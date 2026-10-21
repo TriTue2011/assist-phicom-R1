@@ -1,0 +1,26 @@
+{
+  "domain": "r1_speaker",
+  "name": "Phicomm R1 Speaker",
+  "codeowners": [
+    "@TriTue2011"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "assist_pipeline",
+    "assist_satellite",
+    "http",
+    "tts",
+    "media_player"
+  ],
+  "after_dependencies": [
+    "dlna_dmr",
+    "frontend",
+    "media_source"
+  ],
+  "documentation": "https://github.com/TriTue2011/assist-phicom-R1",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/TriTue2011/assist-phicom-R1/issues",
+  "requirements": [],
+  "version": "0.2.0"
+}

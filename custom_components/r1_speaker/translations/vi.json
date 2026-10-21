@@ -1,0 +1,282 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Phicomm R1",
+        "description": "Địa chỉ IP của loa và cổng WebSocket. Bấm Gửi để kiểm tra.",
+        "data": {
+          "host": "Địa chỉ IP",
+          "port": "Cổng"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Không đọc được loa (không kết nối được hoặc phản hồi sai định dạng).",
+      "invalid_host": "Địa chỉ không được để trống."
+    },
+    "abort": {
+      "already_configured": "Loa này đã được thêm."
+    }
+  },
+  "entity": {
+    "number": {
+      "volume": {
+        "name": "Âm lượng"
+      },
+      "eq_band": {
+        "name": "EQ {band}"
+      },
+      "bass_strength": {
+        "name": "Cường độ bass"
+      },
+      "loudness_gain": {
+        "name": "Độ lợi loudness"
+      },
+      "mic_gain": {
+        "name": "Tăng mic"
+      }
+    },
+    "switch": {
+      "dlna": {
+        "name": "DLNA"
+      },
+      "airplay": {
+        "name": "AirPlay"
+      },
+      "eq_enable": {
+        "name": "EQ"
+      },
+      "bass": {
+        "name": "Tăng cường bass"
+      },
+      "loudness": {
+        "name": "Loudness"
+      },
+      "mute": {
+        "name": "Tắt mic"
+      }
+    },
+    "sensor": {
+      "device_state": {
+        "name": "Trạng thái thiết bị"
+      },
+      "music_light_luma": {
+        "name": "Độ sáng đèn nhạc"
+      },
+      "music_light_chroma": {
+        "name": "Sắc độ đèn nhạc"
+      },
+      "mic_status": {
+        "name": "Trạng thái mic",
+        "state": {
+          "tat": "Tắt",
+          "nghe": "Đang nghe",
+          "gui": "Đang gửi"
+        }
+      },
+      "settings": {
+        "name": "Tóm tắt cài đặt"
+      }
+    },
+    "media_player": {
+      "speaker": {
+        "name": "Loa"
+      }
+    },
+    "select": {
+      "pipeline": {
+        "name": "Trợ lý",
+        "state": {
+          "preferred": "Ưu tiên"
+        }
+      },
+      "eq_preset": {
+        "name": "Chế độ EQ"
+      }
+    },
+    "binary_sensor": {
+      "intercom": {
+        "name": "Bộ đàm"
+      },
+      "wake": {
+        "name": "Từ đánh thức"
+      }
+    },
+    "button": {
+      "talk": {
+        "name": "Đàm thoại"
+      },
+      "end_talk": {
+        "name": "Kết thúc đàm thoại"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Cấu hình loa R1",
+        "description": "Địa chỉ và cổng điều khiển/EQ của loa; luồng mic (PCM thô 16 kHz mono 16 bit, qua TCP, để trống máy chủ mic thì tắt phần nghe); kênh phát về loa của bộ đàm (cổng 0 = chưa có; phía loa CHƯA có dịch vụ nhận); bốn tham số cổng thoại của bộ đàm (mặc định CHƯA đo trên loa). Từ đánh thức: 'ha' = HA dò (mic về HA liên tục); 'speaker' = dò TRÊN LOA, HA chỉ nhận tiếng sau trigger (phía loa CHƯA có).",
+        "data": {
+          "host": "Địa chỉ IP loa",
+          "port": "Cổng điều khiển / EQ",
+          "mic_host": "Máy chủ mic",
+          "mic_port": "Cổng mic",
+          "play_host": "Máy chủ nhận tiếng phát (trống = cùng IP loa)",
+          "play_port": "Cổng nhận tiếng phát (0 = tắt bộ đàm)",
+          "talk_threshold_db": "Ngưỡng có tiếng người (dBFS)",
+          "talk_silence_s": "Im bao lâu thì đóng loa (giây)",
+          "talk_preroll_s": "Giữ đầu câu (giây)",
+          "talk_tail_s": "Chờ loa tắt trước khi mở mic (giây)",
+          "rotate_intercom_key": "Đổi khoá URL bộ đàm (dòng go2rtc cũ ngừng chạy)",
+          "wake_mode": "Từ đánh thức chạy ở",
+          "noise_suppress": "Khử tạp âm mic (phía HA)",
+          "noise_strength_db": "Khử tạp: giảm tối đa mỗi dải (dB)",
+          "noise_voice_db": "Khử tạp: ngưỡng nhận tiếng người (dB trên nền)",
+          "agc_enable": "Tự chỉnh mức mic (AGC)",
+          "agc_target_db": "AGC: mức đích RMS (dBFS)",
+          "agc_max_gain_db": "AGC: tăng tối đa (dB)",
+          "agc_silence_db": "AGC: dưới mức này coi là im lặng, không tăng (dBFS)",
+          "limiter_enable": "Hạn đỉnh mic",
+          "limiter_ceiling": "Hạn đỉnh: trần (tỉ lệ biên độ tối đa, 0,89 ≈ -1 dBFS)",
+          "ha_url": "Địa chỉ HA mà loa gọi tới (trống = tự đoán)",
+          "mic_listen_port": "Cổng nghe mic (APK loa nối vào HA)",
+          "mic_listen_key": "Khoá cổng nghe mic (trống = không mở cổng nghe)"
+        }
+      }
+    },
+    "error": {
+      "invalid_ha_url": "Địa chỉ phải dạng http(s)://máy[:cổng], không đường dẫn, dấu cách hay #.",
+      "ha_url_loopback": "127.0.0.1 / localhost trỏ về chính loa hoặc go2rtc chứ không phải Home Assistant. Dùng địa chỉ LAN của máy chạy HA.",
+      "ha_url_unreachable": "Home Assistant không gọi được địa chỉ này (hoặc đó không phải Home Assistant này). Chưa lưu gì."
+    }
+  },
+  "services": {
+    "get_intercom_source": {
+      "name": "Lấy nguồn bộ đàm",
+      "description": "Trả hai dòng nguồn dán vào go2rtc.yaml: nói vào loa (talk) và nghe mic loa (listen).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "media_player của loa R1."
+        },
+        "ha_url": {
+          "name": "Địa chỉ HA",
+          "description": "Địa chỉ HA mà máy chạy go2rtc gọi tới được; bỏ trống khi go2rtc chung mạng với HA."
+        }
+      }
+    },
+    "get_wake_endpoint": {
+      "name": "Lấy điểm trigger từ đánh thức",
+      "description": "Trả URL mà dịch vụ từ đánh thức TRÊN LOA sẽ POST tới (phía loa CHƯA có).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "media_player của loa R1."
+        },
+        "ha_url": {
+          "name": "Địa chỉ HA",
+          "description": "Địa chỉ HA mà máy chạy go2rtc gọi tới được; bỏ trống khi go2rtc chung mạng với HA."
+        }
+      }
+    },
+    "set_light_function": {
+      "name": "Đặt đèn theo chức năng",
+      "description": "Đổi cài đặt đèn của một chức năng (bật/tắt, đèn viền, màu đèn đáy, hiệu ứng, độ sáng). Đèn viền chỉ có màu trắng. Lưu ở HA; chưa gửi gì tới loa cho tới khi có dịch vụ đèn trên loa (CHƯA có).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        },
+        "function": {
+          "name": "Chức năng",
+          "description": "Chức năng cần đổi đèn."
+        },
+        "enabled": {
+          "name": "Bật",
+          "description": "Tắt = không có đèn khi chức năng này đang hiệu lực."
+        },
+        "rim": {
+          "name": "Đèn viền (trắng)",
+          "description": "Dùng đèn viền trắng cùng độ sáng."
+        },
+        "color": {
+          "name": "Màu đèn đáy",
+          "description": "#rrggbb của đèn đáy. Mới xác nhận xanh lá và xanh dương; đỏ chưa chắc."
+        },
+        "effect": {
+          "name": "Hiệu ứng",
+          "description": "Hiệu ứng trong danh mục, hoặc không (sáng cố định)."
+        },
+        "brightness": {
+          "name": "Độ sáng",
+          "description": "0–100."
+        }
+      }
+    },
+    "set_music_light": {
+      "name": "Đặt đèn khi phát nhạc",
+      "description": "Hiệu ứng đèn lúc phát nhạc (chức năng «Đang phát nhạc»): bật/tắt, hiệu ứng, độ sáng. Đèn theo nhạc của firmware là việc khác và chưa biết lệnh điều khiển.",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        },
+        "enabled": {
+          "name": "Bật",
+          "description": "Tắt = HA không chạy hiệu ứng đèn khi phát nhạc."
+        },
+        "effect": {
+          "name": "Hiệu ứng",
+          "description": "Hiệu ứng trong danh mục, hoặc không."
+        },
+        "brightness": {
+          "name": "Độ sáng",
+          "description": "0–100."
+        }
+      }
+    },
+    "preview_light": {
+      "name": "Thử đèn",
+      "description": "Hiện đèn của một chức năng vài giây rồi trả về trạng thái thật. Cần dịch vụ đèn trên loa.",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        },
+        "function": {
+          "name": "Chức năng",
+          "description": "Chức năng cần thử."
+        },
+        "seconds": {
+          "name": "Số giây",
+          "description": "Hiện bao lâu (1–30)."
+        }
+      }
+    }
+  },
+  "selector": {
+    "light_function": {
+      "options": {
+        "cho": "Chờ / từ đánh thức",
+        "nghe": "Đang nghe",
+        "nghi": "Đang nghĩ",
+        "phan_hoi": "Đang trả lời",
+        "dam_thoai": "Đàm thoại",
+        "phat_nhac": "Đang phát nhạc",
+        "loi": "Lỗi",
+        "tat_mic": "Tắt mic"
+      }
+    },
+    "light_effect": {
+      "options": {
+        "none": "Không (sáng cố định)",
+        "tho": "Thở",
+        "cau_vong": "Cầu vồng",
+        "nhap_nhay": "Nhấp nháy",
+        "nhip_tim": "Nhịp tim",
+        "phao_hoa": "Pháo hoa nhỏ",
+        "chop": "Chớp"
+      }
+    }
+  }
+}

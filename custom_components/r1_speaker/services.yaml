@@ -1,0 +1,99 @@
+get_intercom_source:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+          domain: media_player
+    ha_url:
+      example: "http://ha.local:8123"
+      selector:
+        text:
+get_wake_endpoint:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+          domain: media_player
+    ha_url:
+      example: "http://ha.local:8123"
+      selector:
+        text:
+set_light_function:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+    function:
+      required: true
+      example: nghe
+      selector:
+        select:
+          translation_key: light_function
+          options: [cho, nghe, nghi, phan_hoi, dam_thoai, phat_nhac, loi, tat_mic]
+    enabled:
+      selector:
+        boolean:
+    rim:
+      selector:
+        boolean:
+    color:
+      example: "#0000ff"
+      selector:
+        text:
+    effect:
+      selector:
+        select:
+          translation_key: light_effect
+          options: [none, tho, cau_vong, nhap_nhay, nhip_tim, phao_hoa, chop]
+    brightness:
+      selector:
+        number:
+          min: 0
+          max: 100
+          mode: slider
+set_music_light:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+    enabled:
+      selector:
+        boolean:
+    effect:
+      selector:
+        select:
+          translation_key: light_effect
+          options: [none, tho, cau_vong, nhap_nhay, nhip_tim, phao_hoa, chop]
+    brightness:
+      selector:
+        number:
+          min: 0
+          max: 100
+          mode: slider
+preview_light:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+    function:
+      required: true
+      selector:
+        select:
+          translation_key: light_function
+          options: [cho, nghe, nghi, phan_hoi, dam_thoai, phat_nhac, loi, tat_mic]
+    seconds:
+      selector:
+        number:
+          min: 1
+          max: 30
+          mode: box

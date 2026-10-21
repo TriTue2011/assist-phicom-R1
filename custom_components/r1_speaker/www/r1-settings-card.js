@@ -1,0 +1,472 @@
+/* r1-settings-card — thẻ Lovelace CÀI ĐẶT cho loa Phicomm R1 (tích hợp r1_speaker).
+ *
+ * Mặc định chỉ hiện tiêu đề + nút «Cài đặt»; bấm nút mới mở bảng cài đặt, chia ba nhóm:
+ *   Âm thanh  — âm lượng, EQ 5 dải, tăng mic, tắt mic; khử tạp / AGC / bộ hạn đỉnh (CHỈ ĐỌC: là
+ *               tuỳ chọn của mục cài đặt, không phải thực thể; sửa ở trang Tuỳ chọn của tích hợp);
+ *   Ánh sáng  — đèn theo chức năng (bật/tắt, đèn viền trắng, màu đèn đáy, hiệu ứng, độ sáng),
+ *               hiệu ứng khi phát nhạc, danh mục hiệu ứng;
+ *   Kết nối   — host, cổng, ha_url, khoá bộ đàm (chỉ «đã có / chưa có», KHÔNG hiện giá trị khoá).
+ *
+ * Thẻ KHÔNG gọi loa: chỉ đọc thực thể HA (sensor.r1_cai_dat và các thực thể EQ / âm lượng / mic) và
+ * gọi dịch vụ HA (number.set_value, switch.turn_on/off, r1_speaker.set_light_function,
+ * r1_speaker.set_music_light, r1_speaker.preview_light). Đèn chỉ sáng khi có dịch vụ đèn trên loa
+ * (CHƯA có); thẻ nói rõ điều đó thay vì giả vờ.
+ *
+ * Cấu hình tối thiểu:   type: custom:r1-settings-card
+ * Nhiều loa:            device_id: <mã thiết bị>
+ * Chỉ định tay:         entities: { settings: sensor.x, volume: number.y, mic_gain: number.z,
+ *                         mute: switch.u }
+ */
+(function () {
+  "use strict";
+
+  var PLATFORM = "r1_speaker";
+  var FUNCTIONS = ["cho", "nghe", "nghi", "phan_hoi", "dam_thoai", "phat_nhac", "loi", "tat_mic"];
+  var TABS = ["audio", "light", "conn"];
+  var OPTIONS_PATH = "/config/integrations/integration/r1_speaker";
+  var TEXT = {
+    vi: {
+      title: "Loa R1 — Cài đặt", open: "Cài đặt", close: "Đóng",
+      audio: "Âm thanh", light: "Ánh sáng", conn: "Kết nối",
+      none: "Không tìm thấy thực thể r1_speaker nào.",
+      volume: "Âm lượng", eq: "EQ", mic_gain: "Tăng mic (dB)", mute: "Tắt mic",
+      read_only: "Chỉ đọc — sửa ở trang Tuỳ chọn của tích hợp", noise: "Khử tạp âm",
+      agc: "Tự chỉnh mức (AGC)", limiter: "Bộ hạn đỉnh", on: "Bật", off: "Tắt", goto: "Mở tuỳ chọn",
+      sink_pending: "Chưa có dịch vụ đèn trên loa: cài đặt được lưu nhưng đèn CHƯA sáng.",
+      sink_lost: "Dịch vụ đèn trên loa không trả lời.", sink_ready: "Dịch vụ đèn: sẵn sàng",
+      sink_err: "Lỗi gần nhất",
+      fn: { cho: "Chờ / từ đánh thức", nghe: "Đang nghe", nghi: "Đang nghĩ", phan_hoi: "Đang trả lời",
+            dam_thoai: "Đàm thoại", phat_nhac: "Đang phát nhạc", loi: "Lỗi", tat_mic: "Tắt mic" },
+      enabled: "Bật", rim: "Đèn viền (chỉ trắng)", color: "Màu đèn đáy", effect: "Hiệu ứng",
+      brightness: "Độ sáng", preview: "Thử", active: "đang áp dụng", proposal: "mặc định đề xuất, chưa đo",
+      no_effect: "Không (sáng cố định)", red_warn: "Đỏ chưa xác nhận trên đèn đáy",
+      music: "Hiệu ứng khi phát nhạc",
+      fw: "Đèn theo nhạc của firmware (chỉ đọc; chưa biết lệnh điều khiển)",
+      fw_on: "bật", fw_luma: "luma", fw_chroma: "chroma", unknown: "không rõ",
+      catalog: "Danh mục hiệu ứng", source: "nguồn",
+      host: "Địa chỉ loa", port: "Cổng điều khiển / EQ", mic: "Mic (host:cổng)",
+      play: "Phát về loa (host:cổng)", wake: "Từ đánh thức chạy ở", ha_url: "Địa chỉ HA loa gọi tới",
+      key: "Khoá bộ đàm", key_set: "Đã có (không hiện giá trị)", key_unset: "Chưa có", empty: "(trống)",
+      conn_note: "Sửa các mục này ở trang Tuỳ chọn: ở đó có kiểm kết nối và địa chỉ HA trước khi lưu.",
+      unconfirmed: "chưa xác nhận",
+    },
+    en: {
+      title: "R1 speaker — Settings", open: "Settings", close: "Close",
+      audio: "Audio", light: "Light", conn: "Connection",
+      none: "No r1_speaker entity found.",
+      volume: "Volume", eq: "EQ", mic_gain: "Mic gain (dB)", mute: "Mute mic",
+      read_only: "Read-only — change it on the integration's Options page",
+      noise: "Noise suppression", agc: "Auto gain (AGC)", limiter: "Peak limiter", on: "On", off: "Off",
+      goto: "Open options",
+      sink_pending: "No light service on the speaker yet: settings are saved but the light does NOT shine.",
+      sink_lost: "The light service on the speaker is not answering.", sink_ready: "Light service: ready",
+      sink_err: "Last error",
+      fn: { cho: "Idle / wake word", nghe: "Listening", nghi: "Thinking", phan_hoi: "Responding",
+            dam_thoai: "Conversation", phat_nhac: "Music playing", loi: "Error", tat_mic: "Mic muted" },
+      enabled: "On", rim: "Rim light (white only)", color: "Base colour", effect: "Effect",
+      brightness: "Brightness", preview: "Try", active: "in effect", proposal: "suggested default, not measured",
+      no_effect: "None (steady)", red_warn: "Red is unconfirmed on the base light",
+      music: "Light effect while music plays",
+      fw: "Speaker firmware's own music light (read-only; control command unknown)",
+      fw_on: "on", fw_luma: "luma", fw_chroma: "chroma", unknown: "unknown",
+      catalog: "Effect catalogue", source: "source",
+      host: "Speaker address", port: "Control / EQ port", mic: "Mic (host:port)",
+      play: "Playback to speaker (host:port)", wake: "Wake word runs on", ha_url: "HA address the speaker calls",
+      key: "Intercom key", key_set: "Set (value is never shown)", key_unset: "Not set", empty: "(empty)",
+      conn_note: "Change these on the Options page, which checks the connection and HA address before saving.",
+      unconfirmed: "unconfirmed",
+    },
+  };
+
+  function lang(hass) {
+    var l = ((hass && (hass.language || (hass.locale && hass.locale.language))) || "vi");
+    return l.toLowerCase().indexOf("vi") === 0 ? "vi" : "en";
+  }
+  function stateOf(hass, id) { return id && hass && hass.states ? hass.states[id] : undefined; }
+  function isUp(st) { return !!st && st.state !== "unavailable" && st.state !== "unknown"; }
+  function num(v, d) { var n = parseFloat(v); return isFinite(n) ? n : d; }
+
+  function discover(hass, config) {
+    var reg = (hass && hass.entities) || {};
+    var want = config.device_id || null;
+    var mine = Object.keys(reg).filter(function (id) {
+      var e = reg[id];
+      return e && e.platform === PLATFORM && (!want || e.device_id === want);
+    });
+    if (!want && mine.length) {
+      var devs = mine.map(function (id) { return reg[id].device_id; }).sort();
+      mine = mine.filter(function (id) { return reg[id].device_id === devs[0]; });
+    }
+    var all = function (domain, key) {
+      return mine.filter(function (id) {
+        return id.split(".")[0] === domain && reg[id].translation_key === key;
+      }).sort();
+    };
+    return {
+      settings: all("sensor", "settings")[0], volume: all("number", "volume")[0],
+      mic_gain: all("number", "mic_gain")[0], mute: all("switch", "mute")[0],
+      bands: all("number", "eq_band"),
+    };
+  }
+
+  /* Dữ liệu thuần cho thẻ (kiểm được bằng Node): không đụng DOM. */
+  function buildModel(hass, config) {
+    config = config || {};
+    var ent = discover(hass, config);
+    var o = config.entities || {};
+    Object.keys(o).forEach(function (k) { if (o[k]) ent[k] = o[k]; });
+    var st = stateOf(hass, ent.settings);
+    var a = (st && st.attributes) || {};
+    var al = a.anh_sang || {}, am = a.am_thanh || {}, kn = a.ket_noi || {};
+    var level = function (id, dmin, dmax, dstep) {
+      var s = stateOf(hass, id), at = (s && s.attributes) || {};
+      return { entity: id || null, present: !!id, available: isUp(s),
+               value: isUp(s) ? num(s.state, null) : null,
+               min: num(at.min, dmin), max: num(at.max, dmax), step: num(at.step, dstep) };
+    };
+    var bands = (ent.bands || []).map(function (id, i) {
+      var b = level(id, -1500, 1500, 10), at = (stateOf(hass, id) || {}).attributes || {};
+      b.band = at.band !== undefined ? Number(at.band) : i;
+      b.label = at.label || ("EQ " + (b.band + 1));
+      return b;
+    }).sort(function (x, y) { return x.band - y.band; });
+    var mst = stateOf(hass, ent.mute);
+    var chuc = al.chuc_nang || {};
+    var fns = FUNCTIONS.filter(function (k) { return chuc[k]; }).map(function (k) {
+      var p = chuc[k];
+      return { key: k, enabled: p.enabled === true, rim: p.rim === true, color: String(p.color || "#000000"),
+               effect: p.effect || "none", brightness: num(p.brightness, 0), isDefault: p.mac_dinh === true,
+               active: al.dang_ap_dung === k };
+    });
+    var fw = al.den_nhac_firmware || {};
+    var music = fns.filter(function (f) { return f.key === "phat_nhac"; })[0] || null;
+    return {
+      found: !!(ent.settings || ent.volume || bands.length),
+      offline: !!ent.settings && !isUp(st),
+      settings: { entity: ent.settings || null, present: !!ent.settings },
+      audio: {
+        volume: level(ent.volume, 0, 15, 1), bands: bands, micGain: level(ent.mic_gain, 0, 30, 1),
+        mute: { entity: ent.mute || null, present: !!ent.mute, available: isUp(mst),
+                on: isUp(mst) ? mst.state === "on" : null },
+        noise: am.khu_tap || null, agc: am.agc || null, limiter: am.han_dinh || null,
+      },
+      light: {
+        sink: { state: al.dich_vu_den || null, ready: al.dich_vu_den === "san_sang",
+                lost: al.dich_vu_den === "mat_ket_noi", error: al.loi_dich_vu || null },
+        functions: fns, music: music, current: al.dang_ap_dung || null,
+        effects: (al.hieu_ung || []).map(function (h) {
+          return { id: h.id, name: h.ten, nameEn: h.ten_en, source: h.nguon, rimNote: h.vien };
+        }),
+        firmware: { on: fw.bat === undefined ? null : fw.bat, luma: fw.luma === undefined ? null : fw.luma,
+                    chroma: fw.chroma === undefined ? null : fw.chroma },
+      },
+      conn: {
+        host: kn.host || "", port: kn.cong || null, micHost: kn.mic_host || "", micPort: kn.mic_cong || null,
+        playHost: kn.phat_host || "", playPort: kn.phat_cong || null, wake: kn.che_do_tu_danh_thuc || "",
+        haUrl: kn.ha_url || "", keySet: kn.khoa_bo_dam === "da_co", optionsPath: kn.tuy_chon || OPTIONS_PATH,
+      },
+    };
+  }
+
+  /* Trạng thái giao diện: ĐÓNG mặc định. */
+  function initialUi() { return { open: false, tab: "audio" }; }
+  function reduceUi(ui, action) {
+    if (action.type === "toggle") return { open: !ui.open, tab: ui.tab };
+    if (action.type === "tab" && TABS.indexOf(action.tab) >= 0) return { open: ui.open, tab: action.tab };
+    return ui;
+  }
+
+  /* Hành động của người dùng → lệnh gọi dịch vụ HA (hoặc null). Không bao giờ gọi loa. */
+  function makeCall(model, a) {
+    var sid = model.settings.entity;
+    if (a.type === "vol" && model.audio.volume.entity) {
+      return ["number", "set_value", { entity_id: model.audio.volume.entity, value: Number(a.value) }];
+    }
+    if (a.type === "eq" && a.entity) return ["number", "set_value", { entity_id: a.entity, value: Number(a.value) }];
+    if (a.type === "micgain" && model.audio.micGain.entity) {
+      return ["number", "set_value", { entity_id: model.audio.micGain.entity, value: Number(a.value) }];
+    }
+    if (a.type === "mute" && model.audio.mute.entity) {
+      return ["switch", a.on ? "turn_on" : "turn_off", { entity_id: model.audio.mute.entity }];
+    }
+    if (!sid) return null;
+    var coerce = function (field, v) {
+      if (field === "enabled" || field === "rim") return v === true || v === "true" || v === "on";
+      if (field === "brightness") return Math.round(Number(v));
+      return String(v);
+    };
+    if (a.type === "fn" && FUNCTIONS.indexOf(a.key) >= 0) {
+      var d = { entity_id: sid, function: a.key };
+      d[a.field] = coerce(a.field, a.value);
+      return ["r1_speaker", "set_light_function", d];
+    }
+    if (a.type === "music") {
+      var m = { entity_id: sid };
+      m[a.field] = coerce(a.field, a.value);
+      return ["r1_speaker", "set_music_light", m];
+    }
+    if (a.type === "preview" && FUNCTIONS.indexOf(a.key) >= 0) {
+      return ["r1_speaker", "preview_light", { entity_id: sid, function: a.key }];
+    }
+    return null;
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function hexOk(c) { return /^#[0-9a-f]{6}$/i.test(c) ? c.toLowerCase() : "#000000"; }
+  function isRed(c) {
+    c = hexOk(c);
+    return parseInt(c.slice(1, 3), 16) > 180 && parseInt(c.slice(3, 5), 16) < 80 && parseInt(c.slice(5, 7), 16) < 80;
+  }
+  function v(x, t) { return x === null || x === undefined || x === "" ? esc(t.empty) : esc(x); }
+  function onoff(x, t) { return x && x.bat ? t.on : t.off; }
+
+  function slider(attrs, value, min, max, step, disabled) {
+    return '<input type="range" ' + attrs + ' min="' + esc(min) + '" max="' + esc(max) + '" step="' + esc(step) +
+      '" value="' + esc(value === null ? min : value) + '"' + (disabled ? " disabled" : "") + ">";
+  }
+
+  function htmlAudio(m, t) {
+    var A = m.audio, h = '<div data-panel="audio">';
+    h += '<div class="row"><label>' + esc(t.volume) + "</label>" +
+      slider("data-vol", A.volume.value, A.volume.min, A.volume.max, A.volume.step, !A.volume.available) +
+      '<span class="val">' + esc(A.volume.value === null ? "—" : A.volume.value) + "</span></div>";
+    h += "<section><b>" + esc(t.eq) + "</b>";
+    A.bands.forEach(function (b) {
+      h += '<div class="row"><label>' + esc(b.label) + "</label>" +
+        slider('data-eq="' + esc(b.entity) + '"', b.value, b.min, b.max, b.step, !b.available) +
+        '<span class="val">' + esc(b.value === null ? "—" : b.value) + "</span></div>";
+    });
+    h += "</section>";
+    h += '<div class="row"><label>' + esc(t.mic_gain) + "</label>" +
+      slider("data-mic-gain", A.micGain.value, A.micGain.min, A.micGain.max, A.micGain.step, !A.micGain.available) +
+      '<span class="val">' + esc(A.micGain.value === null ? "—" : A.micGain.value) + "</span></div>";
+    h += '<div class="row"><label>' + esc(t.mute) + '</label><input type="checkbox" data-mute' +
+      (A.mute.on ? " checked" : "") + (A.mute.available ? "" : " disabled") + "></div>";
+    h += '<section class="ro"><div class="note">' + esc(t.read_only) + "</div>";
+    h += '<div class="row"><span>' + esc(t.noise) + "</span><b>" + esc(A.noise ? onoff(A.noise, t) : "—") +
+      (A.noise && A.noise.bat ? " (" + esc(A.noise.do_giam_db) + " dB)" : "") + "</b></div>";
+    h += '<div class="row"><span>' + esc(t.agc) + "</span><b>" + esc(A.agc ? onoff(A.agc, t) : "—") +
+      (A.agc && A.agc.bat ? " (" + esc(A.agc.dich_db) + " dBFS)" : "") + "</b></div>";
+    h += '<div class="row"><span>' + esc(t.limiter) + "</span><b>" + esc(A.limiter ? onoff(A.limiter, t) : "—") +
+      "</b></div>";
+    h += '<button class="sec" data-goto>' + esc(t.goto) + "</button></section></div>";
+    return h;
+  }
+
+  function effectSelect(attrs, selected, effects, t, lg) {
+    var h = "<select " + attrs + '><option value="none"' + (selected === "none" ? " selected" : "") + ">" +
+      esc(t.no_effect) + "</option>";
+    effects.forEach(function (e) {
+      h += '<option value="' + esc(e.id) + '"' + (selected === e.id ? " selected" : "") + ">" +
+        esc(lg === "vi" ? e.name : e.nameEn) + "</option>";
+    });
+    return h + "</select>";
+  }
+
+  function htmlLight(m, t, lg) {
+    var L = m.light, h = '<div data-panel="light">';
+    var s = L.sink;
+    h += '<div class="sink ' + (s.ready ? "ok" : "warn") + '" data-sink>' +
+      esc(s.ready ? t.sink_ready : (s.lost ? t.sink_lost : t.sink_pending)) +
+      (s.error ? " — " + esc(t.sink_err) + ": " + esc(s.error) : "") + "</div>";
+    L.functions.forEach(function (f) {
+      if (f.key === "phat_nhac") return;      // hiện riêng ở mục «hiệu ứng khi phát nhạc»
+      h += htmlFunction(f, L, t, lg);
+    });
+    var mu = L.music;
+    if (mu) {
+      h += '<section data-music><b>' + esc(t.music) + "</b>" +
+        '<div class="row"><label>' + esc(t.enabled) + '</label><input type="checkbox" data-music-field="enabled"' +
+        (mu.enabled ? " checked" : "") + "></div>" +
+        '<div class="row"><label>' + esc(t.effect) + "</label>" +
+        effectSelect('data-music-field="effect"', mu.effect, L.effects, t, lg) + "</div>" +
+        '<div class="row"><label>' + esc(t.brightness) + "</label>" +
+        slider('data-music-field="brightness"', mu.brightness, 0, 100, 5, false) +
+        '<span class="val">' + esc(mu.brightness) + "</span></div>" +
+        (mu.isDefault ? '<div class="note">' + esc(t.proposal) + "</div>" : "") +
+        '<div class="note" data-fw>' + esc(t.fw) + ": " + esc(t.fw_on) + "=" +
+        esc(L.firmware.on === null ? t.unknown : (L.firmware.on ? t.on : t.off)) + ", " + esc(t.fw_luma) + "=" +
+        esc(L.firmware.luma === null ? t.unknown : L.firmware.luma) + ", " + esc(t.fw_chroma) + "=" +
+        esc(L.firmware.chroma === null ? t.unknown : L.firmware.chroma) + "</div></section>";
+    }
+    h += "<section><b>" + esc(t.catalog) + "</b>";
+    L.effects.forEach(function (e) {
+      h += '<div class="note">' + esc(lg === "vi" ? e.name : e.nameEn) + " — " + esc(t.source) + ": " +
+        esc(e.source) + "</div>";
+    });
+    return h + "</section></div>";
+  }
+
+  function htmlFunction(f, L, t, lg) {
+    var key = esc(f.key), d = 'data-fn="' + key + '" data-field=';
+    return '<section class="fn' + (f.active ? " active" : "") + '" data-fn-block="' + key + '">' +
+      "<b>" + esc(t.fn[f.key] || f.key) + "</b>" + (f.active ? ' <span class="tag">' + esc(t.active) + "</span>" : "") +
+      '<div class="row"><label>' + esc(t.enabled) + "</label><input type=\"checkbox\" " + d + '"enabled"' +
+      (f.enabled ? " checked" : "") + "></div>" +
+      '<div class="row"><label>' + esc(t.rim) + "</label><input type=\"checkbox\" " + d + '"rim"' +
+      (f.rim ? " checked" : "") + "></div>" +
+      '<div class="row"><label>' + esc(t.color) + '</label><input type="color" ' + d + '"color" value="' +
+      esc(hexOk(f.color)) + '"></div>' +
+      (isRed(f.color) ? '<div class="warn small">' + esc(t.red_warn) + "</div>" : "") +
+      '<div class="row"><label>' + esc(t.effect) + "</label>" + effectSelect(d + '"effect"', f.effect, L.effects, t, lg) +
+      "</div>" +
+      '<div class="row"><label>' + esc(t.brightness) + "</label>" + slider(d + '"brightness"', f.brightness, 0, 100, 5, false) +
+      '<span class="val">' + esc(f.brightness) + "</span></div>" +
+      (f.isDefault ? '<div class="note">' + esc(t.proposal) + "</div>" : "") +
+      '<button class="sec" data-preview="' + key + '">' + esc(t.preview) + "</button></section>";
+  }
+
+  function htmlConn(m, t) {
+    var C = m.conn;
+    var hp = function (h, p) { return (h || p) ? esc((h || "—") + ":" + (p === null ? "—" : p)) : esc(t.empty); };
+    return '<div data-panel="conn">' +
+      '<div class="row"><span>' + esc(t.host) + "</span><b>" + v(C.host, t) + "</b></div>" +
+      '<div class="row"><span>' + esc(t.port) + "</span><b>" + v(C.port, t) + "</b></div>" +
+      '<div class="row"><span>' + esc(t.mic) + "</span><b>" + hp(C.micHost, C.micPort) + "</b></div>" +
+      '<div class="row"><span>' + esc(t.play) + "</span><b>" + hp(C.playHost, C.playPort) + "</b></div>" +
+      '<div class="row"><span>' + esc(t.wake) + "</span><b>" + v(C.wake, t) + "</b></div>" +
+      '<div class="row"><span>' + esc(t.ha_url) + "</span><b>" + v(C.haUrl, t) + "</b></div>" +
+      '<div class="row"><span>' + esc(t.key) + '</span><b data-key>' + esc(C.keySet ? t.key_set : t.key_unset) + "</b></div>" +
+      '<div class="note">' + esc(t.conn_note) + '</div><button class="sec" data-goto>' + esc(t.goto) + "</button></div>";
+  }
+
+  /* HTML thuần của thẻ. Đóng: chỉ tiêu đề + nút. Mở: ba tab + nhóm đang chọn. */
+  function renderHtml(m, ui, t, lg) {
+    lg = lg || "vi";
+    if (!m.found) return '<ha-card><div class="warn">' + esc(t.none) + "</div></ha-card>";
+    var h = '<ha-card><div class="head"><h2>' + esc(t.title) + '</h2><button data-open aria-expanded="' +
+      (ui.open ? "true" : "false") + '">' + esc(ui.open ? t.close : t.open) + "</button></div>";
+    if (!ui.open) return h + "</ha-card>";
+    h += '<div class="tabs" role="tablist">';
+    TABS.forEach(function (k) {
+      h += '<button class="tab' + (ui.tab === k ? " sel" : "") + '" role="tab" data-tab="' + k +
+        '" aria-selected="' + (ui.tab === k ? "true" : "false") + '">' + esc(t[k]) + "</button>";
+    });
+    h += "</div>";
+    h += ui.tab === "light" ? htmlLight(m, t, lg) : (ui.tab === "conn" ? htmlConn(m, t) : htmlAudio(m, t));
+    return h + "</ha-card>";
+  }
+
+  var CSS = [
+    ":host{display:block}", "ha-card{padding:12px 16px}", "h2{margin:0;font-size:1.1em}",
+    ".head{display:flex;align-items:center;justify-content:space-between;gap:8px}",
+    ".row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0}",
+    ".row input[type=range]{flex:1}", ".val{min-width:3em;text-align:right}",
+    "section{margin-top:10px;border-top:1px solid var(--divider-color,#ddd);padding-top:6px}",
+    "section.active{border-left:3px solid var(--primary-color,#03a9f4);padding-left:8px}",
+    ".tabs{display:flex;gap:6px;margin:10px 0}", ".tab.sel{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff)}",
+    "button{font:inherit;padding:6px 14px;border-radius:8px;border:1px solid var(--divider-color,#bbb);",
+    "background:transparent;color:inherit;cursor:pointer}", "button.sec{margin-top:4px}",
+    ".warn{color:var(--error-color,#db4437)}", ".small{font-size:.8em}", ".note{font-size:.8em;opacity:.75}",
+    ".ok{color:var(--success-color,#43a047)}", ".sink{margin:8px 0;font-size:.9em}",
+    ".tag{font-size:.75em;padding:1px 6px;border-radius:8px;background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff)}",
+  ].join("");
+
+  class R1SettingsCard extends (typeof HTMLElement !== "undefined" ? HTMLElement : Object) {
+    constructor() {
+      super();
+      this._config = {};
+      this._ui = initialUi();
+      this._html = null;
+      this._deferred = false;
+      if (this.attachShadow) {
+        this.attachShadow({ mode: "open" });
+        // MỘT lần (shadowRoot không đổi khi dựng lại innerHTML): rời ô nhập thì dựng bản bị hoãn.
+        var self = this;
+        this.shadowRoot.addEventListener("focusout", function () {
+          if (self._deferred) setTimeout(function () { if (self._deferred) self._render(); }, 0);
+        });
+      }
+    }
+
+    static getStubConfig() { return {}; }
+    setConfig(config) { this._config = config || {}; this._html = null; if (this._hass) this._render(); }
+    getCardSize() { return this._ui.open ? 12 : 1; }
+    set hass(hass) { this._hass = hass; this._render(); }
+
+    _model() { return buildModel(this._hass, this._config); }
+
+    _render(force) {
+      if (!this._hass || !this.shadowRoot) return;
+      // Đang kéo thanh / chọn mục: đừng dựng lại DOM dưới tay người dùng; dựng sau khi rời ô.
+      var ae = this.shadowRoot.activeElement;
+      if (!force && this._html !== null && ae && /^(INPUT|SELECT)$/.test(ae.tagName)) {
+        this._deferred = true;
+        return;
+      }
+      this._deferred = false;
+      var lg = lang(this._hass);
+      var html = "<style>" + CSS + "</style>" + renderHtml(this._model(), this._ui, TEXT[lg], lg);
+      if (html === this._html) return;
+      this._html = html;
+      this.shadowRoot.innerHTML = html;
+      this._bind();
+    }
+
+    _call(c) { if (c) this._hass.callService(c[0], c[1], c[2]); }
+
+    _bind() {
+      var root = this.shadowRoot, self = this;
+      var dispatch = function (a) { self._call(makeCall(self._model(), a)); };
+      var q = function (s) { return root.querySelector(s); };
+      var all = function (s, fn) { Array.prototype.forEach.call(root.querySelectorAll(s), fn); };
+      var open = q("[data-open]");
+      if (open) open.addEventListener("click", function () {
+        self._ui = reduceUi(self._ui, { type: "toggle" }); self._render(true);
+      });
+      all("[data-tab]", function (el) {
+        el.addEventListener("click", function () {
+          self._ui = reduceUi(self._ui, { type: "tab", tab: el.dataset.tab }); self._render(true);
+        });
+      });
+      all("[data-goto]", function (el) {
+        el.addEventListener("click", function () {
+          var path = self._model().conn.optionsPath;
+          history.pushState(null, "", path);
+          window.dispatchEvent(new Event("location-changed"));
+        });
+      });
+      var vol = q("[data-vol]");
+      if (vol) vol.addEventListener("change", function () { dispatch({ type: "vol", value: vol.value }); });
+      all("[data-eq]", function (el) {
+        el.addEventListener("change", function () { dispatch({ type: "eq", entity: el.dataset.eq, value: el.value }); });
+      });
+      var mg = q("[data-mic-gain]");
+      if (mg) mg.addEventListener("change", function () { dispatch({ type: "micgain", value: mg.value }); });
+      var mu = q("[data-mute]");
+      if (mu) mu.addEventListener("change", function () { dispatch({ type: "mute", on: mu.checked }); });
+      all("[data-fn][data-field]", function (el) {
+        el.addEventListener("change", function () {
+          dispatch({ type: "fn", key: el.dataset.fn, field: el.dataset.field,
+                     value: el.type === "checkbox" ? el.checked : el.value });
+        });
+      });
+      all("[data-music-field]", function (el) {
+        el.addEventListener("change", function () {
+          dispatch({ type: "music", field: el.dataset.musicField, value: el.type === "checkbox" ? el.checked : el.value });
+        });
+      });
+      all("[data-preview]", function (el) {
+        el.addEventListener("click", function () { dispatch({ type: "preview", key: el.dataset.preview }); });
+      });
+    }
+  }
+
+  if (typeof customElements !== "undefined" && !customElements.get("r1-settings-card")) {
+    customElements.define("r1-settings-card", R1SettingsCard);
+    window.customCards = window.customCards || [];
+    window.customCards.push({
+      type: "r1-settings-card", name: "Phicomm R1 — Cài đặt",
+      description: "Mục cài đặt ẩn (bấm để mở): âm thanh, ánh sáng theo chức năng, kết nối của loa Phicomm R1 (r1_speaker).",
+    });
+  }
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = { buildModel: buildModel, renderHtml: renderHtml, initialUi: initialUi, reduceUi: reduceUi,
+                       makeCall: makeCall, TEXT: TEXT, FUNCTIONS: FUNCTIONS, TABS: TABS };
+  }
+})();

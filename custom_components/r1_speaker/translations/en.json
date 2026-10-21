@@ -1,0 +1,282 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Phicomm R1",
+        "description": "IP of the speaker and its WebSocket port. Press Submit to check.",
+        "data": {
+          "host": "IP address",
+          "port": "Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not read the speaker (no connection or unexpected reply).",
+      "invalid_host": "Host must not be empty."
+    },
+    "abort": {
+      "already_configured": "This speaker is already configured."
+    }
+  },
+  "entity": {
+    "number": {
+      "volume": {
+        "name": "Volume"
+      },
+      "eq_band": {
+        "name": "EQ {band}"
+      },
+      "bass_strength": {
+        "name": "Bass strength"
+      },
+      "loudness_gain": {
+        "name": "Loudness gain"
+      },
+      "mic_gain": {
+        "name": "Microphone gain"
+      }
+    },
+    "switch": {
+      "dlna": {
+        "name": "DLNA"
+      },
+      "airplay": {
+        "name": "AirPlay"
+      },
+      "eq_enable": {
+        "name": "EQ"
+      },
+      "bass": {
+        "name": "Bass boost"
+      },
+      "loudness": {
+        "name": "Loudness"
+      },
+      "mute": {
+        "name": "Mute microphone"
+      }
+    },
+    "sensor": {
+      "device_state": {
+        "name": "Device state"
+      },
+      "music_light_luma": {
+        "name": "Music light luma"
+      },
+      "music_light_chroma": {
+        "name": "Music light chroma"
+      },
+      "mic_status": {
+        "name": "Microphone status",
+        "state": {
+          "tat": "Off",
+          "nghe": "Listening",
+          "gui": "Sending"
+        }
+      },
+      "settings": {
+        "name": "Settings summary"
+      }
+    },
+    "media_player": {
+      "speaker": {
+        "name": "Speaker"
+      }
+    },
+    "select": {
+      "pipeline": {
+        "name": "Assistant",
+        "state": {
+          "preferred": "Preferred"
+        }
+      },
+      "eq_preset": {
+        "name": "EQ preset"
+      }
+    },
+    "binary_sensor": {
+      "intercom": {
+        "name": "Intercom"
+      },
+      "wake": {
+        "name": "Wake word"
+      }
+    },
+    "button": {
+      "talk": {
+        "name": "Talk"
+      },
+      "end_talk": {
+        "name": "End conversation"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "R1 speaker settings",
+        "description": "Speaker address and control/EQ port; microphone stream (raw PCM 16 kHz mono 16-bit over TCP, empty mic host disables listening); intercom playback channel to the speaker (port 0 = none; the speaker side does NOT exist yet); the four voice-gate parameters of the intercom (defaults NOT yet measured on the speaker). Wake word: 'ha' = HA detects it (mic streams to HA continuously); 'speaker' = detected ON the speaker, HA receives audio only after the trigger (the speaker side does NOT exist yet).",
+        "data": {
+          "host": "Speaker IP address",
+          "port": "Control / EQ port",
+          "mic_host": "Microphone host",
+          "mic_port": "Microphone port",
+          "play_host": "Playback host (empty = speaker IP)",
+          "play_port": "Playback port (0 = intercom off)",
+          "talk_threshold_db": "Voice threshold (dBFS)",
+          "talk_silence_s": "Silence before closing the speaker (s)",
+          "talk_preroll_s": "Pre-roll kept before speech (s)",
+          "talk_tail_s": "Wait after playback before reopening the mic (s)",
+          "rotate_intercom_key": "Rotate the intercom URL key (old go2rtc lines stop working)",
+          "wake_mode": "Wake word runs on",
+          "noise_suppress": "Mic noise suppression (HA side)",
+          "noise_strength_db": "Noise suppression: max reduction per band (dB)",
+          "noise_voice_db": "Noise suppression: voice threshold (dB above floor)",
+          "agc_enable": "Mic auto gain (AGC)",
+          "agc_target_db": "AGC: target RMS level (dBFS)",
+          "agc_max_gain_db": "AGC: max gain (dB)",
+          "agc_silence_db": "AGC: below this level counts as silence, no boost (dBFS)",
+          "limiter_enable": "Mic peak limiter",
+          "limiter_ceiling": "Limiter: ceiling (fraction of full scale, 0.89 ≈ -1 dBFS)",
+          "ha_url": "Home Assistant address the speaker calls (empty = guess)",
+          "mic_listen_port": "Microphone listen port (speaker APK connects to HA)",
+          "mic_listen_key": "Microphone listen key (empty = listen port closed)"
+        }
+      }
+    },
+    "error": {
+      "invalid_ha_url": "Address must look like http(s)://host[:port] with no path, spaces or #.",
+      "ha_url_loopback": "127.0.0.1 / localhost points back at the speaker or go2rtc, not at Home Assistant. Use the LAN address of the machine that runs HA.",
+      "ha_url_unreachable": "Home Assistant could not reach this address (or it is not this Home Assistant). Nothing was saved."
+    }
+  },
+  "services": {
+    "get_intercom_source": {
+      "name": "Get intercom source",
+      "description": "Returns two go2rtc.yaml source lines: talk to the speaker (talk) and listen to its microphone (listen).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "The R1 media_player."
+        },
+        "ha_url": {
+          "name": "HA URL",
+          "description": "HA address reachable from the go2rtc host; leave empty when go2rtc shares HA's network."
+        }
+      }
+    },
+    "get_wake_endpoint": {
+      "name": "Get wake endpoint",
+      "description": "Returns the URL the wake-word service ON the speaker will POST to (speaker side NOT built yet).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "The R1 media_player."
+        },
+        "ha_url": {
+          "name": "HA URL",
+          "description": "HA address reachable from the go2rtc host; leave empty when go2rtc shares HA's network."
+        }
+      }
+    },
+    "set_light_function": {
+      "name": "Set light for a function",
+      "description": "Changes the LED settings of one function (on/off, rim light, base colour, effect, brightness). The rim light is white only. Stored in HA; nothing is sent to the speaker until a light service exists on the speaker (NOT built yet).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        },
+        "function": {
+          "name": "Function",
+          "description": "Which function's light to change."
+        },
+        "enabled": {
+          "name": "Enabled",
+          "description": "Off = no light while this function is active."
+        },
+        "rim": {
+          "name": "Rim light (white)",
+          "description": "Use the white rim light at the same brightness."
+        },
+        "color": {
+          "name": "Base colour",
+          "description": "#rrggbb of the base light. Only green and blue are confirmed on the hardware; red is unconfirmed."
+        },
+        "effect": {
+          "name": "Effect",
+          "description": "Effect from the catalogue, or none for a steady colour."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100."
+        }
+      }
+    },
+    "set_music_light": {
+      "name": "Set music light",
+      "description": "Light effect while music plays (the 'Music playing' function): on/off, effect, brightness. The speaker firmware's own music light is separate and its command is unknown.",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        },
+        "enabled": {
+          "name": "Enabled",
+          "description": "Off = no HA light effect for music."
+        },
+        "effect": {
+          "name": "Effect",
+          "description": "Effect from the catalogue, or none."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100."
+        }
+      }
+    },
+    "preview_light": {
+      "name": "Preview light",
+      "description": "Shows one function's light for a few seconds, then returns to the real state. Needs a light service on the speaker.",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        },
+        "function": {
+          "name": "Function",
+          "description": "Function to preview."
+        },
+        "seconds": {
+          "name": "Seconds",
+          "description": "How long to show it (1-30)."
+        }
+      }
+    }
+  },
+  "selector": {
+    "light_function": {
+      "options": {
+        "cho": "Idle / waiting for wake word",
+        "nghe": "Listening",
+        "nghi": "Thinking",
+        "phan_hoi": "Responding",
+        "dam_thoai": "Conversation",
+        "phat_nhac": "Music playing",
+        "loi": "Error",
+        "tat_mic": "Microphone muted"
+      }
+    },
+    "light_effect": {
+      "options": {
+        "none": "None (steady)",
+        "tho": "Breathe",
+        "cau_vong": "Rainbow",
+        "nhap_nhay": "Blink",
+        "nhip_tim": "Heartbeat",
+        "phao_hoa": "Small fireworks",
+        "chop": "Strobe"
+      }
+    }
+  }
+}

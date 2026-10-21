@@ -1,0 +1,15 @@
+# Phụ thuộc để chạy test và bandit (KHÔNG cần để chạy tích hợp trong Home Assistant thật).
+# Bản đã chạy được: Python 3.13, Home Assistant 2026.2.3.
+# pytest-homeassistant-custom-component kéo theo đúng bản homeassistant, pytest, pytest-asyncio.
+pytest-homeassistant-custom-component==0.13.316
+# Gói requirements của các tích hợp HA mà test chạm tới (assist_pipeline, tts, ffmpeg...):
+ha-ffmpeg==3.2.2
+hassil==3.5.0
+home-assistant-intents==2026.1.28
+mutagen==1.47.0
+async-upnp-client==0.46.2   # dlna_dmr
+getmac==0.9.5               # dlna_dmr
+pymicro-vad==1.0.1
+pyspeex-noise==1.0.2
+# Quét bảo mật:
+bandit==1.9.4
