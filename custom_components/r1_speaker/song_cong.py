@@ -62,6 +62,10 @@ VAD_FRAME = 320
 #: Sau khi HA ngừng bơm tiếng xuống loa ngần này giây thì hết coi là «đang phát» cho khâu
 #: cắt vọng (tiếng loa còn vang một lúc sau khúc cuối).
 DUCK_GRACE_S = 0.5
+#: «Quyền nói» của điện thoại (VOX): khúc từ điện thoại có mức tiếng ≥ ngưỡng này là ĐANG NÓI; im quá
+#: ``PHONE_HANG_S`` thì quyền nói trả về loa. Mức mặc định CHƯA ĐO trên mic điện thoại thật.
+PHONE_VOX_DB = -42.0
+PHONE_HANG_S = 0.8
 
 
 def _vad_that():
@@ -150,6 +154,9 @@ class R1Duplex:
         self._hang: asyncio.Queue[bytes | None] | None = None
         self._play_task: asyncio.Task | None = None
         self._last_play = 0.0                # lần cuối có tiếng bơm xuống loa (monotonic)
+        self.ptt = False                     # điện thoại đang GIỮ nút nói (báo qua WebSocket): luôn có quyền nói
+        self._phone_noi_den = 0.0            # điện thoại có tiếng (VOX) tới thời điểm này
+        self._huong_da_bao = "loa"
         self._aec = None                     # khử vọng (tạo khi mở phiên)
         self.half_duplex = False             # bật = luân phiên (bỏ mic khi loa phát); tắt = song công
         self.luon = False                    # «Bật mic luôn»: giữ phiên mở, không cần giữ nút
@@ -163,6 +170,36 @@ class R1Duplex:
     def add_listener(self, cb: Callable[[], None]) -> Callable[[], None]:
         self._on_change.append(cb)
         return lambda: self._on_change.remove(cb)
+
+    # ── Quyền nói: loa hay điện thoại ─────────────────────────────
+
+    @property
+    def phone_floor(self) -> bool:
+        """Điện thoại đang giữ quyền nói: đang giữ nút, hoặc vừa có tiếng (VOX) trong ``PHONE_HANG_S`` giây."""
+        return self.ptt or time.monotonic() < self._phone_noi_den
+
+    @property
+    def huong(self) -> str:
+        """``song_song`` (hai bên cùng nghe), ``dien_thoai`` (nửa công: điện thoại đang nói, mic loa tạm bỏ) hoặc
+        ``loa`` (nửa công, mặc định: im lặng thì quyền nói về loa)."""
+        if not self.half_duplex:
+            return "song_song"
+        return "dien_thoai" if self.phone_floor else "loa"
+
+    def phone_noi(self, dang_giu: bool) -> None:
+        """Điện thoại báo giữ/thả nút nói (không dựa vào mức tiếng)."""
+        if dang_giu == self.ptt:
+            return
+        self.ptt = dang_giu
+        if not dang_giu:
+            self._phone_noi_den = time.monotonic() + PHONE_HANG_S   # thả nút: giữ quyền thêm một nhịp cho khỏi cụt đuôi
+        self._cap_nhat_huong()
+
+    def _cap_nhat_huong(self) -> None:
+        h = self.huong
+        if h != self._huong_da_bao:
+            self._huong_da_bao = h
+            self._notify()
 
     @callback
     def _notify(self) -> None:
@@ -234,6 +271,9 @@ class R1Duplex:
         self.play_seconds = 0.0
         self.duck_dropped = 0
         self._last_play = 0.0
+        self.ptt = False
+        self._phone_noi_den = 0.0
+        self._huong_da_bao = self.huong
         self._mic_seen = self.mic.connected
         self._unsub_mic = self.mic.add_chunk_listener(self._on_mic_chunk)
         self._unsub_link = self.mic.add_link_listener(self._on_link)
@@ -261,6 +301,7 @@ class R1Duplex:
             return
         self.active = False
         self.luon = False                    # phiên đóng thì «giữ mở» cũng hết
+        self.ptt = False
         self._aec = None
         self.last_end = reason
         if self._watchdog is not None:
@@ -317,8 +358,9 @@ class R1Duplex:
     def _on_mic_chunk(self, chunk: bytes) -> None:
         if not self.active or self._gate is None:
             return
-        if self.half_duplex and time.monotonic() - self._last_play < DUCK_GRACE_S:
-            self.duck_dropped += len(chunk) // VAD_FRAME   # nửa công: loa đang phát thì không gửi mic
+        self._cap_nhat_huong()
+        if self.half_duplex and self.phone_floor:
+            self.duck_dropped += len(chunk) // VAD_FRAME   # nửa công: điện thoại đang nói thì không gửi mic loa
             return
         if self._aec is not None:
             chunk = self._aec.xu_ly(chunk)   # trừ tiếng HA đã phát xuống loa khỏi mic
@@ -340,6 +382,14 @@ class R1Duplex:
         phát ghi ngay, không chờ, không cổng thoại, không giữ mic."""
         if not self.active:
             raise HomeAssistantError("Chưa mở phiên song công.")
+        # VOX: «bật mic luôn» trên điện thoại gửi tiếng LIÊN TỤC, kể cả im lặng. Chỉ khúc có tiếng (hoặc đang giữ nút)
+        # mới xuống loa và mới giữ quyền nói; im lặng thì bỏ (không xì xào ra loa, không chặn mic loa).
+        bay_gio = time.monotonic()
+        if self.ptt or level_db(pcm) >= PHONE_VOX_DB:
+            self._phone_noi_den = bay_gio + PHONE_HANG_S
+            self._cap_nhat_huong()
+        elif bay_gio >= self._phone_noi_den:
+            return
         if self._hang is None:
             self._hang = asyncio.Queue()
             self._play_task = self.hass.async_create_background_task(

@@ -27,7 +27,7 @@ from .dam_thoai import R1SessionBusy
 _LOGGER = logging.getLogger(__name__)
 
 #: Gộp khung mic loa thành ngần này giây một khung gửi đi (khung gốc 10 ms: quá nhỏ cho mạng).
-GOP_S = 0.1
+GOP_S = 0.05
 #: Trần dồn tiếng chờ gửi (byte): điện thoại chậm thì bỏ phần cũ, không dồn bộ nhớ.
 TRAN_DEM = 64 * 1024
 
@@ -104,6 +104,11 @@ class DamThoaiWsView(HomeAssistantView):
                 if msg.type == WSMsgType.BINARY:
                     if msg.data and len(msg.data) % 2 == 0 and duplex.active:
                         duplex.feed_playback(msg.data)
+                elif msg.type == WSMsgType.TEXT:
+                    if msg.data == "noi":                  # điện thoại bắt đầu GIỮ nút nói
+                        duplex.phone_noi(True)
+                    elif msg.data == "het":                # thả nút
+                        duplex.phone_noi(False)
                 elif msg.type == WSMsgType.ERROR:
                     ly_do = "mat_ket_noi"
                     break
@@ -111,6 +116,7 @@ class DamThoaiWsView(HomeAssistantView):
             gui.cancel()
             with contextlib.suppress(asyncio.CancelledError, ConnectionError):
                 await gui
+            duplex.phone_noi(False)
             huy_nghe()
             huy_doi()
             duplex.downlink_busy = False

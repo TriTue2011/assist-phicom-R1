@@ -19,6 +19,7 @@ from custom_components.r1_speaker.settings import DuplexSettings, duplex_setting
 from custom_components.r1_speaker.song_cong import VAD_FRAME, R1Duplex, VadGate
 
 from .test_mic import PcmServer, pcm_server  # noqa: F401  (fixture dùng lại)
+from .test_mic_server import khung
 
 
 def khung10(gia_tri: int) -> bytes:
@@ -250,7 +251,7 @@ async def test_vong_khong_hu_vo_han(hass, play_server):
     assert len(nhan) == 1
     for _ in range(20):                                   # vọng quay lại 20 vòng
         mic.feed_inbound(khung10(120))                    # vọng: mẫu nhỏ, VAD bảo không phải người
-        d.feed_playback(khung10(120))
+        d.feed_playback(khung10(600))                     # tiếng điện thoại (≥ ngưỡng VOX) xuống loa
     await cho(lambda: len(play_server.data) >= 20 * VAD_FRAME)
     assert len(nhan) == 1 and d.active                    # không tăng, không hú, phiên còn mở
     d.end("nguoi_dung_ket_thuc")
@@ -378,3 +379,102 @@ async def test_tat_mic_giua_phien_song_cong_dong_phien_va_ngat_loa(hass, play_se
         writer.close()
     finally:
         await server.async_close()
+
+
+# ── Quyền nói: loa hay điện thoại (nửa công / song song) ─────────────────────────────
+
+def _tieng(v: int, n: int = 160) -> bytes:
+    return v.to_bytes(2, "little", signed=True) * n
+
+
+async def _mo_phien(hass, r1, nua_cong: bool):
+    from .test_den_nhac import _them_co_dau_nhan, _noi_apk
+    e, port = await _them_co_dau_nhan(hass, r1)
+    reader, writer = await _noi_apk(e, port)
+    d = e.runtime_data.duplex
+    d._vad_factory = VadGia
+    d.half_duplex = nua_cong
+    await d.async_start()
+    return e, d, reader, writer
+
+
+async def test_nua_cong_bat_mic_luon_dien_thoai_im_lang_thi_nghe_duoc_loa(hass, r1):
+    """Lỗi gốc 22/10: điện thoại «bật mic luôn» gửi tiếng LIÊN TỤC (cả im lặng) làm mic loa bị cắt gần như suốt."""
+    e, d, reader, writer = await _mo_phien(hass, r1, nua_cong=True)
+    nhan: list[bytes] = []
+    d.add_audio_listener(nhan.append)
+    for _ in range(60):                                   # điện thoại gửi toàn tiếng ồn rất nhỏ (im lặng)
+        d.feed_playback(_tieng(3))
+    assert not d.phone_floor and d.huong == "loa"
+    for _ in range(30):
+        writer.write(khung(_tieng(2000)))                 # loa có tiếng người
+    await writer.drain()
+    await cho(lambda: len(nhan) > 0)
+    assert nhan, "mic loa phải đi tới điện thoại khi điện thoại im lặng"
+    writer.close()
+
+
+async def test_nua_cong_dien_thoai_co_tieng_thi_mic_loa_tam_bo_roi_tu_ve_loa(hass, r1):
+    e, d, reader, writer = await _mo_phien(hass, r1, nua_cong=True)
+    nhan: list[bytes] = []
+    d.add_audio_listener(nhan.append)
+    d.feed_playback(_tieng(3000))                         # điện thoại nói (VOX)
+    assert d.phone_floor and d.huong == "dien_thoai"
+    for _ in range(20):
+        writer.write(khung(_tieng(2000)))
+    await writer.drain()
+    await asyncio.sleep(0.3)
+    assert not nhan                                       # mic loa bị bỏ lúc điện thoại đang nói
+    from custom_components.r1_speaker import song_cong
+    await asyncio.sleep(song_cong.PHONE_HANG_S + 0.2)     # điện thoại im: quyền nói TỰ về loa
+    assert not d.phone_floor and d.huong == "loa"
+    for _ in range(30):
+        writer.write(khung(_tieng(2000)))
+    await writer.drain()
+    await cho(lambda: len(nhan) > 0)
+    writer.close()
+
+
+async def test_giu_nut_nua_cong_la_quyen_nói_ke_ca_khi_tieng_nho(hass, r1):
+    e, d, reader, writer = await _mo_phien(hass, r1, nua_cong=True)
+    d.phone_noi(True)
+    d.feed_playback(_tieng(1))                            # tiếng rất nhỏ nhưng đang GIỮ nút → vẫn phát xuống loa
+    assert d.phone_floor and d._hang is not None
+    d.phone_noi(False)                                    # thả nút: giữ quyền thêm một nhịp rồi trả về loa
+    assert d.phone_floor
+    writer.close()
+
+
+async def test_song_song_khong_bao_gio_cat_mic_loa(hass, r1):
+    e, d, reader, writer = await _mo_phien(hass, r1, nua_cong=False)
+    nhan: list[bytes] = []
+    d.add_audio_listener(nhan.append)
+    d.feed_playback(_tieng(3000))                         # điện thoại đang nói
+    assert d.huong == "song_song"
+    for _ in range(30):
+        writer.write(khung(_tieng(2000)))
+    await writer.drain()
+    await cho(lambda: len(nhan) > 0)                      # mic loa vẫn tới điện thoại (hai bên cùng nghe)
+    writer.close()
+
+
+async def test_im_lang_tu_dien_thoai_khong_xuong_loa_ca_hai_che_do(hass, r1):
+    for nua_cong in (True, False):
+        e, d, reader, writer = await _mo_phien(hass, r1, nua_cong=nua_cong)
+        for _ in range(20):
+            d.feed_playback(_tieng(2))
+        assert d._hang is None                            # không có gì được xếp hàng phát (không xì xào ra loa)
+        writer.close()
+        d.end("thu")
+
+
+async def test_assist_tam_nghi_khi_dam_thoai_bat(hass, r1):
+    e, d, reader, writer = await _mo_phien(hass, r1, nua_cong=False)
+    sat = hass.data.get("entity_components", {}).get("assist_satellite")
+    ent = next(x for x in sat.entities if x.entity_id.startswith("assist_satellite.r1"))
+    ent._khi_co_tieng(b"\x01\x00" * 160)
+    assert ent._hang.empty()                              # đàm thoại bật: tiếng mic không vào pipeline dò từ đánh thức
+    d.end("thu")
+    ent._khi_co_tieng(b"\x01\x00" * 160)
+    assert not ent._hang.empty()                          # tắt đàm thoại: Assist nghe lại bình thường
+    writer.close()

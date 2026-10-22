@@ -255,13 +255,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const choDen = async (dk) => { for (let i = 0; i < 400 && !dk(); i++) await sleep(50); };   // mic giả mở bất đồng bộ thật
 const entities = {}, states = {};
 const add = (id, tk, state, attrs) => { entities[id] = {platform: "r1_speaker", translation_key: tk, device_id: "d1"}; states[id] = {state, attributes: attrs || {}}; };
-add("switch.r1_dam_thoai", "intercom_open", "off", {giu_mo: false});
+add("switch.r1_dam_thoai", "intercom_open", "off", {giu_mo: false, huong: null});
+add("switch.r1_mic_loa_song_song", "song_song", "on");
 add("sensor.r1_trang_thai_mic", "mic_status", "nghe", {phien: null});
-const wsList = [], callws = [], calls = [];
-let moTre = 20, trongCuChi = false; const acTao = [];
+const wsList = [], callws = [], calls = []; let moTre = 20, trongCuChi = false; const acTao = [];
 window.WebSocket = class { constructor(url) { this.url = url; this.readyState = 0; this.sent = []; wsList.push(this);
   setTimeout(() => { this.readyState = 1; this.onopen && this.onopen(); }, moTre); }
   send(d) { this.sent.push(d); } close() { this.readyState = 3; this.closed = true; } };
+let gmCalls = 0; const gm0 = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+navigator.mediaDevices.getUserMedia = (c) => { gmCalls++; return gm0(c); };
 const AC0 = window.AudioContext;
 window.AudioContext = class extends AC0 { constructor(o) { super(o); acTao.push({trongCuChi, rate: o && o.sampleRate}); } };
 const hass = {entities, states, language: "vi", callService: (d, s, x) => { calls.push([d, s, x]); return Promise.resolve(); },
@@ -269,92 +271,106 @@ const hass = {entities, states, language: "vi", callService: (d, s, x) => { call
 const tao = () => { const c = document.createElement("r1-talk-card"); document.body.appendChild(c); c.setConfig({show_eq: false}); c.hass = hass; return c; };
 const pe = (t) => new PointerEvent(t, {pointerId: 3, bubbles: true, cancelable: true});
 const nhiPhan = (w) => w.sent.filter((x) => typeof x !== "string").length;
+const chuoi = (w) => w.sent.filter((x) => typeof x === "string");
 const kq = {secure: window.isSecureContext};
 let card = tao(); let sr = card.shadowRoot, q = (s) => sr.querySelector(s);
 const h = q("[data-hold]");
-kq.dau = {panel: q("[data-dt-panel]").style.display, callWS: callws.length, hold: h.textContent};
-// A) Giữ lần đầu: kênh mở NGAY trong cử chỉ (AudioContext tạo trong sự kiện bấm), nói khi kênh sẵn sàng
-trongCuChi = true; h.dispatchEvent(pe("pointerdown")); trongCuChi = false;
-kq.acTrongCuChi = acTao.map((a) => [a.trongCuChi, a.rate]);
-kq.dangNoi = h.textContent;
-await choDen(() => wsList.length > 0 && wsList[0].readyState === 1);
-await choDen(() => nhiPhan(wsList[0]) > 0);
-const w = wsList[0];
-kq.sign = callws.map((m) => [m.type, m.path]); kq.ws = wsList.map((x) => x.url.replace(/^wss?:\/\/[^/]*/, ""));
-kq.khiGiu = {khoa: h.disabled, chu: h.textContent, mau: h.classList.contains("noi"), nhiPhan: nhiPhan(w) > 0,
-  kieu: Object.prototype.toString.call(w.sent.find((x) => typeof x !== "string"))};
-card.hass = {...hass, states: {...states}};                        // HA đổi trạng thái giữa chừng: nút không bị khoá/dựng lại
-kq.sauDoiTrangThai = {khoa: q("[data-hold]").disabled, giong: q("[data-hold]") === h, chu: q("[data-hold]").textContent};
-kq.panelMo = q("[data-dt-panel]").style.display; kq.trangThai = q("[data-dt-status]").textContent;
-h.dispatchEvent(pe("pointerleave")); await sleep(400);              // kéo ngón ra ngoài nút: vẫn đang giữ
-const n1 = nhiPhan(w); await sleep(500); kq.vanNoiKhiRaNgoai = nhiPhan(w) > n1;
+kq.dau = {bat: q("[data-dt-bat]").textContent, callWS: callws.length, hold: h.textContent, gain: q("[data-gain-val]").textContent,
+  note: q("[data-ss-note]").textContent, ssBat: q("[data-song-song]").checked};
+// A) «Bật đàm thoại» một mình: mở kênh NGHE loa, KHÔNG xin mic, KHÔNG gửi tiếng
+trongCuChi = true; q("[data-dt-bat]").click(); trongCuChi = false;
+await choDen(() => wsList.length > 0 && wsList[0].readyState === 1); await sleep(300);
+const w0 = wsList[0];
+kq.chiNghe = {acTrongCuChi: acTao.map((a) => [a.trongCuChi, a.rate]), xinMic: gmCalls, tiengDi: nhiPhan(w0), chuoi: chuoi(w0),
+  nut: q("[data-dt-bat]").textContent, trangThai: q("[data-dt-status]").textContent,
+  sign: callws.map((m) => [m.type, m.path])};
+// hướng từ HA hiển thị theo thuộc tính của công tắc
+states["switch.r1_dam_thoai"] = {state: "on", attributes: {giu_mo: false, huong: "dien_thoai"}}; card.hass = {...hass, states: {...states}};
+kq.huongDienThoai = q("[data-dt-status]").textContent;
+states["switch.r1_dam_thoai"] = {state: "on", attributes: {giu_mo: false, huong: "song_song"}}; card.hass = {...hass, states: {...states}};
+kq.huongSongSong = q("[data-dt-status]").textContent;
+// B) Giữ để nói khi kênh đã mở: xin mic LẦN ĐẦU, báo «noi», gửi tiếng, thả thì «het»
+h.dispatchEvent(pe("pointerdown")); await choDen(() => nhiPhan(w0) > 0);
+kq.giu = {khoa: h.disabled, chu: h.textContent, mau: h.classList.contains("noi"), xinMic: gmCalls, chuoi: chuoi(w0), kieu: Object.prototype.toString.call(w0.sent.find((x) => typeof x !== "string"))};
+card.hass = {...hass, states: {...states}};                         // HA đổi trạng thái giữa chừng: nút không bị khoá/dựng lại
+kq.sauDoiTrangThai = {khoa: q("[data-hold]").disabled, giong: q("[data-hold]") === h};
+h.dispatchEvent(pe("pointerleave")); await sleep(300); const n1 = nhiPhan(w0); await sleep(400); kq.vanNoiKhiRaNgoai = nhiPhan(w0) > n1;
 h.dispatchEvent(pe("pointerup")); await sleep(300);
-kq.het1 = w.sent.filter((x) => typeof x === "string"); const n2 = nhiPhan(w); await sleep(600); kq.imSauTha = nhiPhan(w) === n2;
-kq.chuSauTha = h.textContent;
-// B) Kênh đã mở: giữ lần hai nói được liền; pointercancel (trình duyệt điện thoại huỷ cử chỉ) cũng thôi nói
-h.dispatchEvent(pe("pointerdown")); await choDen(() => nhiPhan(w) > n2);
-kq.lanHai = nhiPhan(w) > n2 && wsList.length === 1 && callws.length === 1;
-h.dispatchEvent(pe("pointercancel")); await sleep(300);
-kq.hetSauCancel = w.sent.filter((x) => typeof x === "string").length === 2;
-// C) «Bật mic luôn»: mic điện thoại đi liên tục không cần giữ; bấm lần nữa thì dừng
-const al = q("[data-always]"); const n3 = nhiPhan(w);
-al.click(); await choDen(() => nhiPhan(w) > n3 + 1);
-kq.luon = {chu: q("[data-always]").textContent, dang: nhiPhan(w) > n3 + 1, trangThai: q("[data-dt-status]").textContent};
-q("[data-always]").click(); await sleep(300); const n4 = nhiPhan(w); await sleep(600);
-kq.luonTat = {im: nhiPhan(w) === n4, chu: q("[data-always]").textContent, het: w.sent.filter((x) => typeof x === "string").length === 3};
-// D) Tiếng loa về + lỗi từ HA hiện ra
-w.onmessage({data: new Int16Array(1600).fill(3000).buffer});
-w.onmessage({data: JSON.stringify({loi: "loi thu"})}); kq.loiHienRa = q("[data-dt-err]").textContent;
-// E) Nút «Đóng kênh điện thoại» đóng hẳn
-q("[data-dt-close]").click(); await sleep(200);
-kq.dong = {ws: !!w.closed, panelAn: q("[data-dt-panel]").style.display === "none"};
-kq.dichVuMicDienThoai = calls.length;                                // giữ/«bật mic luôn» không gọi dịch vụ đàm thoại của HA
+kq.sauTha = {chuoi: chuoi(w0), chu: h.textContent}; const n2 = nhiPhan(w0); await sleep(600); kq.imSauTha = nhiPhan(w0) === n2;
+// C) giữ lần hai (mic đã có, không xin lại), pointercancel = thả
+h.dispatchEvent(pe("pointerdown")); await choDen(() => nhiPhan(w0) > n2);
+kq.lanHai = {xinMic: gmCalls, chuoi: chuoi(w0).join(","), kenh: wsList.length};
+h.dispatchEvent(pe("pointercancel")); await sleep(300); kq.sauCancel = chuoi(w0).join(",");
+// D) «Bật mic luôn»: VOX (không gửi «noi»), bấm lần nữa thì dừng
+const al = q("[data-always]"); const n3 = nhiPhan(w0); const c3 = chuoi(w0).length;
+al.click(); await choDen(() => nhiPhan(w0) > n3 + 1);
+kq.luon = {chu: q("[data-always]").textContent, dang: nhiPhan(w0) > n3 + 1, chuoiThem: chuoi(w0).slice(c3)};
+q("[data-always]").click(); await sleep(300); const n4 = nhiPhan(w0); await sleep(600);
+kq.luonTat = {im: nhiPhan(w0) === n4, chu: q("[data-always]").textContent};
+// E) công tắc «Song song» gọi dịch vụ công tắc của HA
+const ss = q("[data-song-song]"); ss.checked = false; ss.dispatchEvent(new Event("change"));
+kq.songSong = calls.filter((c) => c[2].entity_id === "switch.r1_mic_loa_song_song");
+// F) âm lượng nghe: nhãn thời gian thực, nhớ lại, áp vào GainNode
+const gs = q("[data-nghe-gain]"); gs.value = "500"; gs.dispatchEvent(new Event("input"));
+kq.gain = {nhan: q("[data-gain-val]").textContent, nho: localStorage.getItem("r1_nghe_gain"), node: card._dt && card._dt.gain && card._dt.gain.gain.value};
+// G) tắt đàm thoại bằng chính nút bật
+q("[data-dt-bat]").click(); await sleep(200);
+kq.tat = {ws: !!w0.closed, nut: q("[data-dt-bat]").textContent};
 card.remove();
-// F) Nhấn rồi thả TRƯỚC khi kênh sẵn sàng: mic không được đi (không rò tiếng sau khi đã thả tay)
+// H) Nhấn rồi thả TRƯỚC khi kênh sẵn sàng: mic không được đi
 moTre = 1500; card = tao(); sr = card.shadowRoot; q = (s) => sr.querySelector(s);
 const hb = q("[data-hold]"); hb.dispatchEvent(pe("pointerdown")); await sleep(100); hb.dispatchEvent(pe("pointerup"));
 await choDen(() => wsList.length > 1 && wsList[1].readyState === 1); await sleep(800);
-kq.thaTruocKhiSan = {khongGui: nhiPhan(wsList[1]) === 0, het: wsList[1].sent.length};
-// G) Ẩn tab: đóng hẳn, mic không chạy ngầm
+kq.thaTruocKhiSan = {khongGui: nhiPhan(wsList[1]) === 0, chuoi: chuoi(wsList[1])};
+// I) Ẩn tab: đóng hẳn
 Object.defineProperty(document, "visibilityState", {value: "hidden", configurable: true});
 document.dispatchEvent(new Event("visibilitychange")); await sleep(200);
-kq.anTab = {wsDong: !!wsList[1].closed, panelAn: q("[data-dt-panel]").style.display === "none"};
+kq.anTab = {wsDong: !!wsList[1].closed, nut: q("[data-dt-bat]").textContent};
 Object.defineProperty(document, "visibilityState", {value: "visible", configurable: true});
 card.remove();
-// H) Không có ngữ cảnh an toàn (http trong nhà): nói rõ lý do, KHÔNG mở phiên rỗng
+// J) Không có ngữ cảnh an toàn (http): vẫn NGHE được; mic thì báo https và không xin
 Object.defineProperty(window, "isSecureContext", {value: false, configurable: true});
-const wsTruoc = wsList.length, sTruoc = callws.length; card = tao(); sr = card.shadowRoot; q = (s) => sr.querySelector(s);
-q("[data-hold]").dispatchEvent(pe("pointerdown")); await sleep(300); q("[data-hold]").dispatchEvent(pe("pointerup"));
-kq.http = {loi: q("[data-dt-err]").textContent, khongMo: wsList.length === wsTruoc && callws.length === sTruoc, dichVu: calls.length};
+const gm1 = gmCalls; card = tao(); sr = card.shadowRoot; q = (s) => sr.querySelector(s);
+q("[data-dt-bat]").click(); await choDen(() => wsList.length > 2 && wsList[2].readyState === 1);
+const hh = q("[data-hold]"); hh.dispatchEvent(pe("pointerdown")); await sleep(300); hh.dispatchEvent(pe("pointerup"));
+kq.http = {kenhNgheMo: wsList.length > 2, loi: q("[data-dt-err]").textContent, xinMic: gmCalls - gm1, dichVu: calls.filter((c) => c[1] !== "turn_off" && c[1] !== "turn_on").length};
 document.getElementById("out").textContent = JSON.stringify(kq);
 })();</script>"""
 
 
 @pytest.mark.skipif(CHROME is None, reason="cần Chrome/Chromium")
-def test_giao_dien_giu_de_noi_la_mic_dien_thoai_nhu_camera(tmp_path):
-    """Nút chính «Giữ để nói» PHẢI là mic điện thoại (như bộ đàm camera của c2a), không phải nút mở phiên rỗng;
-    lỗi cũ «nhấn vào mất luôn» (nút bị khoá giữa chừng khi trạng thái HA đổi) cũng được giữ chặt ở đây."""
+def test_giao_dien_dam_thoai_bat_nghe_giu_noi_mic_luon_song_song_va_gain(tmp_path):
+    """«Bật đàm thoại» mở kênh nghe loa (không xin mic); giữ để nói = mic điện thoại (báo «noi»/«het»); bật mic luôn = VOX;
+    công tắc Song song; âm lượng nghe có nhãn thời gian thực. Lỗi cũ «nhấn vào mất luôn» cũng được giữ chặt ở đây."""
     page = tmp_path / "dt.html"
     page.write_text(PAGE_DT.replace("@EQ@", str(EQ)).replace("@CARD@", str(CARD)), encoding="utf-8")
     r = json.loads(_chay_chrome_den_khi_xong(page))
-    assert r["dau"] == {"panel": "none", "callWS": 0, "hold": "Giữ để nói"}   # chưa bấm: chưa xin mic, chưa nối gì
-    assert r["acTrongCuChi"] == [[True, 16000]]                               # AudioContext tạo NGAY trong cử chỉ bấm
-    assert r["sign"] == [["auth/sign_path", "/api/r1_speaker/dam_thoai/sensor.r1_trang_thai_mic/ws"]]
-    assert r["ws"] == ["/api/r1_speaker/dam_thoai/sensor.r1_trang_thai_mic/ws?authSig=x"]
-    k = r["khiGiu"]
-    assert k["khoa"] is False and k["mau"] is True and "Đang nói" in k["chu"] and k["nhiPhan"] and "ArrayBuffer" in k["kieu"]
-    assert r["sauDoiTrangThai"] == {"khoa": False, "giong": True, "chu": k["chu"]}   # không bị khoá/dựng lại giữa chừng
-    assert r["panelMo"] == "" and "Mic điện thoại đã mở" in r["trangThai"]
-    assert r["vanNoiKhiRaNgoai"] is True                                       # kéo ngón ra ngoài nút: vẫn đang giữ
-    assert r["het1"] == ["het"] and r["imSauTha"] is True and r["chuSauTha"] == "Giữ để nói"
-    assert r["lanHai"] is True and r["hetSauCancel"] is True                   # kênh mở sẵn: nói liền; pointercancel = thả
-    assert r["luon"]["dang"] is True and r["luon"]["chu"].endswith("✓") and "liên tục" in r["luon"]["trangThai"]
-    assert r["luonTat"] == {"im": True, "chu": "Bật mic luôn", "het": True}
-    assert r["loiHienRa"] == "loi thu"
-    assert r["dong"] == {"ws": True, "panelAn": True} and r["dichVuMicDienThoai"] == 0
-    assert r["thaTruocKhiSan"]["khongGui"] is True                             # thả tay trước khi kênh sẵn sàng: không rò tiếng
-    assert r["anTab"] == {"wsDong": True, "panelAn": True}                     # ẩn tab: đóng hẳn, mic không chạy ngầm
-    assert "https" in r["http"]["loi"] and r["http"]["khongMo"] is True and r["http"]["dichVu"] == 0
+    d = r["dau"]
+    assert d["bat"] == "📞 Bật đàm thoại" and d["callWS"] == 0 and d["hold"] == "Giữ để nói"   # chưa bấm: chưa nối gì
+    assert d["gain"] == "300%" and "Song song" in d["note"] and d["ssBat"] is True
+    c = r["chiNghe"]
+    assert c["acTrongCuChi"] == [[True, 16000]]                           # AudioContext tạo NGAY trong cử chỉ bấm
+    assert c["xinMic"] == 0 and c["tiengDi"] == 0 and c["chuoi"] == []    # chỉ NGHE: không xin mic, không gửi gì
+    assert c["nut"] == "Tắt đàm thoại" and "Đang nghe loa" in c["trangThai"] and "Assist tạm nghỉ" in c["trangThai"]
+    assert c["sign"] == [["auth/sign_path", "/api/r1_speaker/dam_thoai/sensor.r1_trang_thai_mic/ws"]]
+    assert "Điện thoại đang nói" in r["huongDienThoai"] and "Song song" in r["huongSongSong"]
+    g = r["giu"]
+    assert g["xinMic"] == 1 and g["khoa"] is False and g["mau"] is True and "Đang nói" in g["chu"]
+    assert g["chuoi"] == ["noi"] and "ArrayBuffer" in g["kieu"]            # giữ nút → báo «noi» rồi gửi tiếng
+    assert r["sauDoiTrangThai"] == {"khoa": False, "giong": True}          # không bị khoá/dựng lại giữa chừng
+    assert r["vanNoiKhiRaNgoai"] is True                                    # kéo ngón ra ngoài nút: vẫn đang giữ
+    assert r["sauTha"]["chuoi"] == ["noi", "het"] and r["sauTha"]["chu"] == "Giữ để nói" and r["imSauTha"] is True
+    assert r["lanHai"]["xinMic"] == 1 and r["lanHai"]["kenh"] == 1          # mic xin MỘT lần; kênh mở sẵn thì nói liền
+    assert r["sauCancel"] == "noi,het,noi,het"                              # pointercancel = thả
+    assert r["luon"]["dang"] is True and r["luon"]["chu"].endswith("✓") and r["luon"]["chuoiThem"] == []   # VOX: không «noi»
+    assert r["luonTat"]["im"] is True and r["luonTat"]["chu"] == "Bật mic luôn"
+    assert r["songSong"] == [["switch", "turn_off", {"entity_id": "switch.r1_mic_loa_song_song"}]]
+    assert r["gain"] == {"nhan": "500%", "nho": "500", "node": 5}           # nhãn thời gian thực, nhớ lại, áp vào GainNode
+    assert r["tat"] == {"ws": True, "nut": "📞 Bật đàm thoại"}
+    assert r["thaTruocKhiSan"]["khongGui"] is True                          # thả tay trước khi kênh sẵn sàng: không rò tiếng
+    assert r["anTab"] == {"wsDong": True, "nut": "📞 Bật đàm thoại"}        # ẩn tab: đóng hẳn
+    h = r["http"]
+    assert h["kenhNgheMo"] is True and "https" in h["loi"] and h["xinMic"] == 0   # http: vẫn NGHE; mic báo https, không xin
 
 
 PAGE_NGHE = """<!doctype html><meta charset="utf-8"><body><div id="out">CHUA CHAY</div>

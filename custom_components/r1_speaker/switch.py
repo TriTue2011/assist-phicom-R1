@@ -159,7 +159,7 @@ class R1IntercomSwitch(R1MicEntity, SwitchEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {"giu_mo": self._duplex.luon}
+        return {"giu_mo": self._duplex.luon, "huong": self._duplex.huong if self._duplex.active else None}
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()

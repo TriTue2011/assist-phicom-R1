@@ -149,6 +149,8 @@ class R1Satellite(R1MicEntity, AssistSatelliteEntity):
     def _khi_co_tieng(self, khuc: bytes) -> None:
         if self._dang_noi:
             return
+        if self.talk.session_kind == "song_cong":
+            return        # đàm thoại đang bật: Assist tạm nghỉ chờ từ đánh thức, mic dành cho cuộc gọi
         if self._hang.full():
             self._hang.get_nowait()   # tụt hậu thì bỏ khúc cũ nhất
         self._hang.put_nowait(khuc)

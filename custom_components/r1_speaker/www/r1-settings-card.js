@@ -19,7 +19,7 @@
  */
 (function () {
   "use strict";
-  var BUILD = "2026-10-22.8";
+  var BUILD = "2026-10-22.9";
 
   var PLATFORM = "r1_speaker";
   var FUNCTIONS = ["cho", "nghe", "nghi", "phan_hoi", "dam_thoai", "phat_nhac", "loi", "tat_mic"];
@@ -288,7 +288,7 @@
     }
     h += '<div class="row"><label>' + esc(t.mic_gain) + "</label>" +
       slider("data-mic-gain", A.micGain.value, A.micGain.min, A.micGain.max, A.micGain.step, !A.micGain.available) +
-      '<span class="val">' + esc(A.micGain.value === null ? "—" : A.micGain.value) + "</span></div>";
+      '<span class="val">' + esc(A.micGain.value === null ? "—" : A.micGain.value + " dB") + "</span></div>";
     if (!m.gop) h += '<div class="row"><label>' + esc(t.mute) + '</label><input type="checkbox" data-mute' +
       (A.mute.on ? " checked" : "") + (A.mute.available ? "" : " disabled") + "></div>";
     if (A.adv && A.adv.length) {
@@ -498,6 +498,15 @@
           var path = self._model().conn.optionsPath;
           history.pushState(null, "", path);
           window.dispatchEvent(new Event("location-changed"));
+        });
+      });
+      // Số hiển thị THỜI GIAN THỰC khi đang kéo (trước đây chỉ cập nhật sau khi thả tay nên thanh kéo trông «đơ»).
+      all('input[type="range"]', function (el) {
+        el.addEventListener("input", function () {
+          var v = el.parentNode && el.parentNode.querySelector(".val");
+          if (!v) return;
+          var dv = el.hasAttribute("data-mic-gain") ? " dB" : (el.dataset.eq ? " mB" : "");
+          v.textContent = el.value + dv;
         });
       });
       var vol = q("[data-vol]");
