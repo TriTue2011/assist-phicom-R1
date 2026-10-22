@@ -46,9 +46,10 @@ Kho này gồm hai phần chạy cùng nhau để biến loa **Phicomm R1** thà
 3. Cài đặt → Thiết bị & dịch vụ → **Thêm tích hợp** → **Phicomm R1 Speaker**. Điền:
    - **Địa chỉ IP của loa** — *không có giá trị mặc định* (ô để trống); tự điền IP loa của bạn, ví dụ `192.0.2.10` (địa chỉ ví dụ);
    - **Cổng điều khiển/EQ** — mặc định `8080`.
-4. Các tuỳ chọn khác (đổi sau ở *Cấu hình* của tích hợp): máy chủ/cổng mic, cổng nghe mic và **khoá luồng mic** (mục 6),
-   cổng phát tiếng bộ đàm, `ha_url` (địa chỉ HA mà loa/go2rtc gọi tới, dạng `http://<IP của HA>:8123`), ngưỡng bộ đàm. Chi tiết:
-   `docs/HUONG-DAN-CAI-DAT.md`.
+4. Khoá và cổng nghe mic **do HA tự cấp** cho từng loa, không phải nhập. Muốn thêm loa thứ hai: thêm tích hợp
+   lần nữa với IP khác. Tuỳ chọn đổi sau ở *Cấu hình*: IP/cổng loa, `ha_url` (địa chỉ HA mà loa/go2rtc gọi tới, dạng
+   `http://<IP của HA>:8123`), và «thông số nâng cao» (ngưỡng bộ đàm, khử tạp, song công). Lệnh cài APK đã kèm khoá
+   hiện ở thẻ → Cài đặt → Kết nối (quản trị viên). Chi tiết: `docs/HUONG-DAN-CAI-DAT.md`.
 
 **Kiểm nhanh:**
 

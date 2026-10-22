@@ -29,6 +29,16 @@ public class KiemMicReceiver extends BroadcastReceiver {
                     + (loi == null ? "da gui" : loi));
             return;
         }
+        if ("vn.r1.bodam.KIEM_DEN".equals(hd)) {
+            // am broadcast -a vn.r1.bodam.KIEM_DEN --es dong "V 128"   (CHI kiem thu; may chu den tu kiem lenh)
+            final String dong = intent.getStringExtra("dong");
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    Log.i(TAG, "KIEM_DEN dong=" + dong + " -> " + String.valueOf(DenCau.gui(dong == null ? "" : dong)));
+                }
+            }, "kiem-den").start();
+            return;
+        }
         if (!HANH_DONG_KIEM_MIC.equals(hd)) return;
         boolean bat = intent.getBooleanExtra("bat", false);
         // CHI KIEM THU: nhan host/cong/khoa qua tham so broadcast (khong can man hinh)

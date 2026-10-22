@@ -253,12 +253,15 @@ def _sau_lan_dung_cuoi(mem):
     return mem.log[i + 1:]
 
 
-async def test_mac_dinh_chua_co_dich_vu_den_chi_luu_khong_gui(hass, r1):
+async def test_loa_chua_noi_thi_chi_luu_khong_gui(hass, r1):
+    """Tích hợp dùng sink qua APK loa; APK chưa nối thì đèn chỉ lưu cài đặt, không gửi, không báo lỗi."""
+    from custom_components.r1_speaker.den_apk import ApkLights
     e = await _them(hass, r1)
     lights = e.runtime_data.lights
-    assert isinstance(lights.sink, NullLights) and lights.sink_state == "CHO_PHIA_LOA"
+    assert isinstance(lights.sink, ApkLights) and lights.sink_state == "mat_ket_noi"
+    assert not lights.sink.available
     st = hass.states.get(CAI_DAT)
-    assert st.state == "cho" and st.attributes["anh_sang"]["dich_vu_den"] == "CHO_PHIA_LOA"
+    assert st.state == "cho" and st.attributes["anh_sang"]["dich_vu_den"] == "mat_ket_noi"
     # đổi trạng thái vẫn không ném lỗi, không gửi gì
     hass.states.async_set(SAT, "listening")
     await hass.async_block_till_done()

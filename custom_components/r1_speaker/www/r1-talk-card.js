@@ -13,13 +13,13 @@
  */
 (function () {
   "use strict";
-  var BUILD = "2026-10-22.3";
+  var BUILD = "2026-10-22.6";
 
   var PLATFORM = "r1_speaker";
   var STATUS = { tat: "off", nghe: "listening", gui: "sending" };
   var TEXT = {
     vi: {
-      title: "Loa R1 — Đàm thoại", hold: "Giữ để nói", always: "Bật mic luôn", mic: "Mic",
+      title: "Loa R1 — Đàm thoại", hold: "Giữ để nói", holding: "🔴 Đang nói — thả ra để nghe", always: "Bật mic luôn", mic: "Mic",
       off: "Tắt", listening: "Đang nghe", sending: "Đang gửi", unknown: "Không rõ",
       off_tip: "Không có tiếng nào rời loa.",
       listening_tip: "Loa chờ từ đánh thức; chưa gửi tiếng nào về Home Assistant.",
@@ -30,9 +30,14 @@
       pending: "Phía loa chưa có (từ đánh thức trên loa còn chờ)",
       refused: "Phiên bị từ chối gần đây", none: "Không tìm thấy thực thể r1_speaker nào.",
       no_mic: "Mic chưa sẵn sàng — chưa mở được phiên",
+      dt_open: "📱 Mic điện thoại", dt_close: "Đóng mic điện thoại", dt_hold: "✋ Giữ để nói (điện thoại)",
+      dt_talk: "🔴 Đang nói — thả ra để nghe", dt_wait: "Đang nối…", dt_on: "Đang nghe loa — giữ nút để nói",
+      dt_https: "Trình duyệt chỉ cho dùng mic khi mở Home Assistant bằng https (địa chỉ ngoài hoặc https trong nhà).",
+      dt_err: "Không mở được mic điện thoại", dt_busy: "Loa đang có kênh khác (điện thoại khác hoặc phiên đang mở).",
+      dt_fail: "Không mở được phiên đàm thoại với loa.", dt_ended: "Phiên đàm thoại đã đóng.", dt_lost: "Đã ngắt kết nối.",
     },
     en: {
-      title: "R1 speaker — Talk", hold: "Hold to talk", always: "Mic always on", mic: "Mic",
+      title: "R1 speaker — Talk", hold: "Hold to talk", holding: "🔴 Talking — release to listen", always: "Mic always on", mic: "Mic",
       off: "Off", listening: "Listening", sending: "Sending", unknown: "Unknown",
       off_tip: "No audio leaves the speaker.",
       listening_tip: "The speaker waits for the wake word; nothing is sent to Home Assistant yet.",
@@ -43,6 +48,11 @@
       pending: "Speaker side not built yet (wake word on the speaker is pending)",
       refused: "A session was recently refused", none: "No r1_speaker entity found.",
       no_mic: "Microphone not ready — cannot start a session",
+      dt_open: "📱 Phone microphone", dt_close: "Close phone microphone", dt_hold: "✋ Hold to talk (phone)",
+      dt_talk: "🔴 Talking — release to listen", dt_wait: "Connecting…", dt_on: "Listening to the speaker — hold to talk",
+      dt_https: "The browser only allows the microphone when Home Assistant is opened over https.",
+      dt_err: "Could not open the phone microphone", dt_busy: "The speaker already has another channel (another phone or an open session).",
+      dt_fail: "Could not open an intercom session with the speaker.", dt_ended: "The intercom session closed.", dt_lost: "Disconnected.",
     },
   };
 
@@ -145,7 +155,12 @@
     "button{font:inherit;padding:8px 16px;border-radius:8px;border:1px solid var(--divider-color,#bbb);",
     "background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff);cursor:pointer}",
     "button.sec{background:transparent;color:inherit}",
+    "button.noi{background:var(--error-color,#db4437);color:#fff}",
+    "button[data-dt-hold]{touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;width:100%;padding:18px 16px;margin-top:8px}",
     "button[disabled]{opacity:.45;cursor:not-allowed}",
+    // Nhấn GIỮ trên màn hình cảm ứng: không có touch-action:none thì trình duyệt điện thoại bắt đầu cuộn/menu
+    // giữ lâu và HUỶ thao tác (pointercancel) ngay, nên «giữ để nói» không giữ được.
+    "button[data-hold]{touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}",
     ".warn{color:var(--error-color,#db4437);font-size:.85em}",
     ".note{font-size:.8em;opacity:.75}",
     "section{margin-top:10px;border-top:1px solid var(--divider-color,#ddd);padding-top:6px}",
@@ -171,7 +186,7 @@
     getCardSize() { return 8; }
     set hass(hass) { this._hass = hass; this._render(); }
 
-    _call(domain, service, data) { this._hass.callService(domain, service, data); }
+    _call(domain, service, data) { return this._hass.callService(domain, service, data); }
 
     _render() {
       if (!this._hass || !this.shadowRoot) return;
@@ -184,6 +199,7 @@
       if (sig !== this._sig) {
         this._sig = sig;
         this._eq = null;
+        this._t = t;
         this.shadowRoot.innerHTML = "<style>" + CSS + "</style>" + this._html(m, t);
         this._bind();
         this._mountEq();
@@ -199,6 +215,9 @@
         '<div class="tip" data-mic-tip></div>' +
         '<div class="warn" data-refused style="display:none"></div>' +
         '<div class="row"><button data-hold>' + esc(t.hold) + '</button><button class="sec" data-always>' + esc(t.always) + "</button></div>" +
+        '<div class="row"><button class="sec" data-dt-open>' + esc(t.dt_open) + "</button></div>" +
+        '<div data-dt-panel style="display:none"><button data-dt-hold>' + esc(t.dt_hold) + "</button>" +
+        '<div class="tip" data-dt-status></div><div class="warn" data-dt-err style="display:none"></div></div>' +
         '<div class="row"><label>' + esc(t.mute) + '</label><ha-switch data-mute></ha-switch></div>' +
         '<div class="note" data-pending style="display:none">' + esc(t.pending) + "</div>" +
         '<section><div class="row"><span>' + esc(t.music) + ': <span data-music-text></span></span>' +
@@ -216,21 +235,33 @@
       var hold = root.querySelector("[data-hold]");
       if (hold) {
         var dang = false;
-        var ent = function () { var m = now(); return m.mic.entity || m.talk.entity; };
+        self._giu = false;
+        // Lệnh bắt đầu/dừng xếp HÀNG: thả nút nhanh thì «dừng» không được chạy trước «bắt đầu» (mic bị kẹt mở).
+        var hang = Promise.resolve();
+        var xep = function (service) {
+          hang = hang.then(function () {
+            var m = now();
+            return self._call("r1_speaker", service, { entity_id: m.mic.entity || m.talk.entity });
+          }).catch(function () { /* lỗi dịch vụ hiện ở HA; vòng sau vẫn chạy */ });
+        };
         hold.addEventListener("pointerdown", function (ev) {
           ev.preventDefault();
           var m = now();
           if (!m.talk.enabled || m.intercom.on) return;  // không sẵn sàng / đã mở (bật mic luôn hoặc người khác đang giữ)
-          dang = true; self._call("r1_speaker", "start_duplex", { entity_id: ent() });
+          // Giữ nguồn con trỏ cho nút: kéo ngón ra ngoài vẫn đang giữ (như nút «giữ để nói» của camera).
+          try { hold.setPointerCapture(ev.pointerId); } catch (e) { /* sự kiện không có pointerId */ }
+          dang = true; self._giu = true; self._capNhatNutGiu();
+          xep("start_duplex");
         });
         var tha = function () {
           if (!dang) return;
-          dang = false;
-          if (!now().always.on) self._call("r1_speaker", "stop_duplex", { entity_id: ent() });
+          dang = false; self._giu = false; self._capNhatNutGiu();
+          if (!now().always.on) xep("stop_duplex");
         };
         hold.addEventListener("pointerup", tha);
-        hold.addEventListener("pointerleave", tha);
         hold.addEventListener("pointercancel", tha);
+        hold.addEventListener("lostpointercapture", tha);
+        hold.addEventListener("contextmenu", function (ev) { ev.preventDefault(); });
       }
       on("[data-always]", function () {
         var m = now();
@@ -244,6 +275,20 @@
         var m = now();
         if (m.music.canPlay) self._call("media_player", "media_play", { entity_id: m.music.entity });
       });
+      on("[data-dt-open]", function () { if (self._dt) self._dtDong(); else self._dtMo(); });
+      var dh = root.querySelector("[data-dt-hold]");
+      if (dh) {
+        // Như nút camera: không bao giờ khoá lúc đang giữ; thả/huỷ/mất con trỏ đều là thôi nói.
+        dh.addEventListener("pointerdown", function (ev) {
+          ev.preventDefault();
+          try { dh.setPointerCapture(ev.pointerId); } catch (e) { /* sự kiện không có pointerId */ }
+          self._dtNoiBatDau();
+        });
+        ["pointerup", "pointercancel", "lostpointercapture"].forEach(function (n) {
+          dh.addEventListener(n, function () { self._dtNoiKetThuc(); });
+        });
+        dh.addEventListener("contextmenu", function (ev) { ev.preventDefault(); });
+      }
       var sw = root.querySelector("[data-mute]");
       if (sw) sw.addEventListener("change", function () {
         var m = now();
@@ -262,6 +307,146 @@
       host.appendChild(this._eq);
     }
 
+    connectedCallback() {
+      var self = this;
+      this._dtAn = function () { if (document.visibilityState === "hidden") self._dtDong(); };
+      this._dtRoi = function () { self._dtDong(); };
+      document.addEventListener("visibilitychange", this._dtAn);
+      window.addEventListener("pagehide", this._dtRoi);
+    }
+
+    disconnectedCallback() {
+      document.removeEventListener("visibilitychange", this._dtAn);
+      window.removeEventListener("pagehide", this._dtRoi);
+      this._dtDong();
+    }
+
+    /* ── Mic điện thoại (như bộ đàm camera của c2a): MỘT WebSocket hai chiều tới HA. Mic chỉ gửi khi đang giữ nút;
+       tiếng loa phát ra điện thoại suốt lúc kênh mở. Kênh đóng hẳn khi ẩn tab / rời trang (mic không chạy ngầm). */
+    _dtHienThi(loi) {
+      var root = this.shadowRoot, t = this._t || TEXT.vi;
+      if (!root) return;
+      var open = root.querySelector("[data-dt-open]"), panel = root.querySelector("[data-dt-panel]");
+      var st = root.querySelector("[data-dt-status]"), er = root.querySelector("[data-dt-err]");
+      var hold = root.querySelector("[data-dt-hold]");
+      if (!open) return;
+      if (loi !== undefined) this._dtLoi = loi || "";
+      open.textContent = this._dt ? t.dt_close : t.dt_open;
+      panel.style.display = this._dt ? "" : "none";
+      st.textContent = this._dt ? (this._dtSan ? t.dt_on : t.dt_wait) : "";
+      er.style.display = this._dtLoi ? "" : "none";
+      er.textContent = this._dtLoi || "";
+      hold.classList.toggle("noi", !!this._dtNoi);
+      hold.textContent = this._dtNoi ? t.dt_talk : t.dt_hold;
+    }
+
+    _dtMo() {
+      var self = this, t = this._t || TEXT.vi, m = buildModel(this._hass, this._config);
+      var eid = m.mic.entity || m.talk.entity;
+      this._dtLoi = "";
+      if (!eid) return;
+      if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        this._dtHienThi(t.dt_https); return;
+      }
+      this._dt = { stream: null, ac: null, ws: null, lich: 0 };
+      var dt = this._dt;
+      this._dtSan = false; this._dtNoi = false;
+      this._dtHienThi();
+      navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
+        .then(function (stream) {
+          if (self._dt !== dt) { stream.getTracks().forEach(function (k) { k.stop(); }); return null; }
+          dt.stream = stream;
+          return self._hass.callWS({ type: "auth/sign_path", path: "/api/r1_speaker/dam_thoai/" + eid + "/ws", expires: 30 });
+        })
+        .then(function (r) {
+          if (!r || self._dt !== dt) return;
+          var AC = window.AudioContext || window.webkitAudioContext;
+          dt.ac = new AC({ sampleRate: 16000 });
+          var ws = new WebSocket((location.protocol === "https:" ? "wss:" : "ws:") + "//" + location.host + r.path);
+          ws.binaryType = "arraybuffer";
+          dt.ws = ws;
+          ws.onopen = function () { self._dtSan = true; self._dtHienThi(); self._dtNoiMic(dt); };
+          ws.onmessage = function (e) { self._dtNhan(dt, e); };
+          ws.onclose = function (e) {
+            if (self._dt !== dt) return;
+            var tt = self._t || TEXT.vi;
+            var ly = e.code === 4409 ? tt.dt_busy : e.code === 4400 ? tt.dt_fail : e.code === 4001 ? tt.dt_ended : tt.dt_lost;
+            self._dtDong(ly);
+          };
+        })
+        .catch(function (err) {
+          if (self._dt === dt) self._dtDong((self._t || TEXT.vi).dt_err + ": " + (err && err.message ? err.message : err));
+        });
+    }
+
+    _dtNoiMic(dt) {
+      var self = this, ac = dt.ac;
+      var nguon = ac.createMediaStreamSource(dt.stream);
+      var xl = ac.createScriptProcessor(2048, 1, 1);          // cũ nhưng chạy mọi trình duyệt, không cần tệp worklet
+      xl.onaudioprocess = function (e) {
+        var ws = dt.ws;
+        if (!self._dtNoi || !ws || ws.readyState !== 1) return;
+        var f = e.inputBuffer.getChannelData(0), i16 = new Int16Array(f.length);
+        for (var i = 0; i < f.length; i++) i16[i] = Math.max(-1, Math.min(1, f[i])) * 32767;
+        ws.send(i16.buffer);
+      };
+      var cam = ac.createGain();
+      cam.gain.value = 0;                                      // processor phải nối ra đích mới chạy; không phát lại tiếng mình
+      nguon.connect(xl); xl.connect(cam); cam.connect(ac.destination);
+    }
+
+    _dtNhan(dt, e) {
+      if (typeof e.data === "string") {
+        try { var j = JSON.parse(e.data); if (j.loi) this._dtHienThi(j.loi); } catch (x) { /* bỏ qua */ }
+        return;
+      }
+      var ac = dt.ac, i16 = new Int16Array(e.data);
+      if (!ac || !i16.length) return;
+      var f = new Float32Array(i16.length);
+      for (var i = 0; i < i16.length; i++) f[i] = i16[i] / 32768;
+      var now = ac.currentTime;
+      if (dt.lich - now > 1.0) return;                         // tụt hậu quá 1 giây: bỏ khúc này để đuổi kịp
+      if (dt.lich < now + 0.05) dt.lich = now + 0.15;
+      var buf = ac.createBuffer(1, f.length, 16000);
+      buf.copyToChannel(f, 0);
+      var src = ac.createBufferSource();
+      src.buffer = buf; src.connect(ac.destination); src.start(dt.lich);
+      dt.lich += buf.duration;
+    }
+
+    _dtNoiBatDau() {
+      if (!this._dt || !this._dtSan) return;
+      var ac = this._dt.ac;
+      if (ac && ac.state === "suspended" && ac.resume) ac.resume();
+      this._dtNoi = true; this._dtHienThi();
+    }
+
+    _dtNoiKetThuc() {
+      if (!this._dtNoi) return;
+      this._dtNoi = false;
+      var ws = this._dt && this._dt.ws;
+      if (ws && ws.readyState === 1) ws.send("het");
+      this._dtHienThi();
+    }
+
+    _dtDong(loi) {
+      var dt = this._dt;
+      this._dt = null; this._dtSan = false; this._dtNoi = false;
+      if (dt) {
+        try { if (dt.ws) { dt.ws.onclose = null; dt.ws.close(); } } catch (e) { /* đã đóng */ }
+        try { if (dt.stream) dt.stream.getTracks().forEach(function (k) { k.stop(); }); } catch (e) { /* đã dừng */ }
+        try { if (dt.ac) dt.ac.close(); } catch (e) { /* đã đóng */ }
+      }
+      this._dtHienThi(loi || "");
+    }
+
+    _capNhatNutGiu() {
+      var hold = this.shadowRoot && this.shadowRoot.querySelector("[data-hold]");
+      if (!hold || !this._t) return;
+      hold.classList.toggle("noi", !!this._giu);
+      hold.textContent = this._giu ? this._t.holding : this._t.hold;
+    }
+
     _update(m, t) {
       var root = this.shadowRoot;
       if (!m.found) return;
@@ -270,7 +455,12 @@
       q("[data-mic-text]").textContent = t[m.mic.status];
       q("[data-mic-tip]").textContent = t[m.mic.status + "_tip"] || "";
       var hold = q("[data-hold]"), al = q("[data-always]");
-      hold.disabled = al.disabled = !m.talk.enabled;
+      // Nút «giữ để nói» KHÔNG được vô hiệu hoá khi ngón tay còn đang giữ: phiên vừa mở làm trạng thái HA đổi
+      // thoáng chốc, nút bị khoá giữa chừng là trình duyệt huỷ thao tác giữ và đàm thoại tắt ngay (như nút camera
+      // của c2a: không bao giờ khoá lúc đang giữ).
+      hold.disabled = !m.talk.enabled && !this._giu;
+      al.disabled = !m.talk.enabled;
+      this._t = t;
       hold.title = al.title = m.talk.reason ? t[m.talk.reason] : "";
       al.textContent = t.always + (m.always.on ? " ✓" : "");
       var sw = q("[data-mute]");
@@ -283,6 +473,8 @@
       q("[data-music-text]").textContent = m.music.title ? mt + " — " + m.music.title : mt;
       q("[data-pause]").disabled = !m.music.canPause;
       q("[data-play]").disabled = !m.music.canPlay;
+      this._capNhatNutGiu();
+      this._dtHienThi();
       if (this._eq) this._eq.hass = this._hass;
     }
   }

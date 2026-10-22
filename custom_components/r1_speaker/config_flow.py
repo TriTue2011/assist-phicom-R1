@@ -34,6 +34,7 @@ from .const import (CONF_WAKE_ENABLE, CONF_WAKE_SENSITIVITY, CONF_WAKE_WORD,
                     DEFAULT_WAKE_ENABLE, DEFAULT_WAKE_SENSITIVITY, DEFAULT_WAKE_WORD)
 
 CONF_ROTATE_KEY = "rotate_intercom_key"
+CONF_NANG_CAO = "nang_cao"
 
 
 class R1ConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -95,38 +96,39 @@ _DSP_GOC = {k: _GOC[k] for k in (
     CONF_LIMITER_CEILING, CONF_WAKE_ENABLE, CONF_WAKE_WORD, CONF_WAKE_SENSITIVITY)}
 
 
+#: Khoá tuỳ chọn KHÔNG còn hiện ở form nào (tự cấp hoặc chưa có dịch vụ phía loa) nhưng vẫn phải giữ nguyên
+#: nếu đã có sẵn trong options — lưu form không được làm rơi khoá đầu nhận mic người dùng đã đặt từ trước.
+_AN = (CONF_MIC_HOST, CONF_MIC_PORT, CONF_MIC_LISTEN_PORT, CONF_MIC_LISTEN_KEY, CONF_PLAY_HOST,
+       CONF_PLAY_PORT, CONF_WAKE_MODE, CONF_WAKE_ENABLE, CONF_WAKE_WORD, CONF_WAKE_SENSITIVITY)
+
+
 def _overrides(entry: ConfigEntry, chosen: dict[str, Any]) -> dict[str, Any]:
     """Chỉ giữ giá trị KHÁC giá trị gốc (host/cổng: khác lúc thêm loa). Lý do: mặc định của
     bộ đàm còn CHƯA ĐO — khi có số đo và đổi mặc định, các mục chưa chỉnh tay tự theo mặc
     định mới thay vì kẹt ở số cũ."""
     goc = {**_GOC, CONF_HOST: entry.data.get(CONF_HOST), CONF_PORT: entry.data.get(CONF_PORT)}
-    return {k: v for k, v in chosen.items() if v != goc[k]}
+    return {k: v for k, v in chosen.items() if k not in goc or v != goc[k]}
 
 
 class R1OptionsFlow(OptionsFlowWithReload):
-    """Mọi thứ chỉnh được sau khi thêm loa (HA nạp lại mục khi lưu):
+    """Chỉnh loa sau khi thêm (HA nạp lại mục khi lưu). Form chính chỉ còn thứ người dùng thật sự biết:
 
-    * ``host`` + ``port`` — địa chỉ và cổng WebSocket điều khiển / EQ (đổi thì kiểm lại bằng
-      một lần get_info);
-    * ``mic_host`` + ``mic_port`` — luồng mic của loa (host trống = tắt phần nghe);
-    * ``mic_listen_port`` + ``mic_listen_key`` — đầu NHẬN mic NV244 (APK loa nối vào HA);
-      khoá trống = đầu nhận không mở. Khoá chỉ nằm ở options, không ghi log;
-    * ``play_host`` + ``play_port`` — kênh phát về loa của bộ đàm (cổng 0 = chưa có kênh);
-    * bốn tham số cổng thoại của bộ đàm nửa công (mặc định CHƯA đo trên loa R1);
-    * ``wake_mode`` — ``ha`` (từ đánh thức do pipeline HA dò, mic về HA liên tục) hoặc
-      ``speaker`` (từ đánh thức TRÊN LOA, HA chỉ nhận luồng sau trigger; phía loa CHƯA có);
-    * ``noise_suppress`` + ``noise_strength_db`` + ``noise_voice_db`` — khử tạp âm phía HA
-      (``noise_suppress.py``; MẶC ĐỊNH TẮT, số CHƯA ĐO trên mic loa);
-    * ``agc_*`` + ``limiter_*`` — AGC và bộ hạn đỉnh (``agc.py``; MẶC ĐỊNH TẮT, CHƯA ĐO). Cả
-      năm khoá trên áp dụng từ lần nối mic kế (HA nạp lại mục khi lưu);
-    * ``duplex_*`` — đàm thoại SONG CÔNG (NV246): ngưỡng VAD, đệm trước/sau, hạn phiên,
-      cắt vọng tuỳ chọn (mặc định TẮT; mọi số CHƯA ĐO trên loa R1);
-    * ``ha_url`` — địa chỉ HA mà loa / go2rtc gọi tới. KIỂM NGAY khi lưu: sai dạng, trỏ về
-      127.0.0.1/localhost, hay HA không tự gọi được ``/api/r1_speaker/ping`` thì báo lỗi cụ thể
-      và KHÔNG lưu gì (cả form);
-    * ``rotate_intercom_key`` — sinh khoá URL bộ đàm / trigger mới (cấu hình cũ trên loa/go2rtc
-      ngừng chạy, thông báo «khoá sai» được gỡ).
+    * ``host`` + ``port`` — địa chỉ và cổng WebSocket điều khiển / EQ (đổi thì kiểm lại bằng get_info);
+    * ``ha_url`` — địa chỉ HA mà loa / go2rtc gọi tới (trống = tự đoán). KIỂM NGAY khi lưu: sai dạng,
+      trỏ về 127.0.0.1/localhost, hay HA không tự gọi được ``/api/r1_speaker/ping`` thì báo lỗi cụ thể
+      và KHÔNG lưu gì;
+    * ``rotate_intercom_key`` — sinh khoá URL bộ đàm / trigger mới;
+    * ``nang_cao`` — tích để sang bước thứ hai chỉnh thông số âm thanh.
+
+    Khoá và cổng nghe mic KHÔNG hỏi: ``async_setup_entry`` tự sinh khoá và cấp cổng riêng cho từng loa,
+    IP mic lấy theo IP loa; lệnh cấu hình APK có sẵn khoá được thẻ «Kết nối» hiện cho quản trị viên.
+
+    Bước nâng cao (mặc định CHƯA đo trên loa R1, đa số người dùng không cần đụng): bốn tham số cổng thoại
+    nửa công, khử tạp / AGC / hạn đỉnh phía HA (mặc định TẮT), sáu tham số đàm thoại song công.
     """
+
+    def __init__(self) -> None:
+        self._co_ban: dict[str, Any] = {}
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None
                               ) -> ConfigFlowResult:
@@ -155,37 +157,54 @@ class R1OptionsFlow(OptionsFlowWithReload):
                         entry, data={**entry.data,
                                      CONF_INTERCOM_KEY: secrets.token_urlsafe(24)})
                     xoa_canh_bao_khoa(self.hass, entry.entry_id)
-                return self.async_create_entry(data=_overrides(entry, {
-                    CONF_HOST: host, CONF_PORT: port,
-                    CONF_MIC_HOST: user_input.get(CONF_MIC_HOST, "").strip(),
-                    CONF_MIC_PORT: user_input[CONF_MIC_PORT],
-                    CONF_MIC_LISTEN_PORT: user_input.get(
-                        CONF_MIC_LISTEN_PORT, mic_listen(entry)[0]),
-                    CONF_MIC_LISTEN_KEY: user_input.get(CONF_MIC_LISTEN_KEY, "").strip(),
-                    CONF_PLAY_HOST: user_input.get(CONF_PLAY_HOST, "").strip(),
-                    CONF_PLAY_PORT: user_input[CONF_PLAY_PORT],
-                    CONF_TALK_THRESHOLD_DB: user_input[CONF_TALK_THRESHOLD_DB],
-                    CONF_TALK_SILENCE: user_input[CONF_TALK_SILENCE],
-                    CONF_TALK_PREROLL: user_input[CONF_TALK_PREROLL],
-                    CONF_TALK_TAIL: user_input[CONF_TALK_TAIL],
-                    CONF_WAKE_MODE: user_input.get(CONF_WAKE_MODE, DEFAULT_WAKE_MODE),
-                    **{k: user_input.get(k, d) for k, d in _DSP_GOC.items()},
-                    CONF_DUPLEX_VAD_THRESHOLD: user_input[CONF_DUPLEX_VAD_THRESHOLD],
-                    CONF_DUPLEX_PREROLL: user_input[CONF_DUPLEX_PREROLL],
-                    CONF_DUPLEX_HANGOVER: user_input[CONF_DUPLEX_HANGOVER],
-                    CONF_DUPLEX_MAX_S: user_input[CONF_DUPLEX_MAX_S],
-                    CONF_DUPLEX_DUCK: user_input.get(CONF_DUPLEX_DUCK, DEFAULT_DUPLEX_DUCK),
-                    CONF_DUPLEX_DUCK_DB: user_input[CONF_DUPLEX_DUCK_DB],
-                    CONF_HA_URL: url.rstrip("/")}))
+                self._co_ban = {CONF_HOST: host, CONF_PORT: port, CONF_HA_URL: url.rstrip("/")}
+                if user_input.get(CONF_NANG_CAO):
+                    return await self.async_step_nang_cao()
+                return self._luu({})
         v = user_input or {}
+        return self.async_show_form(step_id="init", errors=errors, data_schema=vol.Schema({
+            vol.Required(CONF_HOST, default=v.get(CONF_HOST, speaker_host(entry))): str,
+            vol.Required(CONF_PORT, default=v.get(CONF_PORT, speaker_port(entry))): vol.All(
+                int, vol.Range(min=1, max=65535)),
+            vol.Optional(CONF_HA_URL, description={
+                "suggested_value": v.get(CONF_HA_URL, ha_url(entry))}): str,
+            vol.Optional(CONF_ROTATE_KEY, default=False): bool,
+            vol.Optional(CONF_NANG_CAO, default=False): bool,
+        }))
+
+    def _luu(self, nang_cao: dict[str, Any]) -> ConfigFlowResult:
+        """Gộp: khoá ẩn đang có + bước nâng cao (nếu đã qua) + bước chính. Bước nâng cao bị bỏ qua thì giữ nguyên
+        các số nâng cao đang lưu, không đặt lại về mặc định."""
+        entry = self.config_entry
+        giu = {k: v for k, v in entry.options.items() if k in _AN}
+        if not nang_cao:
+            giu.update({k: v for k, v in entry.options.items() if k in _GOC and k not in _AN
+                        and k != CONF_HA_URL})
+        return self.async_create_entry(data=_overrides(entry, {**giu, **nang_cao, **self._co_ban}))
+
+    async def async_step_nang_cao(self, user_input: dict[str, Any] | None = None
+                                  ) -> ConfigFlowResult:
+        entry = self.config_entry
+        if user_input is not None:
+            return self._luu({
+                CONF_TALK_THRESHOLD_DB: user_input[CONF_TALK_THRESHOLD_DB],
+                CONF_TALK_SILENCE: user_input[CONF_TALK_SILENCE],
+                CONF_TALK_PREROLL: user_input[CONF_TALK_PREROLL],
+                CONF_TALK_TAIL: user_input[CONF_TALK_TAIL],
+                **{k: user_input.get(k, d) for k, d in _DSP_GOC.items()
+                   if k in (CONF_NOISE_ENABLE, CONF_NOISE_STRENGTH_DB, CONF_NOISE_VOICE_DB,
+                            CONF_AGC_ENABLE, CONF_AGC_TARGET_DB, CONF_AGC_MAX_GAIN_DB,
+                            CONF_AGC_SILENCE_DB, CONF_LIMITER_ENABLE, CONF_LIMITER_CEILING)},
+                CONF_DUPLEX_VAD_THRESHOLD: user_input[CONF_DUPLEX_VAD_THRESHOLD],
+                CONF_DUPLEX_PREROLL: user_input[CONF_DUPLEX_PREROLL],
+                CONF_DUPLEX_HANGOVER: user_input[CONF_DUPLEX_HANGOVER],
+                CONF_DUPLEX_MAX_S: user_input[CONF_DUPLEX_MAX_S],
+                CONF_DUPLEX_DUCK: user_input.get(CONF_DUPLEX_DUCK, DEFAULT_DUPLEX_DUCK),
+                CONF_DUPLEX_DUCK_DB: user_input[CONF_DUPLEX_DUCK_DB]})
+        v = {}
         talk = TalkSettings.from_entry(entry)
         duplex = DuplexSettings.from_entry(entry)
-        mic_host, mic_port = mic_address(entry)
-        listen_port, listen_key = mic_listen(entry)
-        play_host = str(conf(entry, CONF_PLAY_HOST, "") or "")
-        port_range = vol.All(int, vol.Range(min=1, max=65535))
         noise, agc, lim = noise_settings(entry), agc_settings(entry), limiter_settings(entry)
-        wake = wake_settings(entry)
         dsp = {
             CONF_NOISE_ENABLE: (noise.enabled, bool),
             CONF_NOISE_STRENGTH_DB: (noise.strength_db, vol.All(
@@ -202,26 +221,8 @@ class R1OptionsFlow(OptionsFlowWithReload):
             CONF_LIMITER_ENABLE: (lim.enabled, bool),
             CONF_LIMITER_CEILING: (lim.ceiling, vol.All(
                 vol.Coerce(float), vol.Range(min=0.1, max=1.0))),
-            CONF_WAKE_ENABLE: (wake["bat"], bool),
-            CONF_WAKE_WORD: (wake["tu_khoa"], vol.All(str, vol.Length(max=40))),
-            CONF_WAKE_SENSITIVITY: (wake["do_nhay"], vol.All(
-                vol.Coerce(float), vol.Range(min=0, max=1))),
         }
-        return self.async_show_form(step_id="init", errors=errors, data_schema=vol.Schema({
-            vol.Required(CONF_HOST, default=v.get(CONF_HOST, speaker_host(entry))): str,
-            vol.Required(CONF_PORT, default=v.get(CONF_PORT, speaker_port(entry))): port_range,
-            vol.Optional(CONF_MIC_HOST, description={
-                "suggested_value": v.get(CONF_MIC_HOST, mic_host)}): str,
-            vol.Required(CONF_MIC_PORT, default=v.get(CONF_MIC_PORT, mic_port)): port_range,
-            vol.Required(CONF_MIC_LISTEN_PORT,
-                         default=v.get(CONF_MIC_LISTEN_PORT, listen_port)): port_range,
-            vol.Optional(CONF_MIC_LISTEN_KEY, description={
-                "suggested_value": v.get(CONF_MIC_LISTEN_KEY, listen_key)}): str,
-            vol.Optional(CONF_PLAY_HOST, description={
-                "suggested_value": v.get(CONF_PLAY_HOST, play_host)}): str,
-            vol.Required(CONF_PLAY_PORT, default=v.get(
-                CONF_PLAY_PORT, play_address(entry)[1])): vol.All(
-                    int, vol.Range(min=0, max=65535)),
+        return self.async_show_form(step_id="nang_cao", data_schema=vol.Schema({
             vol.Required(CONF_TALK_THRESHOLD_DB,
                          default=v.get(CONF_TALK_THRESHOLD_DB, talk.threshold_db)): vol.All(
                              vol.Coerce(float), vol.Range(min=-90, max=-5)),
@@ -231,8 +232,6 @@ class R1OptionsFlow(OptionsFlowWithReload):
                 vol.All(vol.Coerce(float), vol.Range(min=0, max=2)),
             vol.Required(CONF_TALK_TAIL, default=v.get(CONF_TALK_TAIL, talk.tail_s)):
                 vol.All(vol.Coerce(float), vol.Range(min=0, max=5)),
-            vol.Required(CONF_WAKE_MODE, default=v.get(CONF_WAKE_MODE, wake_mode(entry))):
-                vol.In([WAKE_HA, WAKE_SPEAKER]),
             **{vol.Required(k, default=v.get(k, cur)): typ for k, (cur, typ) in dsp.items()},
             vol.Required(CONF_DUPLEX_VAD_THRESHOLD,
                          default=v.get(CONF_DUPLEX_VAD_THRESHOLD, duplex.vad_threshold)):
@@ -249,7 +248,4 @@ class R1OptionsFlow(OptionsFlowWithReload):
             vol.Required(CONF_DUPLEX_DUCK_DB,
                          default=v.get(CONF_DUPLEX_DUCK_DB, duplex.duck_db)):
                 vol.All(vol.Coerce(float), vol.Range(min=-90, max=-5)),
-            vol.Optional(CONF_HA_URL, description={
-                "suggested_value": v.get(CONF_HA_URL, ha_url(entry))}): str,
-            vol.Optional(CONF_ROTATE_KEY, default=False): bool,
         }))

@@ -7,8 +7,10 @@ bộ đàm nửa công (``intercom.py``) và thẻ Lovelace chỉnh EQ (``www/r1
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import secrets
+from datetime import timedelta
 from pathlib import Path
 
 import voluptuous as vol
@@ -20,14 +22,17 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.typing import ConfigType
 
-from . import media_player
+from . import lenh_apk, media_player
 from .client import R1Client
-from .const import (CARD_GOP_URL, CARD_URL, CONF_INTERCOM_KEY, DOMAIN, SETTINGS_CARD_URL, TALK_CARD_URL,
+from .const import (CARD_GOP_URL, CARD_URL, CONF_INTERCOM_KEY, CONF_MIC_LISTEN_KEY, CONF_MIC_LISTEN_PORT, DOMAIN, SETTINGS_CARD_URL, TALK_CARD_URL,
                     WAKE_SPEAKER)
 from .cong_vao import PingView, WakeView
+from .dam_thoai_ws import DamThoaiWsView
 from .den import R1Lights, dang_ky_dich_vu as dang_ky_dich_vu_den
+from .den_apk import ApkLights
 from .dam_thoai import R1Talk
 from .giu_nhac import MusicKeeper
 from .coordinator import R1ConfigEntry, R1Coordinator
@@ -35,7 +40,7 @@ from .intercom import IntercomView, MicView, R1Intercom, go2rtc_source, wake_end
 from .mic import R1Mic
 from .mic_server import R1MicServer
 from .playback import R1Playback
-from .settings import (DuplexSettings, TalkSettings, agc_settings, limiter_settings, noise_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
+from .settings import (DuplexSettings, TalkSettings, agc_settings, cong_nghe_trong, limiter_settings, mic_host_hieu_luc, noise_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
                        speaker_port, wake_mode)
 from .song_cong import DuplexView, R1Duplex
 
@@ -56,10 +61,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.http.register_view(IntercomView())
     hass.http.register_view(MicView())
     hass.http.register_view(DuplexView())
+    hass.http.register_view(DamThoaiWsView())
     hass.http.register_view(WakeView())
     hass.http.register_view(PingView())
     await _register_card(hass)
     dang_ky_dich_vu_den(hass)
+    lenh_apk.dang_ky(hass)
 
     def _entry_va_goc(call: ServiceCall):
         entity_id = call.data["entity_id"]
@@ -177,6 +184,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
         # còn đúng sau mỗi lần khởi động lại HA.
         hass.config_entries.async_update_entry(
             entry, data={**entry.data, CONF_INTERCOM_KEY: secrets.token_urlsafe(24)})
+    if not mic_listen(entry)[1] and not mic_address(entry)[0]:
+        # Đường mic mới (APK nối vào HA): tự sinh khoá và cấp cổng riêng cho loa này, sinh một lần rồi giữ
+        # (APK đã cài khoá này phải còn đúng sau mỗi lần HA khởi động lại). Không bắt người dùng nhập gì.
+        cap = {CONF_MIC_LISTEN_KEY: secrets.token_urlsafe(24)}
+        if CONF_MIC_LISTEN_PORT not in entry.options and CONF_MIC_LISTEN_PORT not in entry.data:
+            cap[CONF_MIC_LISTEN_PORT] = cong_nghe_trong(hass.config_entries.async_entries(DOMAIN), entry)
+        hass.config_entries.async_update_entry(entry, data={**entry.data, **cap})
     client = R1Client(async_get_clientsession(hass), speaker_host(entry), speaker_port(entry))
     coordinator = R1Coordinator(hass, entry, client)
     # Loa tắt lúc khởi động HA vẫn được thêm: thực thể unavailable, tự hồi phục sau.
@@ -185,13 +199,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
     # Nguồn mic: host trống (mặc định) thì không nối gì, thực thể assist_satellite unavailable.
     modo = wake_mode(entry)
     # Từ đánh thức trên loa: mic chỉ nối khi có phiên (on_demand). Chế độ ``ha``: nối liên tục.
-    coordinator.mic = R1Mic(*mic_address(entry), on_demand=modo == WAKE_SPEAKER)
+    coordinator.mic = R1Mic(mic_host_hieu_luc(entry), mic_address(entry)[1], on_demand=modo == WAKE_SPEAKER)
     coordinator.mic.set_dsp(noise_settings(entry), agc_settings(entry), limiter_settings(entry))
     # Đầu nhận mic NV244: APK trên loa nối VÀO HA (mic.py là chiều ngược). Chỉ mở khi đã
     # đặt khoá + IP loa; start() không ném lỗi ra ngoài.
     listen_port, listen_key = mic_listen(entry)
     coordinator.mic_server = R1MicServer(
-        coordinator.mic, listen_port, listen_key, mic_address(entry)[0])
+        coordinator.mic, listen_port, listen_key, mic_host_hieu_luc(entry))
     await coordinator.mic_server.start()
     coordinator.playback = R1Playback(*play_address(entry), via=coordinator.mic_server)
     coordinator.music = MusicKeeper(
@@ -207,11 +221,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
     if not listen_key:
         entry.async_create_background_task(hass, coordinator.mic.run(), "r1_speaker mic")
     # Đèn: mặc định CHƯA có dịch vụ đèn trên loa (NullLights) — chỉ lưu cài đặt, không gửi gì.
-    coordinator.lights = R1Lights(hass, entry)
+    coordinator.lights = R1Lights(hass, entry, sink=ApkLights(coordinator.mic_server))
     await coordinator.lights.async_load()
     _don_thuc_the_cu(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     coordinator.lights.start()
+    # Loa nối vào / máy chủ đèn sẵn sàng hoặc rớt → áp lại đèn hiện tại; hỏi trạng thái máy chủ đèn định kỳ
+    # (nó do người dùng bật ngoài HA nên HA không tự biết lúc nó lên).
+    entry.async_on_unload(coordinator.mic_server.add_state_listener(coordinator.lights.ap_dung_lai))
+
+    async def _hoi_den(_now=None) -> None:
+        if coordinator.mic_server.receiving:
+            with contextlib.suppress(ConnectionError, OSError, TimeoutError):
+                await coordinator.mic_server.hoi_den()
+
+    entry.async_on_unload(async_track_time_interval(hass, _hoi_den, timedelta(seconds=30)))
     return True
 
 

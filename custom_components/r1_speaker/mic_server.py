@@ -73,6 +73,8 @@ class R1MicServer:
         self._server: asyncio.Server | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._on_state: list[Callable[[], None]] = []
+        #: Máy chủ đèn quyền shell trên loa có chạy không (APK báo): None = chưa biết / loa chưa nối.
+        self.den_san_sang: bool | None = None
 
     # ── Trạng thái ────────────────────────────────────────────────────────────
 
@@ -147,6 +149,23 @@ class R1MicServer:
         """Gửi một khúc PCM16 16 kHz mono xuống APK loa (cùng kết nối đang nhận mic)."""
         await self._gui_khung(pcm)
 
+    async def gui_den_vien(self, muc: int) -> None:
+        """Đèn viền (CHỈ trắng) mức 0–255 qua APK loa → máy chủ đèn quyền shell. Hợp đồng khung với
+        ``LenhDieuKhien.java`` (khoá đúng thứ tự, dạng tách gọn)."""
+        if isinstance(muc, bool) or not isinstance(muc, int) or not 0 <= muc <= 255:
+            raise ValueError(f"mức đèn viền ngoài 0–255: {muc!r}")
+        await self._gui_khung(json.dumps({"type": "den_vien", "muc": muc}, separators=(",", ":")).encode())
+
+    async def gui_den_day(self, rgb: str) -> None:
+        """Đèn đáy RGB: sáu số hex viết thường."""
+        if not isinstance(rgb, str) or len(rgb) != 6 or any(c not in "0123456789abcdef" for c in rgb):
+            raise ValueError(f"màu đèn đáy phải là 6 số hex thường: {rgb!r}")
+        await self._gui_khung(json.dumps({"type": "den_day", "rgb": rgb}, separators=(",", ":")).encode())
+
+    async def hoi_den(self) -> None:
+        """Hỏi APK máy chủ đèn có chạy không; APK trả ``den_trang_thai``."""
+        await self._gui_khung(b'{"type":"den_hoi"}')
+
     async def set_music_light(self, ma: int, gia_tri: int) -> None:
         """Đặt đèn theo nhạc của firmware qua APK loa (mã/giá trị xem ``const.MUSIC_LIGHT_*``).
         APK chỉ nhận đúng định dạng khung này và kiểm khoảng giá trị lần nữa."""
@@ -199,6 +218,7 @@ class R1MicServer:
                                 ip)
                 return
             self._writer = writer
+            self.den_san_sang = None
             self._mic.note_inbound(True)
             self._notify_state()
             _LOGGER.debug("R1 mic server: loa %s đã nối, bắt đầu nhận tiếng", ip)
@@ -209,8 +229,16 @@ class R1MicServer:
                     if payload is None:
                         break                       # mất kết nối giữa chừng
                     ctrl = _la_khung_json(payload)
-                    if ctrl is not None and ctrl.get("type") == "end":
-                        break                       # loa báo kết thúc phiên
+                    if ctrl is not None:            # khung điều khiển: KHÔNG bao giờ coi là tiếng
+                        loai = ctrl.get("type")
+                        if loai == "end":
+                            break                   # loa báo kết thúc phiên
+                        if loai == "den_trang_thai":
+                            moi = ctrl.get("san_sang") is True
+                            if moi != self.den_san_sang:
+                                self.den_san_sang = moi
+                                self._notify_state()
+                        continue
                     # PCM16 phải đủ cặp byte: khung rỗng bỏ qua, byte lẻ chuyển sang khung sau
                     # để mẫu không bị lệch một byte về sau.
                     payload = du + payload
@@ -221,6 +249,7 @@ class R1MicServer:
             finally:
                 if self._writer is writer:
                     self._writer = None
+                    self.den_san_sang = None
                 self._mic.note_inbound(False)
                 self._notify_state()
                 _LOGGER.debug("R1 mic server: phiên từ %s đã đóng", ip)

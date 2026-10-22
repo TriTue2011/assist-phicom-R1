@@ -39,7 +39,19 @@ xác thực; APK kiểm chặt định dạng và khoảng giá trị rồi gọ
 `switch.r1_den_nhac` — chỉ dùng được khi APK đang nối về HA. Đây là đèn của FIRMWARE, khác với «hiệu ứng
 khi phát nhạc của HA» (chức năng `phat_nhac` ở dưới, chưa ra đèn).
 
-**Không** làm được qua đường này: `lights_test` từ app (uid app không mở được
+**Đèn viền (trắng) và đèn đáy (RGB) theo mức sáng tuỳ ý** cần quyền shell nên đi vòng qua một **máy chủ đèn**:
+HA gửi `{"type":"den_vien","muc":0-255}` / `{"type":"den_day","rgb":"rrggbb"}` / `{"type":"den_hoi"}` xuống APK
+(kiểm chặt, `LenhDieuKhien.java`), APK xếp vào hàng đợi riêng «mới nhất thắng» (`DenHangDoi.java`, không chặn
+đường phát tiếng) rồi gọi máy chủ đèn quyền shell qua TCP 127.0.0.1:18771 (`DenCau.java` →
+`apk/nguon/den/.../MayChuDen.java`, chỉ chạy `lights_test set <mặt nạ> <rgb>`). APK báo
+`{"type":"den_trang_thai","san_sang":true|false}` lên HA (lúc nối và mỗi lần HA hỏi, 30 giây một lần);
+thực thể `binary_sensor.r1_dich_vu_den` hiện máy chủ đèn có chạy không, `number.r1_do_sang_den` là độ sáng
+chung 0–100 % nhân vào mọi chức năng. **Máy chủ đèn không tự sống sau khi loa khởi động lại**: phải có một
+tiến trình `scripts/den_loa.sh <IP-loa> giam-sat` chạy ở máy khác trong nhà. **Chưa có xác nhận bằng mắt của chủ
+nhà cho đường HA → APK → máy chủ đèn đầu-cuối** (phần HA và APK có test; đèn thật chỉ đã thử riêng
+`lights_test` và vòng loopback). Không dùng hiệu ứng ID 500–505 của AI box (CHƯA thử).
+
+Trước đó, vì sao cần máy chủ đèn: `lights_test` từ app (uid app không mở được
 `/sys/class/leds/multi_leds0/led_color`, thoát 255). AI box điều khiển đèn viền/đáy bằng cách gửi
 nhóm `0x1000` + ID hiệu ứng có sẵn trong `/system/etc/lights_effects.conf` (500/501/502 đáy đỏ/xanh lá/
 xanh dương, 503 viền trắng, 504/505 tắt đáy/viền…) — chỉ chọn hiệu ứng có sẵn, không chỉnh mức sáng
@@ -140,9 +152,9 @@ Mặc định chỉ hiện tiêu đề + nút «Cài đặt». Bấm nút mới 
 * **Ánh sáng** — mỗi chức năng một khối (bật, viền, màu, hiệu ứng, sáng, nút «Thử»), mục hiệu ứng khi phát
   nhạc, đèn nhạc của firmware (chỉ đọc), danh mục hiệu ứng kèm nguồn, và dòng nói thẳng «chưa có dịch
   vụ đèn trên loa» khi `dich_vu_den != san_sang`;
-* **Kết nối** — host, cổng, mic, phát về loa, từ đánh thức, ha_url, và khoá bộ đàm chỉ hiện «đã có /
-  chưa có» (**giá trị khoá không bao giờ vào thuộc tính hay thẻ**: recorder lưu thuộc tính và mọi người
-  dùng HA đọc được). Sửa các mục này ở trang Tuỳ chọn, nơi có kiểm kết nối và địa chỉ HA trước khi lưu.
+* **Kết nối** — IP loa, cổng, `ha_url`, APK trên loa đang nối hay chưa, cổng nghe mic (HA tự cấp). Khoá nghe mic
+  **không bao giờ vào thuộc tính hay thẻ**: nút «Hiện lệnh cài APK» hỏi quản trị viên qua WebSocket
+  `r1_speaker/apk_lenh` (chỉ quản trị viên, kết quả chỉ nằm trong bộ nhớ thẻ).
 
 Thẻ KHÔNG gọi loa: chỉ đọc thực thể HA và gọi `number.set_value`, `switch.turn_on/off`,
 `r1_speaker.set_light_function`, `r1_speaker.set_music_light`, `r1_speaker.preview_light`. Nạp tự động

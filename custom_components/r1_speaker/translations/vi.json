@@ -40,6 +40,9 @@
       },
       "music_light_chroma": {
         "name": "Sắc độ đèn nhạc"
+      },
+      "light_master": {
+        "name": "Độ sáng đèn"
       }
     },
     "switch": {
@@ -112,27 +115,33 @@
       },
       "wake": {
         "name": "Từ đánh thức"
+      },
+      "light_service": {
+        "name": "Dịch vụ đèn"
       }
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Cấu hình loa R1",
-        "description": "Địa chỉ và cổng điều khiển/EQ của loa; luồng mic (PCM thô 16 kHz mono 16 bit, qua TCP, để trống máy chủ mic thì tắt phần nghe); kênh phát về loa của bộ đàm (cổng 0 = chưa có; phía loa CHƯA có dịch vụ nhận); bốn tham số cổng thoại của bộ đàm (mặc định CHƯA đo trên loa). Từ đánh thức: 'ha' = HA dò (mic về HA liên tục); 'speaker' = dò TRÊN LOA, HA chỉ nhận tiếng sau trigger (phía loa CHƯA có).",
+        "title": "Cài đặt loa R1",
+        "description": "Địa chỉ loa và địa chỉ HA. Khoá và cổng nghe mic do HA tự cấp cho từng loa, không cần nhập: lệnh cấu hình APK (đã kèm khoá) hiện ở thẻ «Kết nối» của loa dành cho quản trị viên. Muốn chỉnh thông số âm thanh (cổng thoại, khử tạp, song công) thì tích «Chỉnh thông số nâng cao».",
         "data": {
-          "host": "Địa chỉ IP loa",
+          "host": "Địa chỉ IP của loa",
           "port": "Cổng điều khiển / EQ",
-          "mic_host": "Máy chủ mic",
-          "mic_port": "Cổng mic",
-          "play_host": "Máy chủ nhận tiếng phát (trống = cùng IP loa)",
-          "play_port": "Cổng nhận tiếng phát (0 = tắt bộ đàm)",
+          "ha_url": "Địa chỉ HA mà loa gọi tới (trống = tự đoán)",
+          "rotate_intercom_key": "Đổi khoá URL bộ đàm (các dòng go2rtc cũ sẽ ngừng chạy)",
+          "nang_cao": "Chỉnh thông số nâng cao (cổng thoại, khử tạp, song công)"
+        }
+      },
+      "nang_cao": {
+        "title": "Thông số âm thanh nâng cao",
+        "description": "Mọi số ở đây là mặc định CHƯA đo trên loa R1; để nguyên nếu không có lý do.",
+        "data": {
           "talk_threshold_db": "Ngưỡng có tiếng người (dBFS)",
           "talk_silence_s": "Im bao lâu thì đóng loa (giây)",
           "talk_preroll_s": "Giữ đầu câu (giây)",
           "talk_tail_s": "Chờ loa tắt trước khi mở mic (giây)",
-          "rotate_intercom_key": "Đổi khoá URL bộ đàm (dòng go2rtc cũ ngừng chạy)",
-          "wake_mode": "Từ đánh thức chạy ở",
           "noise_suppress": "Khử tạp âm mic (phía HA)",
           "noise_strength_db": "Khử tạp: giảm tối đa mỗi dải (dB)",
           "noise_voice_db": "Khử tạp: ngưỡng nhận tiếng người (dB trên nền)",
@@ -142,18 +151,12 @@
           "agc_silence_db": "AGC: dưới mức này coi là im lặng, không tăng (dBFS)",
           "limiter_enable": "Hạn đỉnh mic",
           "limiter_ceiling": "Hạn đỉnh: trần (tỉ lệ biên độ tối đa, 0,89 ≈ -1 dBFS)",
-          "ha_url": "Địa chỉ HA mà loa gọi tới (trống = tự đoán)",
-          "mic_listen_port": "Cổng nghe mic (APK loa nối vào HA)",
-          "mic_listen_key": "Khoá cổng nghe mic (trống = không mở cổng nghe)",
           "duplex_vad_threshold": "Đàm thoại song công: ngưỡng tiếng người (VAD), xác suất 0-1",
           "duplex_preroll_s": "Đàm thoại song công: giữ tiếng trước câu nói (giây)",
           "duplex_hangover_s": "Đàm thoại song công: giữ tiếng sau câu nói (giây)",
           "duplex_max_s": "Đàm thoại song công: thời gian tối đa của phiên (giây)",
           "duplex_duck": "Đàm thoại song công: bỏ tiếng mic nhỏ khi HA đang phát (cắt vọng, mặc định tắt)",
-          "duplex_duck_db": "Đàm thoại song công: ngưỡng mức tiếng cắt vọng (dBFS)",
-          "wake_enable": "Từ đánh thức (chưa hoạt động, chờ loa)",
-          "wake_word": "Từ khoá đánh thức",
-          "wake_sensitivity": "Độ nhạy từ đánh thức (0–1, CHƯA ĐO)"
+          "duplex_duck_db": "Đàm thoại song công: ngưỡng mức tiếng cắt vọng (dBFS)"
         }
       }
     },

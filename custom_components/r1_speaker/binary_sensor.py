@@ -15,7 +15,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
                             async_add_entities: AddConfigEntryEntitiesCallback) -> None:
     preregister(hass, entry, "binary_sensor", f"{entry.entry_id}_intercom", "r1_bo_dam")
     preregister(hass, entry, "binary_sensor", f"{entry.entry_id}_wake", "r1_tu_danh_thuc")
-    async_add_entities([R1IntercomLink(entry), R1WakeTrigger(entry)])
+    preregister(hass, entry, "binary_sensor", f"{entry.entry_id}_light_service", "r1_dich_vu_den")
+    async_add_entities([R1IntercomLink(entry), R1WakeTrigger(entry), R1LightService(entry)])
 
 
 class R1IntercomLink(R1MicEntity, BinarySensorEntity):
@@ -50,6 +51,35 @@ class R1IntercomLink(R1MicEntity, BinarySensorEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         self.async_on_remove(self._playback.add_state_listener(self.async_write_ha_state))
+
+
+class R1LightService(R1MicEntity, BinarySensorEntity):
+    """Máy chủ đèn quyền shell trên loa có chạy không. Trên loa KHÔNG giữ được tiến trình quyền shell sau
+    khi loa khởi động lại, nên tắt = chưa chạy: chạy ``scripts/den_loa.sh <IP-loa> giam-sat`` ở một máy
+    trong nhà. Không có dịch vụ này thì cài đặt đèn vẫn được lưu nhưng đèn không sáng."""
+
+    _attr_translation_key = "light_service"
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, entry: R1ConfigEntry) -> None:
+        super().__init__(entry, "light_service")
+
+    @property
+    def _server(self):
+        return self._entry.runtime_data.mic_server
+
+    @property
+    def available(self) -> bool:
+        return self._server.receiving          # APK chưa nối thì không biết
+
+    @property
+    def is_on(self) -> bool | None:
+        return self._server.den_san_sang
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self._server.add_state_listener(self.async_write_ha_state))
 
 
 class R1WakeTrigger(R1MicEntity, BinarySensorEntity):

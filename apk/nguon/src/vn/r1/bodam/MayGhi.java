@@ -38,6 +38,12 @@ public final class MayGhi {
         vanChuyen.gui(Khung.dongGoi(pcmDaKhuechDai));
     }
 
+    /** Gui them mot khung dieu khien (da dong goi) len cung ket noi; im lang neu chua/khong con ghi. */
+    public synchronized void guiKhung(byte[] khungDaDongGoi) throws IOException {
+        if (!dangGhi) return;
+        vanChuyen.gui(khungDaDongGoi);
+    }
+
     public synchronized void tat() {
         if (!dangGhi) return;
         dangGhi = false;

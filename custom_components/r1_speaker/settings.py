@@ -61,6 +61,22 @@ def mic_listen(entry: ConfigEntry) -> tuple[int, str]:
             str(conf(entry, CONF_MIC_LISTEN_KEY, "") or ""))
 
 
+def mic_host_hieu_luc(entry: ConfigEntry) -> str:
+    """IP loa dùng cho mic: ô «máy chủ mic» nếu có (chế độ nối ra cũ), không thì CHÍNH IP loa khi đã có khoá
+    đầu nhận (APK nối vào HA) — người dùng không phải nhập lại một địa chỉ đã biết."""
+    host = mic_address(entry)[0]
+    return host or (speaker_host(entry) if mic_listen(entry)[1] else "")
+
+
+def cong_nghe_trong(entries, entry: ConfigEntry) -> int:
+    """Cổng nghe mic nhỏ nhất từ ``DEFAULT_MIC_LISTEN_PORT`` mà loa khác chưa dùng: mỗi loa một cổng, khỏi đụng nhau."""
+    dung = {mic_listen(e)[0] for e in entries if e.entry_id != entry.entry_id and mic_listen(e)[1]}
+    cong = DEFAULT_MIC_LISTEN_PORT
+    while cong in dung:
+        cong += 1
+    return cong
+
+
 def wake_mode(entry: ConfigEntry) -> str:
     """``ha`` (từ đánh thức do pipeline HA dò, mic về HA liên tục) hoặc ``speaker`` (từ đánh
     thức trên loa, HA chỉ nhận luồng sau trigger). Giá trị lạ → mặc định."""

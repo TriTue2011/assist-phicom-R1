@@ -95,7 +95,7 @@ async def test_mo_hinh_tu_trang_thai_that_ba_nhom(hass, r1):
     li = m["light"]
     assert [f["key"] for f in li["functions"]] == [
         "cho", "nghe", "nghi", "phan_hoi", "dam_thoai", "phat_nhac", "loi", "tat_mic"]
-    assert li["sink"] == {"state": "CHO_PHIA_LOA", "ready": False, "lost": False, "error": None}
+    assert li["sink"] == {"state": "mat_ket_noi", "ready": False, "lost": True, "svc": False, "error": None}
     assert [x["id"] for x in li["effects"]] == ["tho", "cau_vong", "nhap_nhay", "nhip_tim",
                                                 "phao_hoa", "chop"]
     assert li["music"]["key"] == "phat_nhac" and li["music"]["enabled"] is False
@@ -115,7 +115,7 @@ async def test_muc_cai_dat_an_mac_dinh_va_chi_hien_khi_bam(hass, r1):
     dong = _html(m, ui)
     assert 'data-open' in dong and 'aria-expanded="false"' in dong
     for dau in ("data-panel", "data-tab", "data-vol", "data-eq", 'type="range"', "data-fn=",
-                "data-key", "data-music"):
+                "data-apk-state", "data-music"):
         assert dau not in dong, dau                               # không có gì của bảng cài đặt
     ui = _node("c.reduceUi(i.ui,{type:'toggle'})", ui=ui)         # bấm nút mở
     assert ui["open"] is True
@@ -145,11 +145,16 @@ async def test_nhom_anh_sang_hien_du_chuc_nang_hieu_ung_nhac_va_noi_ro_chua_co_d
     assert 'data-fn-block="phat_nhac"' not in h and "data-music" in h   # nhạc có mục riêng
     for field in ("enabled", "effect", "brightness"):
         assert f'data-music-field="{field}"' in h
-    assert "CHƯA sáng" in h and 'class="sink warn"' in h              # nói thật: chưa có dịch vụ trên loa
+    assert "không trả lời" in h and 'class="sink warn"' in h          # nói thật: loa chưa nối (mat_ket_noi)
     assert h.count("kno.wled.ge") == 6                                # nguồn của từng hiệu ứng
     assert "Đỏ chưa xác nhận" in h                                    # «lỗi» / «tắt mic» mặc định là đỏ
     assert "mặc định đề xuất, chưa đo" in h
-    assert "chưa biết lệnh điều khiển" in h and "luma=50" in h        # đèn nhạc firmware: chỉ đọc
+    assert "Đèn theo nhạc của firmware" in h and "luma=50" in h       # đèn nhạc firmware: số đo; chỉnh ở thực thể
+    # loa nối nhưng máy chủ đèn quyền shell chưa chạy: nói rõ và chỉ cách bật
+    g = _hass_gia(hass)
+    g["states"][SID]["attributes"]["anh_sang"]["dich_vu_den"] = "CHO_DICH_VU_DEN"
+    h2 = _html(_mo_hinh(g), {"open": True, "tab": "light"})
+    assert "chưa chạy" in h2 and "den_loa.sh" in h2 and 'class="sink warn"' in h2
     # đèn sẵn sàng thì không còn cảnh báo
     g = _hass_gia(hass)
     g["states"][SID]["attributes"]["anh_sang"]["dich_vu_den"] = "san_sang"
@@ -160,9 +165,11 @@ async def test_nhom_anh_sang_hien_du_chuc_nang_hieu_ung_nhac_va_noi_ro_chua_co_d
 async def test_nhom_ket_noi_khong_bao_gio_hien_khoa(hass, r1):
     e = await _them(hass, r1, ha_url="http://ha.example:8123")
     h = _html(_mo_hinh(_hass_gia(hass)), {"open": True, "tab": "conn"})
-    assert "Đã có (không hiện giá trị)" in h
-    assert e.data[CONF_INTERCOM_KEY] not in h
-    assert "http://ha.example:8123" in h and str(r1.port) in h
+    assert e.data[CONF_INTERCOM_KEY] not in h and e.data["mic_listen_key"] not in h
+    assert "HA tự sinh" in h and "http://ha.example:8123" in h and str(r1.port) in h
+    assert str(e.data["mic_listen_port"]) in h                     # cổng nghe tự cấp có hiện
+    assert "data-apk-show" not in h                                # người xem không phải quản trị: không có nút lệnh
+    assert "Chưa nối" in h                                         # APK chưa nối vào HA
 
 
 @need_node
@@ -239,7 +246,7 @@ function add(id,tk,state,attrs){entities[id]={platform:"r1_speaker",translation_
 add("sensor.r1_cai_dat","settings","cho",{anh_sang:{chuc_nang:prof,dang_ap_dung:"nghe",dich_vu_den:"CHO_PHIA_LOA",loi_dich_vu:null,
  hieu_ung:[{id:"tho",ten:"Thở",ten_en:"Breathe",nguon:"U1",vien:""}],den_nhac_firmware:{bat:true,luma:50,chroma:60}},
  am_thanh:{khu_tap:{bat:false},agc:{bat:false},han_dinh:{bat:false}},
- ket_noi:{host:"h",cong:1,khoa_bo_dam:"da_co",tuy_chon:"/config/x"}});
+ ket_noi:{host:"h",cong:1,khoa_bo_dam:"da_co",khoa_nghe_mic:"da_co",cong_nghe_mic:18765,apk_dang_noi:true,tuy_chon:"/config/x"}});
 add("number.r1_am_luong","volume","7",{min:0,max:15,step:1});
 add("number.r1_tang_mic","mic_gain","12",{min:0,max:30,step:1});
 add("switch.r1_tat_mic","mute","off");
@@ -263,7 +270,7 @@ const r=q('[data-fn="nghe"][data-field="rim"]'); r.checked=false; r.dispatchEven
 q('[data-music-field="enabled"]').checked=true; q('[data-music-field="enabled"]').dispatchEvent(new Event("change"));
 q('[data-preview="tat_mic"]').click();
 q('[data-tab="conn"]').click();
-const kn={panel:q("[data-panel]").dataset.panel, khoa:q("[data-key]").textContent};
+const kn={panel:q("[data-panel]").dataset.panel, apk:q("[data-apk-state]").textContent, nutLenh:!!q("[data-apk-show]")};
 q("[data-open]").click();                       // đóng lại
 const cuoi={panel:!!q("[data-panel]"), nut:q("[data-open]").getAttribute("aria-expanded")};
 document.getElementById("out").textContent=JSON.stringify({dau,mo,anh,kn,cuoi,calls});
@@ -285,7 +292,7 @@ def test_giao_dien_the_cai_dat_an_hien_ba_nhom_va_goi_dich_vu(tmp_path):
     assert r["mo"] == {"panel": "audio", "tabs": 3, "eq": 2, "nut": "true"}   # bấm → hiện, ba nhóm
     assert r["anh"]["panel"] == "light" and r["anh"]["blocks"] == 7
     assert "CHƯA sáng" in r["anh"]["sink"]
-    assert r["kn"] == {"panel": "conn", "khoa": "Đã có (không hiện giá trị)"}
+    assert r["kn"] == {"panel": "conn", "apk": "Đang nối vào HA", "nutLenh": False}   # hass giả không phải quản trị
     assert r["cuoi"] == {"panel": False, "nut": "false"}                    # bấm lại → ẩn
     sid = "sensor.r1_cai_dat"
     assert r["calls"] == [
@@ -319,3 +326,18 @@ async def test_the_khong_bao_gio_phuc_vu_tep_nen_gz_dung_canh(tmp_path):
 def test_thu_muc_the_khong_co_tep_nen_bo_roi():
     www = CARD.parent
     assert not list(www.glob("*.gz")) and not list(www.glob("*.br")), "tệp nén cũ sẽ che bản cập nhật"
+
+
+@need_node
+async def test_quan_tri_thay_nut_lenh_apk_va_lenh_chi_hien_khi_da_lay(hass, r1):
+    e = await _them(hass, r1)
+    g = _hass_gia(hass)
+    g["user"] = {"is_admin": True}
+    m = _mo_hinh(g)
+    assert m["conn"]["admin"] is True and m["conn"]["listenKeySet"] is True
+    h = _html(m, {"open": True, "tab": "conn"})
+    assert "data-apk-show" in h and "data-apk-cmd" not in h        # chưa bấm: chưa có lệnh (khoá chưa rời HA)
+    m["conn"]["lenh"] = "adb ... --es khoa KHOA-GIA"
+    h = _html(m, {"open": True, "tab": "conn"})
+    assert "data-apk-cmd" in h and "KHOA-GIA" in h and "Ẩn lệnh" in h
+    assert e.data["mic_listen_key"] not in json.dumps(_mo_hinh(g))  # mô hình sinh từ trạng thái không chứa khoá

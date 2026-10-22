@@ -167,8 +167,16 @@ async def test_mic_giu_hold_khong_chay_dsp_va_khong_phat(pcm_server):
 
 # ── Options ───────────────────────────────────────────────────────────────────────────
 
-_GOC = dict(host="127.0.0.1", mic_port=const.DEFAULT_MIC_PORT, play_port=0,
-            talk_threshold_db=-45.0, talk_silence_s=1.5, talk_preroll_s=0.3, talk_tail_s=0.5)
+_GOC = dict(talk_threshold_db=-45.0, talk_silence_s=1.5, talk_preroll_s=0.3, talk_tail_s=0.5,
+            noise_suppress=False, noise_strength_db=const.DEFAULT_NOISE_STRENGTH_DB,
+            noise_voice_db=const.DEFAULT_NOISE_VOICE_DB, agc_enable=False,
+            agc_target_db=const.DEFAULT_AGC_TARGET_DB, agc_max_gain_db=const.DEFAULT_AGC_MAX_GAIN_DB,
+            agc_silence_db=const.DEFAULT_AGC_SILENCE_DB, limiter_enable=False,
+            limiter_ceiling=const.DEFAULT_LIMITER_CEILING,
+            duplex_vad_threshold=const.DEFAULT_DUPLEX_VAD_THRESHOLD,
+            duplex_preroll_s=const.DEFAULT_DUPLEX_PREROLL,
+            duplex_hangover_s=const.DEFAULT_DUPLEX_HANGOVER, duplex_max_s=const.DEFAULT_DUPLEX_MAX_S,
+            duplex_duck=const.DEFAULT_DUPLEX_DUCK, duplex_duck_db=const.DEFAULT_DUPLEX_DUCK_DB)
 
 
 async def test_mac_dinh_options_tat_het(hass, r1):
@@ -182,9 +190,12 @@ async def test_mac_dinh_options_tat_het(hass, r1):
 
 async def test_bat_tu_options_ap_vao_mic_va_chi_luu_gia_tri_khac_goc(hass, r1):
     e = await _them(hass, r1)
-    _, res = await _luu(hass, e, port=r1.port, noise_suppress=True, noise_strength_db=15.0,
-                        agc_enable=True, agc_target_db=-18.0, limiter_enable=True,
-                        limiter_ceiling=0.8, **_GOC)
+    res = await hass.config_entries.options.async_init(e.entry_id)
+    res = await hass.config_entries.options.async_configure(
+        res["flow_id"], {"host": "127.0.0.1", "port": r1.port, "nang_cao": True})
+    res = await hass.config_entries.options.async_configure(res["flow_id"], {
+        **_GOC, "noise_suppress": True, "noise_strength_db": 15.0, "agc_enable": True,
+        "agc_target_db": -18.0, "limiter_enable": True, "limiter_ceiling": 0.8})
     assert res["type"] is FlowResultType.CREATE_ENTRY
     assert e.options == {"noise_suppress": True, "noise_strength_db": 15.0, "agc_enable": True,
                          "agc_target_db": -18.0, "limiter_enable": True,
@@ -205,7 +216,8 @@ async def test_gia_tri_dsp_ngoai_dai_bi_tu_choi(hass, r1, truong, gia_tri):
     from homeassistant.data_entry_flow import InvalidData
     e = await _them(hass, r1)
     res = await hass.config_entries.options.async_init(e.entry_id)
+    res = await hass.config_entries.options.async_configure(
+        res["flow_id"], {"host": "127.0.0.1", "port": r1.port, "nang_cao": True})
     with pytest.raises(InvalidData):
-        await hass.config_entries.options.async_configure(
-            res["flow_id"], {"port": r1.port, **_GOC, truong: gia_tri})
+        await hass.config_entries.options.async_configure(res["flow_id"], {**_GOC, truong: gia_tri})
     assert e.options == {}

@@ -15,7 +15,7 @@
  */
 (function () {
   "use strict";
-  var BUILD = "2026-10-22.3";
+  var BUILD = "2026-10-22.6";
 
   var PLATFORM = "r1_speaker";
   var N_BANDS = 5;

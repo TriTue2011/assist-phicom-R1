@@ -540,6 +540,100 @@ public class KiemTra {
                     "den-nhac: bien khoang luma 0-100, chroma 1-100 hop le");
         }
 
+        // (f11b) Den vien / den day / hoi san sang: khung chat, gia tri ngoai khoang bi chan, hang doi "moi nhat thang"
+        {
+            final List<String> daGui = new ArrayList<String>();
+            LenhDieuKhien.DichDen gia = new LenhDieuKhien.DichDen() {
+                public String guiVien(int muc) { daGui.add("V" + muc); return null; }
+                public String guiDay(String rgb) { daGui.add("D" + rgb); return null; }
+                public boolean sanSang() { return true; }
+            };
+            ok(LenhDieuKhien.loaiDen("{\"type\":\"den_vien\",\"muc\":128}") == 1
+                    && LenhDieuKhien.loaiDen("{\"type\":\"den_day\",\"rgb\":\"00ff7f\"}") == 2
+                    && LenhDieuKhien.loaiDen("{\"type\":\"den_hoi\"}") == 3, "den: nhan dang ba loai khung");
+            ok(LenhDieuKhien.xuLyDen("{\"type\":\"den_vien\",\"muc\":255}", gia) == null
+                    && LenhDieuKhien.xuLyDen("{\"type\":\"den_vien\",\"muc\":0}", gia) == null
+                    && LenhDieuKhien.xuLyDen("{\"type\":\"den_day\",\"rgb\":\"0080ff\"}", gia) == null
+                    && daGui.toString().equals("[V255, V0, D0080ff]"), "den: khung hop le -> goi dich dung gia tri");
+            int truoc = daGui.size();
+            String[] hong = {
+                "{\"type\":\"den_vien\",\"muc\":256}", "{\"type\":\"den_vien\",\"muc\":-1}",
+                "{\"type\":\"den_vien\",\"muc\":1000}", "{\"type\":\"den_vien\",\"muc\":\"5\"}",
+                "{\"type\":\"den_day\",\"rgb\":\"00FF7F\"}", "{\"type\":\"den_day\",\"rgb\":\"00ff7\"}",
+                "{\"type\":\"den_day\",\"rgb\":\"00ff7f0\"}", "{\"type\":\"den_day\",\"rgb\":\"gg0000\"}",
+                "{\"type\":\"den_day\",\"rgb\":\"00ff7f\",\"x\":1}", "{\"muc\":5,\"type\":\"den_vien\"}",
+                "{\"type\":\"den_vien\",\"muc\":5} ", "{\"type\":\"den_hoi\",\"x\":1}", "", "{", null
+            };
+            boolean chan = true;
+            for (String h : hong) {
+                // 256 dung dinh dang (3 chu so) nen duoc nhan dang nhung xuLyDen phai chan o kiem khoang
+                boolean laDinhDangDung = h != null && h.equals("{\"type\":\"den_vien\",\"muc\":256}");
+                if ((!laDinhDangDung && LenhDieuKhien.loaiDen(h) != 0) || LenhDieuKhien.xuLyDen(h, gia) == null) chan = false;
+            }
+            ok(chan && daGui.size() == truoc, "den: khung hong/ngoai khoang/lech dinh dang khong bao gio gui");
+            LenhDieuKhien.DichDen no = new LenhDieuKhien.DichDen() {
+                public String guiVien(int muc) { throw new IllegalStateException("no"); }
+                public String guiDay(String rgb) { throw new IllegalStateException("no"); }
+                public boolean sanSang() { throw new IllegalStateException("no"); }
+            };
+            ok(LenhDieuKhien.xuLyDen("{\"type\":\"den_vien\",\"muc\":5}", no) != null, "den: dich nem loi -> tra ly do");
+
+            // Hang doi: gui lien tuc thi chi muc moi nhat cua tung loai; hoi san sang -> bao lai; dich nem loi khong giet luong
+            final List<Boolean> baoLai = new ArrayList<Boolean>();
+            daGui.clear();
+            DenHangDoi h = new DenHangDoi(gia, new DenHangDoi.Ben() {
+                public void baoSanSang(boolean b) { baoLai.add(b); }
+            });
+            h.dat("{\"type\":\"den_vien\",\"muc\":10}");
+            h.dat("{\"type\":\"den_vien\",\"muc\":20}");
+            h.dat("{\"type\":\"den_day\",\"rgb\":\"010203\"}");
+            h.dat("{\"type\":\"den_day\",\"rgb\":\"040506\"}");
+            ok(!h.dat("{\"type\":\"den_nhac\",\"ma\":65,\"gia_tri\":5}") && !h.dat(null) && !h.dat("rac"),
+                    "den: hang doi tu choi khung khong phai den");
+            h.dat("{\"type\":\"den_hoi\"}");
+            ok(h.chayMotLuot() && daGui.toString().equals("[V20, D040506]") && baoLai.toString().equals("[true]"),
+                    "den: hang doi giu muc moi nhat (V20, D040506) va tra loi hoi san sang");
+            ok(!h.chayMotLuot(), "den: het viec thi chayMotLuot tra false");
+            DenHangDoi hn = new DenHangDoi(no, new DenHangDoi.Ben() { public void baoSanSang(boolean b) { baoLai.add(b); } });
+            hn.dat("{\"type\":\"den_hoi\"}");
+            hn.chayMotLuot();
+            ok(baoLai.toString().equals("[true, false]"), "den: dich loi -> bao HA khong san sang, khong nem ra");
+            // Luong that: dung duoc
+            final DenHangDoi hl = new DenHangDoi(gia, new DenHangDoi.Ben() { public void baoSanSang(boolean b) { } });
+            Thread tl = new Thread(hl);
+            tl.start();
+            hl.dat("{\"type\":\"den_vien\",\"muc\":77}");
+            long han = System.currentTimeMillis() + 2000;
+            while (!daGui.contains("V77") && System.currentTimeMillis() < han) Thread.sleep(10);
+            hl.dungLai();
+            tl.join(2000);
+            ok(daGui.contains("V77") && !tl.isAlive(), "den: luong hang doi xu ly roi dung duoc");
+
+            byte[] tt = Khung.trangThaiDen(true), tf = Khung.trangThaiDen(false);
+            ok(new String(tt, 4, tt.length - 4, "UTF-8").equals("{\"type\":\"den_trang_thai\",\"san_sang\":true}")
+                    && new String(tf, 4, tf.length - 4, "UTF-8").equals("{\"type\":\"den_trang_thai\",\"san_sang\":false}")
+                    && tt[3] == (byte) (tt.length - 4), "den: khung trang thai dung dinh dang HA doi");
+        }
+
+        // (f11c) May chu den quyen shell: chi nhan dung ba lenh, khong bao gio chay chuoi do nguoi gui dua vao
+        {
+            vn.r1.den.MayChuDen.Lenh l = vn.r1.den.MayChuDen.phanTich("V 128");
+            ok(l != null && l.matNa.equals("7fffff8000") && l.rgb.equals("808080"), "may chu den: V 128 -> vien, trang 808080");
+            l = vn.r1.den.MayChuDen.phanTich("V 0");
+            ok(l.rgb.equals("000000"), "may chu den: V 0 -> tat vien");
+            l = vn.r1.den.MayChuDen.phanTich("D 00ff7f");
+            ok(l.matNa.equals("7fff") && l.rgb.equals("00ff7f"), "may chu den: D -> day RGB");
+            ok(vn.r1.den.MayChuDen.phanTich("P") == null, "may chu den: P -> chi hoi san sang");
+            String[] xau = {"V 256", "V -1", "V 5; reboot", "D 00FF7F", "D 00ff7", "D 00ff7f0", "rm -rf /", "V  5", "v 5", "", "V 1234",
+                "D 00ff7f; id", "P P"};
+            boolean het = true;
+            for (String x : xau) {
+                try { vn.r1.den.MayChuDen.phanTich(x); het = false; } catch (IllegalArgumentException ok) { }
+            }
+            try { vn.r1.den.MayChuDen.phanTich(null); het = false; } catch (IllegalArgumentException ok) { }
+            ok(het, "may chu den: lenh la/ngoai khoang/chen chuoi bi tu choi");
+        }
+
         // (f12) Ban phat hanh: cua cau hinh bang intent chi mo LAN DAU; tu bat mic chi khi du cau hinh
         {
             ok(CauHinhTuLenh.choPhepDoiCauHinh("", "") && CauHinhTuLenh.choPhepDoiCauHinh(null, null),

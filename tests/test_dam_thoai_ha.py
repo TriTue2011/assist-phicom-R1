@@ -526,8 +526,9 @@ async def test_ha_url_dung_luu_va_dich_vu_dung_no(hass, r1, hass_client_no_auth)
     src = await hass.services.async_call(DOMAIN, "get_intercom_source", {"entity_id": LOA},
                                          blocking=True, return_response=True)
     assert goc in src["talk"]                                   # dịch vụ cũ cũng theo ha_url đã kiểm
-    # Chế độ từ đánh thức đổi được cùng lúc.
-    res = await _luu_ha_url(hass, e, goc, wake_mode="speaker")
+    # Khoá ẩn đã có (chế độ từ đánh thức) sống sót khi lưu lại form chính.
+    hass.config_entries.async_update_entry(e, options={**e.options, "wake_mode": "speaker"})
+    res = await _luu_ha_url(hass, e, goc)
     assert res["type"] is FlowResultType.CREATE_ENTRY and e.options["wake_mode"] == "speaker"
 
 

@@ -157,6 +157,8 @@ class R1Lights:
         self._sink: LightsSink = sink or NullLights()
         self._rng = rng
         self.profiles: dict[str, FunctionLight] = dict(DEFAULTS)
+        #: Độ sáng chung 0–100 (%), nhân vào độ sáng của MỌI chức năng khi ghi xuống đèn.
+        self.master = 100
         self.current: str | None = None
         self.last_error: str | None = None
         self._store: Store = Store(hass, 1, f"{DOMAIN}.lights.{entry.entry_id}")
@@ -177,6 +179,9 @@ class R1Lights:
 
     async def async_load(self) -> None:
         data = await self._store.async_load()
+        m = (data or {}).get("master") if isinstance(data, dict) else None
+        if isinstance(m, int) and not isinstance(m, bool) and 0 <= m <= 100:
+            self.master = m
         saved = (data or {}).get("functions") if isinstance(data, dict) else None
         if isinstance(saved, dict):
             for fn in FUNCTIONS:
@@ -190,7 +195,7 @@ class R1Lights:
             diff = {k: v for k, v in asdict(p).items() if v != getattr(DEFAULTS[fn], k)}
             if diff:
                 ra[fn] = diff
-        return {"functions": ra}
+        return {"functions": ra, **({"master": self.master} if self.master != 100 else {})}
 
     # ── Sink ──────────────────────────────────────────────────────────────────
 
@@ -202,7 +207,9 @@ class R1Lights:
     def sink_state(self) -> str:
         if self._sink.available:
             return "san_sang"
-        return "CHO_PHIA_LOA" if isinstance(self._sink, NullLights) else "mat_ket_noi"
+        if isinstance(self._sink, NullLights):
+            return "CHO_PHIA_LOA"
+        return getattr(self._sink, "ly_do", "mat_ket_noi")
 
     def set_sink(self, sink: LightsSink | None) -> None:
         """Đổi sink (None = về ``NullLights``) và áp lại đèn hiện tại."""
@@ -293,7 +300,7 @@ class R1Lights:
         if self._dong:
             return
         fn = self.chuc_nang_hien_tai()
-        key = (fn, self.profiles[fn])
+        key = (fn, self.profiles[fn], self.master)
         if key == self._key:
             return
         self._key = key
@@ -365,6 +372,20 @@ class R1Lights:
         self._notify()
         return self.profiles[fn]
 
+    @callback
+    def ap_dung_lai(self) -> None:
+        """Áp lại đèn hiện tại (loa vừa nối / máy chủ đèn vừa sẵn sàng)."""
+        self._key = None
+        self.evaluate()
+
+    async def async_set_master(self, level: int) -> None:
+        if isinstance(level, bool) or not isinstance(level, int) or not 0 <= level <= 100:
+            raise ServiceValidationError("độ sáng chung phải là số nguyên 0–100")
+        self.master = level
+        await self._store.async_save(self._du_lieu())
+        self.evaluate()
+        self._notify()
+
     async def async_set_music(self, *, enabled: bool | None = None, effect: str | None = None,
                               brightness: int | None = None) -> FunctionLight:
         """Hiệu ứng khi phát nhạc = hồ sơ chức năng ``phat_nhac`` (bật/tắt, hiệu ứng, sáng).
@@ -390,17 +411,18 @@ class R1Lights:
             sink, p = self._sink, self.profiles[fn]
             if not sink.available:
                 return
+            sang = round(p.brightness * self.master / 100)
             try:
                 await sink.stop_effect()          # KHÔNG bao giờ để hai nơi cùng ghi đèn
                 if not p.enabled:
                     await self._tat(sink)
                 elif p.effect != KHONG:
                     await sink.play_effect(
-                        dung(p.effect, mau_rgb(p.color), p.brightness, p.rim, self._rng),
+                        dung(p.effect, mau_rgb(p.color), sang, p.rim, self._rng),
                         repeat=HIEU_UNG[p.effect].lap)
                 else:
-                    await sink.set_rim(sang_vien(p.brightness) if p.rim else 0)
-                    await sink.set_base(sang_rgb(mau_rgb(p.color), p.brightness))
+                    await sink.set_rim(sang_vien(sang) if p.rim else 0)
+                    await sink.set_base(sang_rgb(mau_rgb(p.color), sang))
                 self.last_error = None
             except LightsError as exc:
                 # Ghi một lần mỗi lần ĐỔI lỗi, không ngập log khi loa mất kết nối.
@@ -421,6 +443,7 @@ class R1Lights:
             "hieu_ung": [{"id": h.id, "ten": h.ten, "ten_en": h.ten_en, "mo_ta": h.mo_ta,
                           "vien": h.vien, "nguon": h.nguon} for h in HIEU_UNG.values()],
             "dich_vu_den": self.sink_state,
+            "do_sang_chung": self.master,
             "loi_dich_vu": self.last_error,
             # Đèn theo nhạc CỦA FIRMWARE: đọc ở đây; điều khiển bằng các thực thể ``r1_*_den_nhac`` (qua APK).
             "den_nhac_firmware": {

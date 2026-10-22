@@ -40,6 +40,9 @@
       },
       "music_light_chroma": {
         "name": "Music light chroma"
+      },
+      "light_master": {
+        "name": "Light brightness"
       }
     },
     "switch": {
@@ -112,6 +115,9 @@
       },
       "wake": {
         "name": "Wake word"
+      },
+      "light_service": {
+        "name": "Light service"
       }
     }
   },
@@ -119,20 +125,23 @@
     "step": {
       "init": {
         "title": "R1 speaker settings",
-        "description": "Speaker address and control/EQ port; microphone stream (raw PCM 16 kHz mono 16-bit over TCP, empty mic host disables listening); intercom playback channel to the speaker (port 0 = none; the speaker side does NOT exist yet); the four voice-gate parameters of the intercom (defaults NOT yet measured on the speaker). Wake word: 'ha' = HA detects it (mic streams to HA continuously); 'speaker' = detected ON the speaker, HA receives audio only after the trigger (the speaker side does NOT exist yet).",
+        "description": "Speaker address and Home Assistant address. The microphone listen key and port are issued automatically per speaker, nothing to type: the APK setup command (with the key) is shown to administrators on the speaker's Connection card. To tune audio (voice gate, noise, duplex) tick «Edit advanced parameters».",
         "data": {
           "host": "Speaker IP address",
           "port": "Control / EQ port",
-          "mic_host": "Microphone host",
-          "mic_port": "Microphone port",
-          "play_host": "Playback host (empty = speaker IP)",
-          "play_port": "Playback port (0 = intercom off)",
+          "ha_url": "Home Assistant address the speaker calls (empty = guess)",
+          "rotate_intercom_key": "Rotate the intercom URL key (old go2rtc lines stop working)",
+          "nang_cao": "Edit advanced parameters (voice gate, noise, duplex)"
+        }
+      },
+      "nang_cao": {
+        "title": "Advanced audio parameters",
+        "description": "Every value here is a default NOT yet measured on the R1; leave as is without a reason.",
+        "data": {
           "talk_threshold_db": "Voice threshold (dBFS)",
           "talk_silence_s": "Silence before closing the speaker (s)",
           "talk_preroll_s": "Pre-roll kept before speech (s)",
           "talk_tail_s": "Wait after playback before reopening the mic (s)",
-          "rotate_intercom_key": "Rotate the intercom URL key (old go2rtc lines stop working)",
-          "wake_mode": "Wake word runs on",
           "noise_suppress": "Mic noise suppression (HA side)",
           "noise_strength_db": "Noise suppression: max reduction per band (dB)",
           "noise_voice_db": "Noise suppression: voice threshold (dB above floor)",
@@ -142,18 +151,12 @@
           "agc_silence_db": "AGC: below this level counts as silence, no boost (dBFS)",
           "limiter_enable": "Mic peak limiter",
           "limiter_ceiling": "Limiter: ceiling (fraction of full scale, 0.89 ≈ -1 dBFS)",
-          "ha_url": "Home Assistant address the speaker calls (empty = guess)",
-          "mic_listen_port": "Microphone listen port (speaker APK connects to HA)",
-          "mic_listen_key": "Microphone listen key (empty = listen port closed)",
           "duplex_vad_threshold": "Duplex call: voice (VAD) threshold, probability 0-1",
           "duplex_preroll_s": "Duplex call: audio kept before speech (s)",
           "duplex_hangover_s": "Duplex call: audio kept after speech (s)",
           "duplex_max_s": "Duplex call: max session length (s)",
           "duplex_duck": "Duplex call: drop quiet mic audio while HA is playing (echo cut, off by default)",
-          "duplex_duck_db": "Duplex call: echo-cut level threshold (dBFS)",
-          "wake_enable": "Wake word (device side, not active yet)",
-          "wake_word": "Wake word phrase",
-          "wake_sensitivity": "Wake word sensitivity (0-1, not measured)"
+          "duplex_duck_db": "Duplex call: echo-cut level threshold (dBFS)"
         }
       }
     },

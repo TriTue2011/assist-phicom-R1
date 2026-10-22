@@ -28,6 +28,57 @@ public final class LenhDieuKhien {
         }
     };
 
+    /** Dich den vien/day: may chu den quyen shell tren loa (DenCau). */
+    public interface DichDen {
+        /** null = gui duoc; con lai = loi. muc 0-255 (chi trang). */
+        String guiVien(int muc);
+        /** rgb: sau so hex thuong. */
+        String guiDay(String rgb);
+        boolean sanSang();
+    }
+
+    public static final DichDen DEN_THAT = new DichDen() {
+        @Override public String guiVien(int muc) { return DenCau.vien(muc); }
+        @Override public String guiDay(String rgb) { return DenCau.day(rgb); }
+        @Override public boolean sanSang() { return DenCau.sanSang(); }
+    };
+
+    private static final Pattern DEN_VIEN = Pattern.compile("^\\{\"type\":\"den_vien\",\"muc\":(\\d{1,3})\\}$");
+    private static final Pattern DEN_DAY = Pattern.compile("^\\{\"type\":\"den_day\",\"rgb\":\"([0-9a-f]{6})\"\\}$");
+    private static final String DEN_HOI = "{\"type\":\"den_hoi\"}";
+
+    /** Loai khung den: 1 = vien, 2 = day, 3 = hoi san sang, 0 = khong phai khung den hop le. */
+    public static int loaiDen(String khung) {
+        if (khung == null || khung.length() > DAI_TOI_DA) return 0;
+        if (DEN_HOI.equals(khung)) return 3;
+        if (DEN_VIEN.matcher(khung).matches()) return 1;
+        if (DEN_DAY.matcher(khung).matches()) return 2;
+        return 0;
+    }
+
+    /** Xu ly khung den_vien / den_day. null = da gui; con lai = ly do bo qua. Khong nem loi ra ngoai.
+     *  (den_hoi do ben goi tra loi, vi can ghi len ket noi.) */
+    public static String xuLyDen(String khung, DichDen dich) {
+        try {
+            int loai = loaiDen(khung);
+            if (loai == 1) {
+                Matcher m = DEN_VIEN.matcher(khung);
+                m.matches();
+                int muc = Integer.parseInt(m.group(1));
+                if (muc > 255) return "muc vien ngoai 0-255";
+                return dich.guiVien(muc);
+            }
+            if (loai == 2) {
+                Matcher m = DEN_DAY.matcher(khung);
+                m.matches();
+                return dich.guiDay(m.group(1));
+            }
+            return "khong phai lenh den vien/day";
+        } catch (Throwable t) {
+            return t.toString();
+        }
+    }
+
     private static final Pattern DEN_NHAC = Pattern.compile(
             "^\\{\"type\":\"den_nhac\",\"ma\":(\\d{1,3}),\"gia_tri\":(\\d{1,3})\\}$");
 

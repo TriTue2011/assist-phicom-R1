@@ -25,6 +25,11 @@ public final class Khung {
         return dongGoi(utf8("{\"type\":\"end\"}"));
     }
 
+    /** Bao HA may chu den (quyen shell) tren loa co chay khong. */
+    public static byte[] trangThaiDen(boolean sanSang) {
+        return dongGoi(utf8("{\"type\":\"den_trang_thai\",\"san_sang\":" + (sanSang ? "true" : "false") + "}"));
+    }
+
     static byte[] utf8(String s) {
         try {
             return s.getBytes("UTF-8");

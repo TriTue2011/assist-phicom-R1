@@ -347,12 +347,10 @@ async def test_loa_loi_khi_tra_loi_khong_sap(hass, r1, pcm_server, pipeline, cap
 async def test_tuy_chon_dat_host_mic_roi_nap_lai(hass, r1, pcm_server, pipeline):
     e = await _them(hass, r1)
     assert _state(hass, SAT) == STATE_UNAVAILABLE
-    res = await hass.config_entries.options.async_init(e.entry_id)
-    assert res["type"] is FlowResultType.FORM and res["step_id"] == "init"
-    res = await hass.config_entries.options.async_configure(
-        res["flow_id"], {"mic_host": " 127.0.0.1 ", "mic_port": pcm_server.port})
-    assert res["type"] is FlowResultType.CREATE_ENTRY
-    assert e.options == {"mic_host": "127.0.0.1", "mic_port": pcm_server.port}
+    # Chế độ nối ra cũ (hộp thử): ô mic không còn trên form, đặt thẳng vào options như dữ liệu đã lưu từ trước.
+    hass.config_entries.async_update_entry(
+        e, options={"mic_host": "127.0.0.1", "mic_port": pcm_server.port, "mic_listen_key": ""})
+    await hass.config_entries.async_reload(e.entry_id)
     await hass.async_block_till_done()
     await _cho(lambda: pcm_server.writers)
     await pcm_server.send(pcm(5))

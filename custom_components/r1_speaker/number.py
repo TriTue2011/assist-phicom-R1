@@ -19,6 +19,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
     c = entry.runtime_data
     preregister(hass, entry, "number", f"{entry.entry_id}_music_light_luma", "r1_do_sang_den_nhac")
     preregister(hass, entry, "number", f"{entry.entry_id}_music_light_chroma", "r1_sac_do_den_nhac")
+    preregister(hass, entry, "number", f"{entry.entry_id}_light_master", "r1_do_sang_den")
     async_add_entities([
         R1Volume(c),
         *(R1EqBand(c, i) for i in range(EQ_BANDS)),
@@ -28,7 +29,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
         R1MusicLightNumber(c, "music_light_chroma", MUSIC_LIGHT_CHROMA),
     ])
     preregister(hass, entry, "number", f"{entry.entry_id}_mic_gain", "r1_tang_mic")
-    async_add_entities([R1MicGain(entry)])
+    async_add_entities([R1MicGain(entry), R1LightMaster(entry)])
 
 
 class R1Volume(R1Entity, NumberEntity):
@@ -172,6 +173,34 @@ class R1MusicLightNumber(R1MusicLightEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         v = int(round(value))
         await self._dat(self._code, v, **{self._key: v})
+
+
+class R1LightMaster(R1MicEntity, NumberEntity):
+    """Độ sáng chung 0–100 % của đèn viền và đèn đáy: nhân vào độ sáng của mọi chức năng đèn (cài từng
+    chức năng ở thẻ). Chỉ ra đèn thật khi máy chủ đèn trên loa chạy (xem «Dịch vụ đèn»)."""
+
+    _attr_translation_key = "light_master"
+    _attr_native_min_value, _attr_native_max_value, _attr_native_step = 0, 100, 1
+    _attr_native_unit_of_measurement = "%"
+    _attr_mode = NumberMode.SLIDER
+
+    def __init__(self, entry: R1ConfigEntry) -> None:
+        super().__init__(entry, "light_master")
+
+    @property
+    def _lights(self):
+        return self._entry.runtime_data.lights
+
+    @property
+    def native_value(self) -> float:
+        return self._lights.master
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self._lights.add_listener(self.async_write_ha_state))
+
+    async def async_set_native_value(self, value: float) -> None:
+        await self._lights.async_set_master(int(round(value)))
 
 
 class R1MicGain(R1MicEntity, RestoreNumber):

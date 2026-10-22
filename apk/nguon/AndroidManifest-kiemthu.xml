@@ -46,6 +46,7 @@
             <intent-filter>
                 <action android:name="vn.r1.bodam.KIEM_MIC" />
                 <action android:name="vn.r1.bodam.KIEM_DEN_NHAC" />
+                <action android:name="vn.r1.bodam.KIEM_DEN" />
             </intent-filter>
         </receiver>
     </application>

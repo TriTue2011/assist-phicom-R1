@@ -46,14 +46,19 @@ Cài đặt → Thiết bị & dịch vụ → Phicomm R1 Speaker → **Cấu h�
 | Mục | Ý nghĩa | Mặc định |
 |---|---|---|
 | Địa chỉ IP loa, cổng điều khiển/EQ | đổi thì kiểm lại bằng `get_info`, sai thì không lưu | lúc thêm; cổng 8080 |
-| Máy chủ mic, cổng mic | HA nối TỚI loa để đọc PCM mic (đường cũ, không có phía loa); đồng thời `Máy chủ mic` là **IP loa được phép** nối vào đầu nhận mic bên dưới; **trống = tắt phần nghe** | trống; gợi ý 8765 (CHƯA ĐO) |
-| Cổng nghe mic, khoá luồng mic | đầu NHẬN: APK `vn.r1.bodam` trên loa nối VÀO HA ở cổng này và gửi khung `hello` kèm khoá; **chỉ mở khi đã đặt khoá và IP loa** | cổng 18765 (CHƯA ĐO); khoá: tự đặt một chuỗi dài ngẫu nhiên |
-| Máy chủ nhận tiếng phát, cổng | kênh phát PCM về loa của bộ đàm; **cổng 0 = tắt bộ đàm**; trống = cùng IP loa | cổng 0 (CHƯA CÓ phía loa) |
-| Ngưỡng có tiếng người | dBFS, to hơn thì mở loa | −45 (CHƯA ĐO trên R1) |
-| Im bao lâu thì đóng loa | giây | 1,5 (CHƯA ĐO) |
-| Giữ đầu câu | giây tiếng giữ ngay trước lúc mở | 0,3 (CHƯA ĐO) |
-| Chờ loa tắt trước khi mở mic | giây, chống tự nghe tiếng loa vang | 0,5 (CHƯA ĐO) |
+| Địa chỉ HA mà loa gọi tới (`ha_url`) | xem mục 3.5; kiểm ngay khi lưu | trống = tự đoán |
 | Đổi khoá URL bộ đàm | sinh khoá mới; dòng go2rtc cũ ngừng chạy | tắt |
+| Chỉnh thông số nâng cao | tích để sang bước hai: ngưỡng tiếng người / im bao lâu / giữ đầu câu / chờ loa tắt của bộ đàm; khử tạp, AGC, hạn đỉnh phía HA; sáu tham số đàm thoại song công | tắt (mọi số là mặc định CHƯA ĐO trên R1) |
+
+**Khoá và cổng nghe mic KHÔNG phải nhập.** Khi thêm loa, HA tự sinh khoá nghe mic (24 byte ngẫu nhiên) và cấp
+cổng nghe riêng cho loa đó (từ 18765 trở lên, không trùng loa khác), lưu một lần rồi giữ nguyên qua các lần khởi
+động lại. IP mic lấy theo IP loa. Lệnh cài APK **đã kèm khoá** hiện ở thẻ → Cài đặt → **Kết nối** → «Hiện lệnh
+cài APK» (chỉ quản trị viên; khoá không nằm trong trạng thái thực thể nên người xem thường không đọc được).
+Khoá/cổng đã đặt tay từ phiên bản cũ vẫn được giữ và không bị ghi đè; lưu form không làm rơi chúng.
+
+**Nhiều loa:** thêm tích hợp lần nữa với IP loa khác. Mỗi loa có khoá, cổng nghe, phiên song công, đèn và thực
+thể riêng (tên thêm hậu tố `_2`, `_3`…). Thẻ nhận `device_id` để chọn loa. Dịch vụ nhận `entity_id` của loa cần
+điều khiển.
 
 Giá trị bằng mặc định **không được lưu**: khi sau này đo xong và đổi mặc định, các mục bạn chưa
 chỉnh tay tự theo.

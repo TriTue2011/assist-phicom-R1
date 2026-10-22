@@ -225,6 +225,18 @@ public final class DieuKhienGhi {
         benNhan.doiTrangThai("dang_gui");
         final long luc = System.currentTimeMillis();
 
+        // Lenh den vien/day chay tren luong rieng (goi may chu den co the cham): khong chan duong phat tieng.
+        final MayGhi mayGhiCuoi = mayGhi;
+        final DenHangDoi hangDen = new DenHangDoi(LenhDieuKhien.DEN_THAT, new DenHangDoi.Ben() {
+            @Override public void baoSanSang(boolean sanSang) {
+                try { mayGhiCuoi.guiKhung(Khung.trangThaiDen(sanSang)); } catch (IOException boQua) { }
+            }
+        });
+        Thread luongDen = new Thread(hangDen, "r1-den");
+        luongDen.setDaemon(true);
+        luongDen.start();
+        hangDen.dat("{\"type\":\"den_hoi\"}");                   // bao HA trang thai may chu den ngay khi noi
+
         // Luồng nhận PCM từ HA (phát xuống loa) trên cùng kết nối; khung JSON điều khiển bị bỏ qua.
         final PhatAm phat = new PhatAm();
         new Thread(new Runnable() {
@@ -246,10 +258,12 @@ public final class DieuKhienGhi {
                             if (r < 0) return;
                             da += r;
                         }
-                        if (pcm[0] == '{') {                       // khung JSON điều khiển (đèn nhạc)
+                        if (pcm[0] == '{') {                       // khung JSON điều khiển (đèn nhạc, đèn viền/đáy)
                             if (len <= LenhDieuKhien.DAI_TOI_DA) {
-                                LenhDieuKhien.xuLy(new String(pcm, 0, len, java.nio.charset.Charset.forName("UTF-8")),
-                                        LenhDieuKhien.THAT);
+                                String khungJson = new String(pcm, 0, len, java.nio.charset.Charset.forName("UTF-8"));
+                                if (!hangDen.dat(khungJson)) {
+                                    LenhDieuKhien.xuLy(khungJson, LenhDieuKhien.THAT);
+                                }
                             }
                             continue;
                         }
@@ -258,6 +272,7 @@ public final class DieuKhienGhi {
                 } catch (java.io.IOException | RuntimeException ignored) {
                     // kết nối đóng/hỏng: luồng phát dừng, phiên mic xử lý tiếp
                 } finally {
+                    hangDen.dungLai();
                     phat.dong();
                     if (dangDoc) {
                         // HA dong / ket noi hong: dong socket de phia gui mic bao dut ngay
