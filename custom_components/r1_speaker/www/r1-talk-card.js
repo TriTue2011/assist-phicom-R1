@@ -13,7 +13,7 @@
  */
 (function () {
   "use strict";
-  var BUILD = "2026-10-22.6";
+  var BUILD = "2026-10-22.7";
 
   var PLATFORM = "r1_speaker";
   var STATUS = { tat: "off", nghe: "listening", gui: "sending" };
@@ -30,7 +30,9 @@
       pending: "Phía loa chưa có (từ đánh thức trên loa còn chờ)",
       refused: "Phiên bị từ chối gần đây", none: "Không tìm thấy thực thể r1_speaker nào.",
       no_mic: "Mic chưa sẵn sàng — chưa mở được phiên",
-      dt_close: "Đóng kênh điện thoại", dt_wait: "Đang nối…", dt_on: "Mic điện thoại đã mở — giữ nút để nói, thả ra để nghe loa",
+      ng_on: "👂 Nghe tiếng trong nhà", ng_off: "Dừng nghe", ng_wait: "Đang nối…", ng_live: "ĐANG NGHE mic loa — tiếng trong nhà đang được phát ra điện thoại",
+      ng_mute: "Mic loa đang tắt: không có gì để nghe", ng_err: "Không nghe được", ng_denied: "Chỉ quản trị viên được nghe mic loa",
+      ng_ended: "Đã dừng nghe", dt_close: "Đóng kênh điện thoại", dt_wait: "Đang nối…", dt_on: "Mic điện thoại đã mở — giữ nút để nói, thả ra để nghe loa",
       dt_on_luon: "Mic điện thoại mở liên tục — bấm «Bật mic luôn» để tắt",
       dt_https: "Trình duyệt chỉ cho dùng mic khi mở Home Assistant bằng https (địa chỉ ngoài hoặc https trong nhà).",
       dt_err: "Không mở được mic điện thoại", dt_busy: "Loa đang có kênh khác (điện thoại khác hoặc phiên đang mở).",
@@ -48,7 +50,9 @@
       pending: "Speaker side not built yet (wake word on the speaker is pending)",
       refused: "A session was recently refused", none: "No r1_speaker entity found.",
       no_mic: "Microphone not ready — cannot start a session",
-      dt_close: "Close phone channel", dt_wait: "Connecting…", dt_on: "Phone microphone ready — hold to talk, release to hear the speaker",
+      ng_on: "👂 Listen to the house", ng_off: "Stop listening", ng_wait: "Connecting…", ng_live: "LISTENING to the speaker microphone — house sounds are playing on this phone",
+      ng_mute: "Speaker microphone is off: nothing to hear", ng_err: "Could not listen", ng_denied: "Only administrators can listen to the speaker microphone",
+      ng_ended: "Stopped listening", dt_close: "Close phone channel", dt_wait: "Connecting…", dt_on: "Phone microphone ready — hold to talk, release to hear the speaker",
       dt_on_luon: "Phone microphone open continuously — press «Mic always on» to stop",
       dt_https: "The browser only allows the microphone when Home Assistant is opened over https.",
       dt_err: "Could not open the phone microphone", dt_busy: "The speaker already has another channel (another phone or an open session).",
@@ -214,6 +218,8 @@
         '<div class="tip" data-mic-tip></div>' +
         '<div class="warn" data-refused style="display:none"></div>' +
         '<div class="row"><button data-hold>' + esc(t.hold) + '</button><button class="sec" data-always>' + esc(t.always) + "</button></div>" +
+        '<div class="row" data-ng-row style="display:none"><button class="sec" data-nghe>' + esc(t.ng_on) + "</button>" +
+        '<span data-ng-muc class="muc"></span></div><div class="tip" data-ng-status></div>' +
         '<div class="tip" data-dt-status></div><div class="warn" data-dt-err style="display:none"></div>' +
         '<div class="row" data-dt-panel style="display:none"><button class="sec" data-dt-close>' + esc(t.dt_close) + "</button></div>" +
         '<div class="row"><label>' + esc(t.mute) + '</label><ha-switch data-mute></ha-switch></div>' +
@@ -260,6 +266,7 @@
         if (m.music.canPlay) self._call("media_player", "media_play", { entity_id: m.music.entity });
       });
       on("[data-dt-close]", function () { self._dtDong(); });
+      on("[data-nghe]", function () { if (self._ng) self._ngDong(); else self._ngMo(); });
       var sw = root.querySelector("[data-mute]");
       if (sw) sw.addEventListener("change", function () {
         var m = now();
@@ -280,8 +287,8 @@
 
     connectedCallback() {
       var self = this;
-      this._dtAn = function () { if (document.visibilityState === "hidden") self._dtDong(); };
-      this._dtRoi = function () { self._dtDong(); };
+      this._dtAn = function () { if (document.visibilityState === "hidden") { self._dtDong(); self._ngDong(); } };
+      this._dtRoi = function () { self._dtDong(); self._ngDong(); };
       document.addEventListener("visibilitychange", this._dtAn);
       window.addEventListener("pagehide", this._dtRoi);
     }
@@ -290,10 +297,80 @@
       document.removeEventListener("visibilitychange", this._dtAn);
       window.removeEventListener("pagehide", this._dtRoi);
       this._dtDong();
+      this._ngDong();
     }
 
     /* ── Mic điện thoại (như bộ đàm camera của c2a): MỘT WebSocket hai chiều tới HA. Mic chỉ gửi khi đang giữ nút
        (hoặc «Bật mic luôn»); tiếng loa phát ra điện thoại suốt lúc kênh mở. Kênh đóng hẳn khi ẩn tab / rời trang. */
+    /* ── Nghe tiếng trong nhà (một chiều loa → điện thoại, CHỈ quản trị viên, không cần mic điện thoại) ── */
+    _ngHienThi(loi) {
+      var root = this.shadowRoot, t = this._t || TEXT.vi;
+      if (!root) return;
+      var row = root.querySelector("[data-ng-row]"), btn = root.querySelector("[data-nghe]");
+      var st = root.querySelector("[data-ng-status]"), muc = root.querySelector("[data-ng-muc]");
+      if (!row) return;
+      if (loi !== undefined) this._ngLoi = loi || "";
+      var admin = !!(this._hass && this._hass.user && this._hass.user.is_admin);
+      row.style.display = admin ? "" : "none";
+      btn.textContent = this._ng ? t.ng_off : t.ng_on;
+      btn.classList.toggle("noi", !!this._ng && !!this._ngSan);
+      st.textContent = this._ng ? (this._ngSan ? t.ng_live : t.ng_wait) : (this._ngLoi || "");
+      if (!this._ng) muc.textContent = "";
+    }
+
+    /* Gọi TRONG cử chỉ bấm (AudioContext phải bắt đầu từ cử chỉ). Không xin mic điện thoại. */
+    _ngMo() {
+      var self = this, t = this._t || TEXT.vi, m = buildModel(this._hass, this._config);
+      var eid = m.mic.entity || m.talk.entity;
+      this._ngLoi = "";
+      if (!eid) return;
+      var AC = window.AudioContext || window.webkitAudioContext;
+      var ng = { ac: null, ws: null, lich: 0 };
+      this._ng = ng; this._ngSan = false;
+      try {
+        ng.ac = new AC({ sampleRate: 16000 });
+        if (ng.ac.state === "suspended" && ng.ac.resume) ng.ac.resume();
+      } catch (e) { this._ngDong(t.ng_err + ": " + (e && e.message ? e.message : e)); return; }
+      this._ngHienThi();
+      this._hass.callWS({ type: "auth/sign_path", path: "/api/r1_speaker/nghe/" + eid + "/ws", expires: 30 })
+        .then(function (r) {
+          if (self._ng !== ng) return;
+          var ws = new WebSocket((location.protocol === "https:" ? "wss:" : "ws:") + "//" + location.host + r.path);
+          ws.binaryType = "arraybuffer";
+          ng.ws = ws;
+          ws.onopen = function () { self._ngSan = true; self._ngHienThi(); };
+          ws.onmessage = function (e) {
+            if (typeof e.data === "string") {
+              try { var j = JSON.parse(e.data); if (j.loi) self._ngLoi = j.loi; } catch (x) { /* bỏ qua */ }
+              return;
+            }
+            var i16 = new Int16Array(e.data), dinh = 0;
+            for (var i = 0; i < i16.length; i++) dinh = Math.max(dinh, Math.abs(i16[i]));
+            var muc = self.shadowRoot && self.shadowRoot.querySelector("[data-ng-muc]");
+            if (muc) muc.textContent = "▮".repeat(Math.min(10, Math.round(dinh / 3277)));   // thanh mức tiếng: thấy ngay có nghe được không
+            self._dtNhan(ng, e);
+          };
+          ws.onclose = function (e) {
+            if (self._ng !== ng) return;
+            var tt = self._t || TEXT.vi;
+            self._ngDong(e.code === 4404 || e.code === 4405 ? tt.ng_mute : (e.code === 4403 || e.code === 1008 ? tt.ng_denied : tt.ng_ended));
+          };
+        })
+        .catch(function (err) {
+          if (self._ng === ng) self._ngDong((self._t || TEXT.vi).ng_err + ": " + (err && err.message ? err.message : err));
+        });
+    }
+
+    _ngDong(loi) {
+      var ng = this._ng;
+      this._ng = null; this._ngSan = false;
+      if (ng) {
+        try { if (ng.ws) { ng.ws.onclose = null; ng.ws.close(); } } catch (e) { /* đã đóng */ }
+        try { if (ng.ac) ng.ac.close(); } catch (e) { /* đã đóng */ }
+      }
+      this._ngHienThi(loi || "");
+    }
+
     _dtHienThi(loi) {
       var root = this.shadowRoot, t = this._t || TEXT.vi;
       if (!root) return;
@@ -472,6 +549,7 @@
       q("[data-pause]").disabled = !m.music.canPause;
       q("[data-play]").disabled = !m.music.canPlay;
       this._dtHienThi();
+      this._ngHienThi();
       if (this._eq) this._eq.hass = this._hass;
     }
   }

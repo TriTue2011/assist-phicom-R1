@@ -30,9 +30,9 @@ def test_tep_the_ton_tai_va_dang_ky_dung_ten():
     # (cùng nguồn gốc, đường dẫn do HA ký ``auth/sign_path``), không bao giờ tới địa chỉ nào khác.
     for cam in ("fetch(", "XMLHttpRequest", "ws://", "http://", "192.168"):
         assert cam not in js, cam
-    assert js.count("new WebSocket(") == 1
-    assert 'new WebSocket((location.protocol === "https:" ? "wss:" : "ws:") + "//" + location.host + r.path)' in js
-    assert '"auth/sign_path"' in js and "/api/r1_speaker/dam_thoai/" in js
+    assert js.count("new WebSocket(") == 2                          # mic điện thoại + kênh nghe, cùng một dạng địa chỉ
+    assert js.count('new WebSocket((location.protocol === "https:" ? "wss:" : "ws:") + "//" + location.host + r.path)') == 2
+    assert '"auth/sign_path"' in js and "/api/r1_speaker/dam_thoai/" in js and "/api/r1_speaker/nghe/" in js
 
 
 async def test_hai_the_duoc_nap_va_phuc_vu(hass, r1, hass_client_no_auth):
@@ -349,3 +349,62 @@ def test_giao_dien_giu_de_noi_la_mic_dien_thoai_nhu_camera(tmp_path):
     assert r["thaTruocKhiSan"]["khongGui"] is True                             # thả tay trước khi kênh sẵn sàng: không rò tiếng
     assert r["anTab"] == {"wsDong": True, "panelAn": True}                     # ẩn tab: đóng hẳn, mic không chạy ngầm
     assert "https" in r["http"]["loi"] and r["http"]["khongMo"] is True and r["http"]["dichVu"] == 0
+
+
+PAGE_NGHE = """<!doctype html><meta charset="utf-8"><body><div id="out">CHUA CHAY</div>
+<script src="file://@EQ@"></script><script src="file://@CARD@"></script>
+<script>(async () => {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const entities = {}, states = {};
+const add = (id, tk, state, attrs) => { entities[id] = {platform: "r1_speaker", translation_key: tk, device_id: "d1"}; states[id] = {state, attributes: attrs || {}}; };
+add("switch.r1_dam_thoai", "intercom_open", "off", {giu_mo: false});
+add("sensor.r1_trang_thai_mic", "mic_status", "nghe", {phien: null});
+const wsList = [], callws = []; let gmCalls = 0;
+navigator.mediaDevices.getUserMedia = () => { gmCalls++; return Promise.reject(new Error("khong duoc xin mic de nghe")); };
+window.WebSocket = class { constructor(url) { this.url = url; this.readyState = 0; wsList.push(this);
+  setTimeout(() => { this.readyState = 1; this.onopen && this.onopen(); }, 20); }
+  send() {} close() { this.readyState = 3; this.closed = true; } };
+const mk = (admin) => ({entities, states, language: "vi", user: {is_admin: admin}, callService: () => Promise.resolve(),
+  callWS: (m) => { callws.push(m); return Promise.resolve({path: m.path + "?authSig=x"}); }});
+const tao = (admin) => { const c = document.createElement("r1-talk-card"); document.body.appendChild(c); c.setConfig({show_eq: false}); c.hass = mk(admin); return c; };
+const kq = {};
+let card = tao(false); let q = (s) => card.shadowRoot.querySelector(s);
+kq.nguoiThuong = q("[data-ng-row]").style.display;                 // KHÔNG phải quản trị: nút bị ẩn
+card.remove();
+card = tao(true); q = (s) => card.shadowRoot.querySelector(s);
+kq.quanTri = q("[data-ng-row]").style.display; kq.dau = q("[data-nghe]").textContent;
+q("[data-nghe]").click(); await sleep(300);
+kq.sign = callws.map((m) => [m.type, m.path]); kq.ws = wsList.map((w) => w.url.replace(/^wss?:\/\/[^/]*/, ""));
+kq.dangNghe = {chu: q("[data-ng-status]").textContent, nut: q("[data-nghe]").textContent, xinMic: gmCalls};
+wsList[0].onmessage({data: new Int16Array(1600).fill(20000).buffer}); await sleep(50);   // tiếng to → thanh mức dài
+kq.muc = q("[data-ng-muc]").textContent.length;
+wsList[0].onmessage({data: new Int16Array(1600).fill(10).buffer}); kq.mucNho = q("[data-ng-muc]").textContent.length;
+q("[data-nghe]").click(); await sleep(100);                          // bấm lần nữa: dừng
+kq.dung = {ws: !!wsList[0].closed, nut: q("[data-nghe]").textContent, chu: q("[data-ng-status]").textContent};
+// mic loa bị tắt giữa chừng: HA đóng 4405 → thẻ nói rõ
+q("[data-nghe]").click(); await sleep(200);
+wsList[1].onclose({code: 4405}); await sleep(50);
+kq.micTat = {chu: q("[data-ng-status]").textContent, nut: q("[data-nghe]").textContent};
+// ẩn tab: đóng hẳn
+q("[data-nghe]").click(); await sleep(200);
+Object.defineProperty(document, "visibilityState", {value: "hidden", configurable: true});
+document.dispatchEvent(new Event("visibilitychange")); await sleep(150);
+kq.anTab = {wsDong: !!wsList[2].closed, nut: q("[data-nghe]").textContent};
+document.getElementById("out").textContent = JSON.stringify(kq);
+})();</script>"""
+
+
+@pytest.mark.skipif(CHROME is None, reason="cần Chrome/Chromium")
+def test_giao_dien_nghe_tieng_trong_nha_chi_quan_tri_khong_xin_mic_dien_thoai(tmp_path):
+    page = tmp_path / "nghe.html"
+    page.write_text(PAGE_NGHE.replace("@EQ@", str(EQ)).replace("@CARD@", str(CARD)), encoding="utf-8")
+    r = json.loads(_chay_chrome_den_khi_xong(page))
+    assert r["nguoiThuong"] == "none" and r["quanTri"] == ""            # chỉ quản trị viên thấy nút
+    assert r["sign"] == [["auth/sign_path", "/api/r1_speaker/nghe/sensor.r1_trang_thai_mic/ws"]]
+    assert r["ws"] == ["/api/r1_speaker/nghe/sensor.r1_trang_thai_mic/ws?authSig=x"]
+    d = r["dangNghe"]
+    assert "ĐANG NGHE" in d["chu"] and d["nut"] == "Dừng nghe" and d["xinMic"] == 0   # KHÔNG xin mic điện thoại
+    assert r["muc"] >= 6 and r["mucNho"] <= 1                           # thanh mức tiếng phản ánh âm lượng
+    assert r["dung"]["ws"] is True and "Nghe tiếng trong nhà" in r["dung"]["nut"]
+    assert "không có gì để nghe" in r["micTat"]["chu"]
+    assert r["anTab"]["wsDong"] is True                                 # ẩn tab: ngừng nghe

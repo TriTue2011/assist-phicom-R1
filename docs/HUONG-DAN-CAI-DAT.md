@@ -180,6 +180,14 @@ bị giữ nên lượt ấy hết giờ); TTS qua DLNA và bộ đàm PCM có t
 
 ### 3.3 Đàm thoại: nút, phiên, nhạc (HA làm máy chủ Assist)
 
+**Nghe tiếng trong nhà (một chiều, chỉ quản trị viên).** Nút «👂 Nghe tiếng trong nhà» trên tab Đàm thoại phát tiếng từ
+mic loa ra điện thoại, KHÔNG lọc tiếng người nên nghe được cả tiếng động xung quanh (nhạc, tiếng nói, tiếng bước
+chân), không mở phiên đàm thoại, không phát gì ra loa và không cần mic điện thoại (nên chạy cả qua `http://IP`).
+Loa không có đèn báo khi bị nghe, nên: chỉ quản trị viên thấy nút, thẻ ghi rõ «ĐANG NGHE», có thanh mức tiếng, HA ghi
+nhật ký lúc bắt đầu/kết thúc, và kênh đóng khi ẩn tab/rời trang hoặc khi tắt mic loa (`switch.r1_tat_mic`). Muốn thử:
+phát nhạc ra loa rồi bấm nút từ điện thoại ở phòng khác (đứng cạnh loa sẽ nghe cả tiếng trực tiếp lẫn tiếng qua kênh,
+trễ nhau chừng nửa giây).
+
 **Nói bằng micro điện thoại (trong thẻ, như bộ đàm camera của c2a).** Trên tab Đàm thoại: **Giữ để nói** = mic
 điện thoại đi ra loa, thả ra là nghe lại tiếng loa; **Bật mic luôn** = mic điện thoại mở liên tục (bấm lần nữa để
 tắt). Lần giữ đầu trình duyệt hỏi quyền mic và mở kênh (một WebSocket hai chiều về chính HA, xác thực bằng đường

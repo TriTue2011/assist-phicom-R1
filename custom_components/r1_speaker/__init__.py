@@ -32,6 +32,7 @@ from .const import (CARD_GOP_URL, CARD_URL, CONF_INTERCOM_KEY, CONF_MIC_CHUA_GHE
 from .cong_vao import PingView, WakeView
 from .dam_thoai_ws import DamThoaiWsView
 from .ghep_khoa import GhepKhoaView
+from .nghe_ws import NgheWsView
 from .den import R1Lights, dang_ky_dich_vu as dang_ky_dich_vu_den
 from .den_apk import ApkLights
 from .dam_thoai import R1Talk
@@ -64,6 +65,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.http.register_view(DuplexView())
     hass.http.register_view(DamThoaiWsView())
     hass.http.register_view(GhepKhoaView())
+    hass.http.register_view(NgheWsView())
     hass.http.register_view(WakeView())
     hass.http.register_view(PingView())
     await _register_card(hass)
