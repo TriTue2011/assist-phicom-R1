@@ -698,11 +698,7 @@
 
   if (typeof customElements !== "undefined" && !customElements.get("r1-talk-card")) {
     customElements.define("r1-talk-card", R1TalkCard);
-    window.customCards = window.customCards || [];
-    window.customCards.push({
-      type: "r1-talk-card", name: "Phicomm R1 — Đàm thoại",
-      description: "Nút đàm thoại, trạng thái mic, tạm dừng/phát nhạc và EQ của loa Phicomm R1 (r1_speaker).",
-    });
+    // (Không khai báo vào bộ chọn thẻ: thẻ gộp r1-card là thẻ duy nhất; thẻ này chỉ được r1-card nạp.)
   }
 
   if (typeof module !== "undefined" && module.exports) {

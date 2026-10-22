@@ -23,7 +23,7 @@ need_node = pytest.mark.skipif(shutil.which("node") is None, reason="cần Node 
 
 def test_tep_the_ton_tai_va_dang_ky_dung_ten():
     js = CARD.read_text(encoding="utf-8")
-    assert 'customElements.define("r1-talk-card"' in js and "window.customCards" in js
+    assert 'customElements.define("r1-talk-card"' in js and "customCards.push" not in js   # chỉ r1-card khai báo vào bộ chọn thẻ
     assert TALK_CARD_URL == "/r1_speaker/r1-talk-card.js"
     assert "innerHTML" in js and "esc(" in js                    # dữ liệu ngoài đều qua esc()
     # Thẻ chỉ gọi dịch vụ HA, không đụng loa. Ngoại lệ DUY NHẤT: mic điện thoại mở một WebSocket về chính HA

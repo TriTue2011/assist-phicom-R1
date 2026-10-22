@@ -142,11 +142,20 @@ HIEU_UNG: dict[str, HieuUng] = {h.id: h for h in (
 )}
 
 
+TOC_DO_MIN, TOC_DO_MAX, TOC_DO_MAC_DINH = 25, 400, 100
+
+
 def dung(effect_id: str, accent: RGB, pct: int, use_rim: bool,
-         rng: random.Random | None = None) -> list[Step]:
+         rng: random.Random | None = None, toc_do: int = TOC_DO_MAC_DINH) -> list[Step]:
     """Dựng các bước của hiệu ứng ``effect_id`` cho màu ``accent`` ở độ sáng ``pct`` (0–100).
-    ``rng`` chỉ pháo hoa dùng; bỏ trống thì mỗi lần một dãy mới (ngẫu nhiên không cần mật mã)."""
+    ``rng`` chỉ pháo hoa dùng; bỏ trống thì mỗi lần một dãy mới (ngẫu nhiên không cần mật mã).
+    ``toc_do`` là PHẦN TRĂM tốc độ (100 = như đề xuất, 200 = nhanh gấp đôi, 50 = chậm một nửa): thời gian mỗi bước chia
+    cho ``toc_do/100``."""
     h = HIEU_UNG[effect_id]
     # Ngẫu nhiên chỉ để trang trí đèn, không dùng cho bảo mật.
     ctx = Ctx(accent, pct, use_rim, rng or random.Random())  # nosec B311
-    return _tinh_gon(h.tao(ctx))
+    steps = _tinh_gon(h.tao(ctx))
+    if toc_do == TOC_DO_MAC_DINH:
+        return steps
+    he_so = 100 / min(max(toc_do, TOC_DO_MIN), TOC_DO_MAX)
+    return [Step(base=s.base, rim=s.rim, seconds=round(s.seconds * he_so, 4)) for s in steps]

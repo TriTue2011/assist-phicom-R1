@@ -57,7 +57,7 @@ Kho này gồm hai phần chạy cùng nhau để biến loa **Phicomm R1** thà
 - Sau khi thêm: có thiết bị **Phicomm R1** với 5 thực thể EQ (`number.phicomm_r1_eq_60_hz` … `_14_khz`), `number.phicomm_r1_volume`,
   `media_player.r1_loa`, `assist_satellite.r1`, `sensor.r1_trang_thai_mic`…
 - Kéo thử một dải EQ: lệnh ghi dải EQ đã được xác nhận trên loa thật; các lệnh khác xem bảng ở mục 7.
-- Thẻ: thêm tài nguyên Lovelace `/r1_speaker/r1-card.js` (loại Mô-đun JavaScript), rồi thêm thẻ `type: custom:r1-card`
+- Thẻ: tích hợp **tự đăng ký** tài nguyên `/r1_speaker/r1-card.js`; chỉ cần thêm thẻ `type: custom:r1-card`
   (thẻ gộp, 3 tab Đàm thoại / EQ / Cài đặt; tên loa và hàng tab luôn hiện, nội dung đóng sẵn). Chi tiết: `docs/HUONG-DAN-CAI-DAT.md` mục 2.
 - Phát tiếng ra loa (TTS/nhạc) cần thêm tích hợp **DLNA Digital Media Renderer** của HA cho loa — xem `docs/PHAT-RA-LOA.md`.
 

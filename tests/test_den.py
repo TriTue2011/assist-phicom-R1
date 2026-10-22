@@ -472,7 +472,7 @@ async def test_cai_dat_duoc_luu_va_nap_lai(hass, r1, hass_storage):
     assert hass_storage[key]["data"] == {"functions": {"nghe": {
         "rim": False, "color": "#00ff00", "effect": "nhip_tim", "brightness": 30}}}   # chỉ phần KHÁC mặc định
     assert hass.states.get(CAI_DAT).attributes["anh_sang"]["chuc_nang"]["nghe"] == {
-        "enabled": True, "rim": False, "color": "#00ff00", "effect": "nhip_tim", "brightness": 30,
+        "enabled": True, "rim": False, "color": "#00ff00", "effect": "nhip_tim", "brightness": 30, "toc_do": 100,
         "mac_dinh": False}
     assert await hass.config_entries.async_reload(e.entry_id)
     await hass.async_block_till_done()
@@ -569,3 +569,30 @@ async def test_thuoc_tinh_cho_the_ba_nhom_va_khong_lo_khoa(hass, r1):
     assert all(v["mac_dinh"] for v in al["chuc_nang"].values())
     assert al["den_nhac_firmware"] == {"bat": True, "luma": 50, "chroma": 60,
                                        "dieu_khien": "qua_apk_msgcenter"}
+
+
+async def test_toc_do_hieu_ung_luu_kiem_gia_tri_va_chia_thoi_gian_moi_buoc(hass, r1, hass_storage):
+    from custom_components.r1_speaker import hieu_ung
+    e = await _them(hass, r1)
+    cd = hass.states.get(CAI_DAT).attributes["anh_sang"]
+    assert cd["toc_do"] == {"min": 25, "max": 400, "mac_dinh": 100}
+    assert cd["chuc_nang"]["nghe"]["toc_do"] == 100
+    await hass.services.async_call("r1_speaker", "set_light_function", {
+        "entity_id": CAI_DAT, "function": "nghe", "effect": "chop", "toc_do": 200}, blocking=True)
+    assert hass_storage[f"r1_speaker.lights.{e.entry_id}"]["data"]["functions"]["nghe"]["toc_do"] == 200
+    assert hass.states.get(CAI_DAT).attributes["anh_sang"]["chuc_nang"]["nghe"]["toc_do"] == 200
+    for xau in (10, 401, 0, -5):                                # ngoài 25–400 bị chặn từ lược đồ dịch vụ
+        with pytest.raises(Exception):
+            await hass.services.async_call("r1_speaker", "set_light_function", {
+                "entity_id": CAI_DAT, "function": "nghe", "toc_do": xau}, blocking=True)
+    # Hiệu ứng gốc của firmware (thở/nháy) có chu kỳ cố định: không nằm trong danh sách chỉnh được tốc độ
+    ds = hass.states.get(CAI_DAT).attributes["anh_sang"]
+    assert not {"tho", "nhap_nhay"} & set(ds["hieu_ung_co_toc_do"])
+    assert {"cau_vong", "nhip_tim", "phao_hoa", "chop"} <= set(ds["hieu_ung_co_toc_do"]) or ds["hieu_ung_goc"] is None
+    # dung(): 200% = thời gian mỗi bước giảm một nửa; 50% = gấp đôi; 100% không đổi; ngoài khoảng bị kẹp
+    mau = (0, 0, 255)
+    goc = [st.seconds for st in hieu_ung.dung("nhap_nhay", mau, 100, False)]
+    assert [st.seconds for st in hieu_ung.dung("nhap_nhay", mau, 100, False, toc_do=200)] == [g / 2 for g in goc]
+    assert [st.seconds for st in hieu_ung.dung("nhap_nhay", mau, 100, False, toc_do=50)] == [g * 2 for g in goc]
+    assert [st.seconds for st in hieu_ung.dung("nhap_nhay", mau, 100, False, toc_do=100)] == goc
+    assert [st.seconds for st in hieu_ung.dung("nhap_nhay", mau, 100, False, toc_do=9999)] == [g / 4 for g in goc]

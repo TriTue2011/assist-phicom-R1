@@ -71,9 +71,11 @@ nữa với IP khác, mỗi loa có khoá, cổng, phiên, đèn và thực th�
 
 ## 3. Thẻ Lovelace
 
-Thêm tài nguyên (Cài đặt → Bảng điều khiển → ⋮ → Tài nguyên, loại *Mô-đun JavaScript*):
-`/r1_speaker/r1-card.js`, `/r1_speaker/r1-talk-card.js`, `/r1_speaker/r1-settings-card.js`. Rồi thêm thẻ
-`type: custom:r1-card` (nhiều loa: thêm `device_id`). Tên loa và hàng tab luôn hiện; nội dung từng tab đóng sẵn, bấm tab để mở.
+**Cài tích hợp là tự thêm thẻ**: khi HA khởi động xong, tích hợp tự đăng ký tài nguyên `/r1_speaker/r1-card.js?v=<phiên bản>`
+(đổi `?v=` mỗi lần cập nhật để trình duyệt bỏ bản cũ) và gỡ ba tài nguyên thẻ con cũ nếu bạn từng thêm tay. **Chỉ có MỘT thẻ**
+`r1-card` (3 tab, tự nạp thẻ đàm thoại/EQ/cài đặt), nên bộ chọn thẻ chỉ hiện «R1 (gộp, tab)». Chỉ cần thêm thẻ
+`type: custom:r1-card` (nhiều loa: thêm `device_id`). Bảng điều khiển ở chế độ YAML thì danh sách tài nguyên chỉ-đọc: khi đó tự
+thêm `/r1_speaker/r1-card.js` (Mô-đun JavaScript). Tên loa và hàng tab luôn hiện; nội dung từng tab đóng sẵn, bấm tab để mở.
 Nếu thẻ báo «Custom element not found»: tải lại cưỡng bức, xoá đệm giao diện, hoặc thêm `?v=<số>` sau địa chỉ tài nguyên.
 
 **Tab Đàm thoại**
@@ -172,7 +174,16 @@ của firmware**, đúng cách app AI box làm: HA gửi `den_hieu_ung` xuống 
 `msgcenter.sendMsg(0x1000, ID, 0)` với ID lấy từ `/system/etc/lights_effects.conf`. **Không cần máy chủ quyền shell, không
 cần máy ngoài**: chỉ cần APK mới đang nối vào HA (cảm biến «Dịch vụ đèn» = bật). Hệ quả: chỉ có tập màu và hiệu ứng khai
 trong tệp của firmware, không có màu tuỳ ý, không chỉnh độ sáng từng chức năng (độ sáng 0 hoặc «Độ sáng đèn» = 0 là
-TẮT, lớn hơn 0 là bật). **Chưa có xác nhận bằng mắt của chủ nhà cho tên màu của từng ID** (tên lấy từ chú thích của tệp).
+TẮT, lớn hơn 0 là bật). Chủ nhà đã thấy đèn đáy lên màu khi gửi đúng đường (22/10/2026).
+
+**Firmware chỉ chạy MỘT hiệu ứng tại một thời điểm** (log `close light X` / `show light Y`): bật hiệu ứng mới là đóng cái cũ, nên
+đèn đáy và đèn viền KHÔNG sáng đồng thời. Mỗi lần áp, tích hợp gửi đúng một ID: đáy đang có màu thì ưu tiên đáy, không thì viền,
+không thì tắt cả hai. (Lỗi cũ «đáy không sáng, viền thì sáng» là do gửi ID đáy rồi ngay ID tắt viền 505 đóng mất hiệu ứng đáy.)
+
+**Tốc độ hiệu ứng** (thanh «Tốc độ hiệu ứng» 25–400 %, 100 = như đề xuất, dịch vụ `set_light_function` trường `toc_do`): chỉnh được cho
+mọi hiệu ứng do HA tự đổi màu theo nhịp (cầu vồng, nhịp tim, pháo hoa, chớp). Thở và nháy gốc của firmware có chu kỳ cố định nên thanh
+tốc độ không hiện. **Không làm được bằng firmware** (cần ghi `/sys/class/leds/multi_leds0/led_color`, app bị SELinux chặn):
+cầu vồng mỗi đèn một màu xoay, sao chổi nhiều màu, tăng giảm độ sáng mượt cho mọi màu.
 
 | Màu (đèn đáy) | Sáng cố định | Thở | Ghi chú |
 |---|---|---|---|

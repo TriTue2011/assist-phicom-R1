@@ -26,7 +26,8 @@ SID = "sensor.r1_cai_dat"
 
 def test_tep_the_ton_tai_dang_ky_dung_ten_va_khong_goi_loa():
     js = CARD.read_text(encoding="utf-8")
-    assert 'customElements.define("r1-settings-card"' in js and "window.customCards" in js
+    # Thẻ con chỉ được r1-card nạp: KHÔNG tự khai báo vào bộ chọn thẻ (trong bộ chọn chỉ còn một thẻ «r1-card»).
+    assert 'customElements.define("r1-settings-card"' in js and "customCards.push" not in js
     assert SETTINGS_CARD_URL == "/r1_speaker/r1-settings-card.js"
     assert "innerHTML" in js and "esc(" in js                    # dữ liệu ngoài đều qua esc()
     # Thẻ chỉ gọi dịch vụ HA: không mạng, không địa chỉ cứng, không đụng loa.

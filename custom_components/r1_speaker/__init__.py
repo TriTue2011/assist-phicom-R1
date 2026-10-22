@@ -25,7 +25,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.typing import ConfigType
 
-from . import lenh_apk, media_player, nang_cao
+from . import giao_dien, lenh_apk, media_player, nang_cao
 from .client import R1Client
 from .const import (CARD_GOP_URL, CARD_URL, CONF_INTERCOM_KEY, CONF_MIC_CHUA_GHEP, CONF_MIC_LISTEN_KEY, CONF_MIC_LISTEN_PORT, DOMAIN, SETTINGS_CARD_URL, TALK_CARD_URL,
                     WAKE_SPEAKER)
@@ -69,6 +69,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.http.register_view(WakeView())
     hass.http.register_view(PingView())
     await _register_card(hass)
+    await giao_dien.dang_ky_tai_nguyen(hass)
     dang_ky_dich_vu_den(hass)
     lenh_apk.dang_ky(hass)
     nang_cao.dang_ky_dich_vu(hass)

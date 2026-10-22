@@ -73,6 +73,14 @@ set_light_function:
           min: 0
           max: 100
           mode: slider
+    toc_do:
+      selector:
+        number:
+          min: 25
+          max: 400
+          step: 5
+          unit_of_measurement: "%"
+          mode: slider
 set_music_light:
   fields:
     entity_id:

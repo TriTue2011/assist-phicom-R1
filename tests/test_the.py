@@ -25,7 +25,7 @@ need_node = pytest.mark.skipif(shutil.which("node") is None, reason="cần Node 
 def test_tep_the_ton_tai_va_dang_ky_dung_ten():
     js = CARD.read_text(encoding="utf-8")
     assert 'customElements.define("r1-eq-card"' in js
-    assert "window.customCards" in js and "r1_speaker" in js
+    assert "customCards.push" not in js and "r1_speaker" in js   # thẻ con không tự khai báo: bộ chọn chỉ còn r1-card
     assert CARD_URL == "/r1_speaker/r1-eq-card.js"
 
 

@@ -45,7 +45,7 @@ from .coordinator import R1ConfigEntry
 from .const import DOMAIN, LIGHT_ERROR_HOLD_S, LIGHT_PREVIEW_MAX_S, LIGHT_PREVIEW_S
 from . import den_firmware as fw
 from .den_port import RGB, LightsError, LightsSink, NullLights
-from .hieu_ung import HIEU_UNG, KHONG, dung, sang_rgb, sang_vien
+from .hieu_ung import HIEU_UNG, KHONG, TOC_DO_MAX, TOC_DO_MIN, dung, sang_rgb, sang_vien
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -88,6 +88,7 @@ class FunctionLight:
     color: str         # màu đèn đáy "#rrggbb"
     effect: str        # ``none`` hoặc id trong ``HIEU_UNG``
     brightness: int    # 0–100
+    toc_do: int = 100  # % tốc độ hiệu ứng đổi màu (25–400, 100 = như đề xuất); hiệu ứng gốc của firmware có chu kỳ cố định
 
     @classmethod
     def from_dict(cls, d: Any, base: "FunctionLight") -> "FunctionLight":
@@ -101,7 +102,9 @@ class FunctionLight:
             color=chuan_mau(d.get("color")) or base.color,
             effect=d["effect"] if d.get("effect") in (KHONG, *HIEU_UNG) else base.effect,
             brightness=bright if isinstance(bright, int) and not isinstance(bright, bool)
-            and 0 <= bright <= 100 else base.brightness)
+            and 0 <= bright <= 100 else base.brightness,
+            toc_do=(d["toc_do"] if isinstance(d.get("toc_do"), int) and not isinstance(d.get("toc_do"), bool)
+                    and TOC_DO_MIN <= d["toc_do"] <= TOC_DO_MAX else base.toc_do))
 
 
 #: MẶC ĐỊNH — ĐỀ XUẤT, CHƯA ĐO (không số nào được nghe/nhìn thử trên loa thật):
@@ -364,6 +367,10 @@ class R1Lights:
             b = new["brightness"]
             if isinstance(b, bool) or not isinstance(b, int) or not 0 <= b <= 100:
                 raise ServiceValidationError("độ sáng phải là số nguyên 0–100")
+        if "toc_do" in new:
+            v = new["toc_do"]
+            if isinstance(v, bool) or not isinstance(v, int) or not TOC_DO_MIN <= v <= TOC_DO_MAX:
+                raise ServiceValidationError(f"tốc độ phải là số nguyên {TOC_DO_MIN}–{TOC_DO_MAX} (%)")
         for k in ("enabled", "rim"):
             if k in new and not isinstance(new[k], bool):
                 raise ServiceValidationError(f"{k} phải là đúng/sai")
@@ -425,7 +432,7 @@ class R1Lights:
                     await sink.ap_dung_ham(rim=p.rim, color=mau_rgb(p.color), effect=p.effect, sang=sang)
                 elif p.effect != KHONG:
                     await sink.play_effect(
-                        dung(p.effect, mau_rgb(p.color), sang, p.rim, self._rng),
+                        dung(p.effect, mau_rgb(p.color), sang, p.rim, self._rng, p.toc_do),
                         repeat=HIEU_UNG[p.effect].lap)
                 else:
                     await sink.set_rim(sang_vien(sang) if p.rim else 0)
@@ -454,6 +461,10 @@ class R1Lights:
             "den_firmware": bool(getattr(self._sink, "firmware", False)),
             "hieu_ung_ho_tro": list(getattr(self._sink, "hieu_ung_ho_tro", None) or []) or None,
             "hieu_ung_goc": list(getattr(self._sink, "hieu_ung_goc", None) or []) or None,
+            # Hiệu ứng chỉnh được tốc độ: mọi hiệu ứng HA tự đổi màu theo nhịp; hiệu ứng gốc của firmware (thở/nháy) có chu kỳ cố định.
+            "hieu_ung_co_toc_do": [h for h in HIEU_UNG
+                                   if h not in (getattr(self._sink, "hieu_ung_goc", None) or ())],
+            "toc_do": {"min": TOC_DO_MIN, "max": TOC_DO_MAX, "mac_dinh": 100},
             "bang_mau_firmware": [{"ten": m.ten, "ten_en": m.ten_en, "rgb": "#%02x%02x%02x" % m.rgb,
                                    "tho": m.tho is not None} for m in fw.MAU.values()],
             "do_sang_chung": self.master,
@@ -482,6 +493,7 @@ def _lights_cua(hass: HomeAssistant, entity_id: str) -> R1Lights:
 
 _EFFECTS = [KHONG, *HIEU_UNG]
 _BRIGHT = vol.All(vol.Coerce(int), vol.Range(min=0, max=100))
+_TOC_DO = vol.All(vol.Coerce(int), vol.Range(min=TOC_DO_MIN, max=TOC_DO_MAX))
 _COLOR = vol.All(str, vol.Match(_MAU, msg="màu phải dạng #rrggbb"))
 
 SET_FUNCTION_SCHEMA = vol.Schema({
@@ -492,6 +504,7 @@ SET_FUNCTION_SCHEMA = vol.Schema({
     vol.Optional("color"): _COLOR,
     vol.Optional("effect"): vol.In(_EFFECTS),
     vol.Optional("brightness"): _BRIGHT,
+    vol.Optional("toc_do"): _TOC_DO,
 })
 SET_MUSIC_SCHEMA = vol.Schema({
     vol.Required("entity_id"): cv.entity_id,

@@ -365,11 +365,7 @@
 
   if (typeof customElements !== "undefined" && !customElements.get("r1-eq-card")) {
     customElements.define("r1-eq-card", R1EqCard);
-    window.customCards = window.customCards || [];
-    window.customCards.push({
-      type: "r1-eq-card", name: "Phicomm R1 — EQ",
-      description: "Chỉnh EQ 5 băng, bass, loudness của loa Phicomm R1 (tích hợp r1_speaker).",
-    });
+    // (Không khai báo vào bộ chọn thẻ: thẻ gộp r1-card là thẻ duy nhất; thẻ này chỉ được r1-card nạp.)
   }
 
   if (typeof module !== "undefined" && module.exports) {

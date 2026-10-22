@@ -74,11 +74,10 @@ chỉnh tay tự theo.
 
 ## 2. Thẻ Lovelace chỉnh EQ và thẻ đàm thoại
 
-Tích hợp phục vụ thẻ ở `/r1_speaker/r1-*.js` nhưng **không tự nạp**: phải thêm tài nguyên Lovelace
-(Cài đặt → Bảng điều khiển → ⋮ → Tài nguyên → Thêm, loại **Mô-đun JavaScript**). Chỉ cần
-`/r1_speaker/r1-card.js` (thẻ gộp, tự nạp ba thẻ con, dùng `type: custom:r1-card`); muốn dùng riêng
-từng thẻ thì thêm file tương ứng. Lý do không tự nạp: nạp sớm làm giao diện HA không thấy thẻ
-(«Custom element not found»). Sau khi cập nhật, tải lại trang (thẻ gộp luôn lấy mã mới).
+Tích hợp **tự đăng ký tài nguyên Lovelace** `/r1_speaker/r1-card.js?v=<phiên bản>` khi HA khởi động xong (cách của tích hợp YouTube;
+đổi phiên bản trong `manifest.json` là `?v=` đổi theo, trình duyệt bỏ bản cũ) và gỡ ba tài nguyên thẻ con cũ nếu còn. Chỉ có **một thẻ**
+`type: custom:r1-card` (thẻ gộp, tự nạp thẻ đàm thoại/EQ/cài đặt). KHÔNG dùng `add_extra_js_url`: nạp sớm làm giao diện HA không thấy thẻ
+(«Custom element not found»). Chế độ YAML thì danh sách tài nguyên chỉ-đọc: tự thêm `/r1_speaker/r1-card.js` (Mô-đun JavaScript).
 
 Thêm thẻ (chế độ YAML):
 
@@ -287,6 +286,6 @@ Test thẻ trong Chrome không đầu: `tests/test_the_chrome.py` (tự bỏ qua
 | Thêm tích hợp báo «Không đọc được loa» | IP/cổng sai hoặc cổng 8080 bị chặn; thử cổng khác trong Tuỳ chọn. |
 | Thực thể EQ unavailable | Loa không trả `get_eq_config`; xem log `custom_components.r1_speaker`. Thẻ hiện «Loa không phản hồi». |
 | Kéo thanh EQ mà số không đổi | Lệnh bị loa bỏ qua (chỉ `set_eq_bandlevel` đã xác nhận); lần hỏi kế (10 giây) HA lấy lại số thật. |
-| Thẻ báo «Custom element not found» | Chưa thêm tài nguyên `/r1_speaker/r1-card.js` (mục 2); sau khi thêm, tải lại trang. |
+| Thẻ báo «Custom element not found» | Tích hợp tự thêm tài nguyên `/r1_speaker/r1-card.js`; nếu chưa có (bảng điều khiển YAML) hãy thêm tay, rồi tải lại cưỡng bức trang. |
 | `assist_satellite.r1` unavailable | Chưa có/đứt luồng mic (mục 4), hoặc `switch.r1_tat_mic` đang bật là chủ động (idle, không phải lỗi). |
 | POST bộ đàm trả 503 | Chưa đặt cổng nhận tiếng phát. |

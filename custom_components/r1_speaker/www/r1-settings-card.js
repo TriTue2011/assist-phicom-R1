@@ -19,7 +19,7 @@
  */
 (function () {
   "use strict";
-  var BUILD = "2026-10-22.10";
+  var BUILD = "2026-10-22.11";
 
   var PLATFORM = "r1_speaker";
   var FUNCTIONS = ["cho", "nghe", "nghi", "phan_hoi", "dam_thoai", "phat_nhac", "loi", "tat_mic"];
@@ -52,7 +52,7 @@
       fn: { cho: "Chờ / từ đánh thức", nghe: "Đang nghe", nghi: "Đang nghĩ", phan_hoi: "Đang trả lời",
             dam_thoai: "Đàm thoại", phat_nhac: "Phát nhạc (hiệu ứng của HA)", loi: "Lỗi", tat_mic: "Tắt mic" },
       enabled: "Bật", rim: "Đèn viền (chỉ trắng)", color: "Màu đèn đáy", effect: "Hiệu ứng",
-      brightness: "Độ sáng", preview: "Thử", active: "đang áp dụng", proposal: "mặc định đề xuất, chưa đo",
+      brightness: "Độ sáng", speed: "Tốc độ hiệu ứng", preview: "Thử", active: "đang áp dụng", proposal: "mặc định đề xuất, chưa đo",
       no_effect: "Không (sáng cố định)", red_warn: "Đỏ chưa xác nhận trên đèn đáy",
       music: "Hiệu ứng khi phát nhạc",
       fw: "Đèn theo nhạc của firmware (chỉnh ở các thực thể «Đèn theo nhạc», «Độ sáng/Sắc độ đèn nhạc»)",
@@ -95,7 +95,7 @@
       fn: { cho: "Idle / wake word", nghe: "Listening", nghi: "Thinking", phan_hoi: "Responding",
             dam_thoai: "Conversation", phat_nhac: "Music playing (HA effect)", loi: "Error", tat_mic: "Mic muted" },
       enabled: "On", rim: "Rim light (white only)", color: "Base colour", effect: "Effect",
-      brightness: "Brightness", preview: "Try", active: "in effect", proposal: "suggested default, not measured",
+      brightness: "Brightness", speed: "Effect speed", preview: "Try", active: "in effect", proposal: "suggested default, not measured",
       no_effect: "None (steady)", red_warn: "Red is unconfirmed on the base light",
       music: "Light effect while music plays",
       fw: "Speaker firmware's own music light (set with the «Music light» entities)",
@@ -170,7 +170,7 @@
     var fns = FUNCTIONS.filter(function (k) { return chuc[k]; }).map(function (k) {
       var p = chuc[k];
       return { key: k, enabled: p.enabled === true, rim: p.rim === true, color: String(p.color || "#000000"),
-               effect: p.effect || "none", brightness: num(p.brightness, 0), isDefault: p.mac_dinh === true,
+               effect: p.effect || "none", brightness: num(p.brightness, 0), tocDo: num(p.toc_do, 100), isDefault: p.mac_dinh === true,
                active: al.dang_ap_dung === k };
     });
     var fw = al.den_nhac_firmware || {};
@@ -191,6 +191,8 @@
         sink: { state: al.dich_vu_den || null, ready: al.dich_vu_den === "san_sang",
                 lost: al.dich_vu_den === "mat_ket_noi", svc: al.dich_vu_den === "CHO_DICH_VU_DEN", error: al.loi_dich_vu || null },
         functions: fns, music: music, current: al.dang_ap_dung || null,
+        tocDoHoTro: Array.isArray(al.hieu_ung_co_toc_do) ? al.hieu_ung_co_toc_do : null,
+        tocDo: { min: num((al.toc_do || {}).min, 25), max: num((al.toc_do || {}).max, 400) },
         fw: al.den_firmware === true, hoTro: Array.isArray(al.hieu_ung_ho_tro) ? al.hieu_ung_ho_tro : null,
         bangMau: Array.isArray(al.bang_mau_firmware) ? al.bang_mau_firmware : [],
         effects: (al.hieu_ung || []).map(function (h) {
@@ -233,7 +235,7 @@
     if (!sid) return null;
     var coerce = function (field, v) {
       if (field === "enabled" || field === "rim") return v === true || v === "true" || v === "on";
-      if (field === "brightness") return Math.round(Number(v));
+      if (field === "brightness" || field === "toc_do") return Math.round(Number(v));
       return String(v);
     };
     if (a.type === "fn" && FUNCTIONS.indexOf(a.key) >= 0) {
@@ -401,6 +403,11 @@
       (L.fw ? '<div class="note">' + esc(t.fw_sang) + "</div>" : "") +
       '<div class="row"><label>' + esc(t.brightness) + "</label>" + slider(d + '"brightness"', f.brightness, 0, 100, 5, false) +
       '<span class="val">' + esc(f.brightness) + "</span></div>" +
+      // Tốc độ: chỉ hiện khi hiệu ứng đang chọn do HA tự đổi màu theo nhịp (thở/nháy gốc của firmware có chu kỳ cố định).
+      (f.effect !== "none" && (!L.tocDoHoTro || L.tocDoHoTro.indexOf(f.effect) >= 0)
+        ? '<div class="row"><label>' + esc(t.speed) + "</label>" + slider(d + '"toc_do"', f.tocDo, L.tocDo.min, L.tocDo.max, 5, false) +
+          '<span class="val">' + esc(f.tocDo) + "%</span></div>"
+        : "") +
       (f.isDefault ? '<div class="note">' + esc(t.proposal) + "</div>" : "") +
       '<button class="sec" data-preview="' + key + '">' + esc(t.preview) + "</button></section>";
   }
@@ -580,11 +587,7 @@
 
   if (typeof customElements !== "undefined" && !customElements.get("r1-settings-card")) {
     customElements.define("r1-settings-card", R1SettingsCard);
-    window.customCards = window.customCards || [];
-    window.customCards.push({
-      type: "r1-settings-card", name: "Phicomm R1 — Cài đặt",
-      description: "Mục cài đặt ẩn (bấm để mở): âm thanh, ánh sáng theo chức năng, kết nối của loa Phicomm R1 (r1_speaker).",
-    });
+    // (Không khai báo vào bộ chọn thẻ: thẻ gộp r1-card là thẻ duy nhất; thẻ này chỉ được r1-card nạp.)
   }
 
   if (typeof module !== "undefined" && module.exports) {
