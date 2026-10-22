@@ -171,6 +171,14 @@ bị giữ nên lượt ấy hết giờ); TTS qua DLNA và bộ đàm PCM có t
 
 ### 3.3 Đàm thoại: nút, phiên, nhạc (HA làm máy chủ Assist)
 
+**Nói bằng micro điện thoại (trong thẻ, như bộ đàm camera của c2a).** Trên tab Đàm thoại: **Giữ để nói** = mic
+điện thoại đi ra loa, thả ra là nghe lại tiếng loa; **Bật mic luôn** = mic điện thoại mở liên tục (bấm lần nữa để
+tắt). Lần giữ đầu trình duyệt hỏi quyền mic và mở kênh (một WebSocket hai chiều về chính HA, xác thực bằng đường
+dẫn đã ký của HA); kênh mở sẵn thì lần sau nói liền, nút «Đóng kênh điện thoại» hoặc ẩn tab/rời trang là đóng hẳn
+(mic không chạy ngầm). **Trình duyệt chỉ cho dùng mic khi mở HA bằng https**: qua địa chỉ ngoài (tên miền
+Cloudflare) được; qua `http://<IP>:8123` trong nhà thì thẻ báo rõ và không mở gì. Mỗi loa chỉ một điện thoại một
+lúc (người thứ hai bị từ chối). Kiểm bằng test HA + Chrome mic giả; CHƯA thử trên điện thoại thật với loa thật.
+
 HA là máy chủ Assist: pipeline chọn ở `select.r1_tro_ly` lo STT / hiểu lệnh / TTS; loa chỉ là
 tai và miệng (`assist_satellite.r1` + `media_player.r1_loa`).
 

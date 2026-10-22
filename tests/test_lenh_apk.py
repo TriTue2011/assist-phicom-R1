@@ -15,6 +15,7 @@ async def test_quan_tri_nhan_lenh_co_khoa_va_cong_dung(hass, r1, hass_ws_client)
     lenh = r["result"]["lenh"]
     assert f"--es khoa {e.data['mic_listen_key']}" in lenh
     assert f"--ei port {e.data['mic_listen_port']}" in lenh
+    assert lenh.endswith("--ez bat true")                    # lần đầu chỉ LƯU cấu hình; «bat» mới bật mic
     assert "--es host " in lenh and "vn.r1.bodam/.ManHinhChinh" in lenh and "/system/bin/am" in lenh
 
 

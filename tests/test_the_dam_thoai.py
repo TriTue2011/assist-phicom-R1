@@ -141,8 +141,7 @@ const nghe={mic:q("[data-mic-text]").textContent, status:q("[data-mic]").dataset
  holdDisabled:q("[data-hold]").disabled, alwaysDisabled:q("[data-always]").disabled,
  pauseDisabled:q("[data-pause]").disabled, playDisabled:q("[data-play]").disabled,
  noTalkButton:!q("[data-talk]") && !q("[data-end]")};
-q("[data-always]").click(); q("[data-pause]").click();             // bật mic luôn; tạm dừng nhạc
-q("[data-hold]").dispatchEvent(new Event("pointerdown")); q("[data-hold]").dispatchEvent(new Event("pointerup"));
+q("[data-pause]").click();                                          // tạm dừng nhạc (nút mic điện thoại có test riêng)
 // 3) Đang có phiên, mic đang gửi.
 states["sensor.r1_trang_thai_mic"]={state:"gui",attributes:{phien:"button",so_lan_tu_choi:1,tu_choi_gan_nhat:"x"}};
 states["media_player.r1_loa"]={state:"paused",attributes:{}};
@@ -151,7 +150,7 @@ const gui={mic:q("[data-mic-text]").textContent, status:q("[data-mic]").dataset.
  holdDisabled:q("[data-hold]").disabled, alwaysDisabled:q("[data-always]").disabled,
  holdTitle:q("[data-hold]").title, refused:q("[data-refused]").style.display!=="none",
  pauseDisabled:q("[data-pause]").disabled, playDisabled:q("[data-play]").disabled};
-q("[data-always]").click(); q("[data-hold]").dispatchEvent(new Event("pointerdown")); q("[data-play]").click();
+q("[data-play]").click();
 // 4) Trạng thái mic không đọc được: KHÔNG hiện như «Tắt».
 states["sensor.r1_trang_thai_mic"]={state:"unavailable",attributes:{}}; card.hass=mk();
 const lạ={mic:q("[data-mic-text]").textContent, status:q("[data-mic]").dataset.status};
@@ -182,130 +181,11 @@ def test_giao_dien_the_dam_thoai_trang_thai_mic_nut_va_thuc_the_den_muon(tmp_pat
     assert r["gui"]["holdTitle"] == "Đang có phiên" and r["gui"]["refused"]
     assert r["gui"]["pauseDisabled"] is True and r["gui"]["playDisabled"] is False
     assert r["la"] == {"mic": "Không rõ", "status": "unknown"}   # không đọc được ≠ «Tắt»
-    calls = r["calls"]                                          # bấm khi đang rảnh; khi có phiên Assist thì không gọi gì
-    assert calls[:2] == [["switch", "turn_on", {"entity_id": "switch.r1_dam_thoai"}],
-                         ["media_player", "media_pause", {"entity_id": "media_player.r1_loa"}]]
-    con_lai = [c[1] for c in calls[2:]]            # giữ/thả chạy bất đồng bộ (xếp hàng) nên chen với lệnh nhạc
-    assert sorted(con_lai) == ["media_play", "start_duplex", "stop_duplex"]
-    assert con_lai.index("start_duplex") < con_lai.index("stop_duplex")
-    assert all(c[2] == {"entity_id": "sensor.r1_trang_thai_mic"} for c in calls if c[0] == "r1_speaker")
+    # Mic đi bằng ĐIỆN THOẠI (WebSocket) nên bấm «Giữ để nói»/«Bật mic luôn» không còn gọi dịch vụ đàm thoại của HA;
+    # chỉ nút nhạc gọi dịch vụ. Khi có phiên Assist chiếm chỗ thì các nút mic không làm gì.
+    assert r["calls"] == [["media_player", "media_pause", {"entity_id": "media_player.r1_loa"}],
+                          ["media_player", "media_play", {"entity_id": "media_player.r1_loa"}]]
     assert r["eq"] is True and r["xss"] is False                # nhúng thẻ EQ; tên bài không thành HTML
-
-
-PAGE_GIU = """<!doctype html><meta charset="utf-8"><body><div id="out">CHUA CHAY</div>
-<script src="file://@EQ@"></script><script src="file://@CARD@"></script>
-<script>(async () => {
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const entities = {}, states = {};
-const add = (id, tk, state, attrs) => { entities[id] = {platform: "r1_speaker", translation_key: tk, device_id: "d1"}; states[id] = {state, attributes: attrs || {}}; };
-add("switch.r1_dam_thoai", "intercom_open", "off", {giu_mo: false});
-add("sensor.r1_trang_thai_mic", "mic_status", "nghe", {phien: null});
-const log = []; let startXong = false;
-const mk = () => ({entities: {...entities}, states: {...states}, language: "vi", callService: (d, s, x) => {
-  log.push(s + (s === "stop_duplex" ? (startXong ? ":sau-start" : ":TRUOC-start") : ""));
-  if (s === "start_duplex") return new Promise((r) => setTimeout(() => { startXong = true; r(); }, 120));   // dịch vụ mở phiên chậm
-  return Promise.resolve(); }});
-const card = document.createElement("r1-talk-card"); document.body.appendChild(card); card.setConfig({show_eq: false}); card.hass = mk();
-const sr = card.shadowRoot, h = sr.querySelector("[data-hold]");
-const pe = (t) => new PointerEvent(t, {pointerId: 7, bubbles: true, cancelable: true});
-const kq = {touchAction: getComputedStyle(h).touchAction};
-// 1) nhấn rồi thả NGAY (trước khi dịch vụ mở phiên xong): «dừng» phải chạy SAU «bắt đầu»
-h.dispatchEvent(pe("pointerdown")); h.dispatchEvent(pe("pointerup")); await sleep(400);
-kq.nhanNhanh = log.splice(0);
-// 2) pointercancel (trình duyệt điện thoại huỷ cử chỉ) cũng phải dừng phiên, không để mic kẹt mở
-startXong = false; h.dispatchEvent(pe("pointerdown")); await sleep(200); h.dispatchEvent(pe("pointercancel")); await sleep(300);
-kq.huy = log.splice(0);
-// 3) giữ rồi kéo ngón RA NGOÀI nút (pointerleave) không được dừng; chỉ dừng khi thả
-startXong = false; h.dispatchEvent(pe("pointerdown")); await sleep(200); h.dispatchEvent(pe("pointerleave")); await sleep(100);
-kq.raNgoai = log.slice(); h.dispatchEvent(pe("pointerup")); await sleep(300); kq.sauThaRaNgoai = log.splice(0);
-// 4a) LỖI «nhấn vào mất luôn»: đang giữ thì phiên vừa mở làm trạng thái HA đổi (có phiên mà công tắc chưa kịp
-// bật = «bận»). Nút KHÔNG được bị khoá giữa chừng (trình duyệt sẽ huỷ cử chỉ giữ), và phải báo «Đang nói».
-startXong = false; h.dispatchEvent(pe("pointerdown")); await sleep(200);
-states["sensor.r1_trang_thai_mic"] = {state: "nghe", attributes: {phien: "dam_thoai"}}; card.hass = mk();
-kq.giuKhiTrangThaiDoi = {khoa: h.disabled, chu: h.textContent, mau: h.classList.contains("noi"), lenh: log.slice()};
-h.dispatchEvent(pe("pointerup")); await sleep(300);
-kq.thaSauDoiTrangThai = log.splice(0);
-kq.sauKhiTha = {khoa: h.disabled, chu: h.textContent, mau: h.classList.contains("noi")};
-states["sensor.r1_trang_thai_mic"] = {state: "nghe", attributes: {phien: null}}; card.hass = mk();
-// 4) đã «Bật mic luôn»: nhấn giữ không làm gì
-states["switch.r1_dam_thoai"] = {state: "on", attributes: {giu_mo: true}}; card.hass = mk();
-h.dispatchEvent(pe("pointerdown")); h.dispatchEvent(pe("pointerup")); await sleep(200);
-kq.daBatLuon = log.splice(0);
-// 5) menu ngữ cảnh khi giữ lâu bị chặn
-const cm = new Event("contextmenu", {cancelable: true, bubbles: true}); h.dispatchEvent(cm); kq.menuBiChan = cm.defaultPrevented;
-document.getElementById("out").textContent = JSON.stringify(kq);
-})();</script>"""
-
-
-@pytest.mark.skipif(CHROME is None, reason="cần Chrome/Chromium")
-def test_giao_dien_nut_giu_de_noi_chiu_duoc_man_hinh_cam_ung(tmp_path):
-    """Lỗi từng gặp: «Giữ để nói» không giữ được trên điện thoại (trình duyệt huỷ cử chỉ, kéo ngón ra
-    ngoài là dừng, lệnh dừng chạy trước lệnh bắt đầu làm mic kẹt mở)."""
-    page = tmp_path / "giu.html"
-    page.write_text(PAGE_GIU.replace("@EQ@", str(EQ)).replace("@CARD@", str(CARD)), encoding="utf-8")
-    out = subprocess.run(
-        [CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--allow-file-access-from-files",
-         "--virtual-time-budget=6000", "--dump-dom", f"file://{page}"],
-        capture_output=True, text=True, timeout=60)
-    import html
-    import re
-    m = re.search(r'<div id="out">(.*?)</div>', out.stdout, re.S)
-    assert m, out.stderr[-500:]
-    r = json.loads(html.unescape(m.group(1)))
-    assert r["touchAction"] == "none"                                    # không để trình duyệt cuộn/huỷ cử chỉ
-    assert r["nhanNhanh"] == ["start_duplex", "stop_duplex:sau-start"]   # dừng luôn SAU bắt đầu
-    assert r["huy"] == ["start_duplex", "stop_duplex:sau-start"]         # pointercancel cũng dừng
-    assert r["raNgoai"] == ["start_duplex"]                              # kéo ngón ra ngoài: vẫn giữ
-    assert r["sauThaRaNgoai"] == ["start_duplex", "stop_duplex:sau-start"]
-    assert r["daBatLuon"] == [] and r["menuBiChan"] is True
-    # Lỗi «nhấn vào mất luôn»: giữ mà trạng thái HA đổi thì nút không bị khoá, không gửi lệnh dừng sớm, hiện «Đang nói».
-    g = r["giuKhiTrangThaiDoi"]
-    assert g["khoa"] is False and g["mau"] is True and "Đang nói" in g["chu"] and g["lenh"] == ["start_duplex"]
-    assert r["thaSauDoiTrangThai"] == ["start_duplex", "stop_duplex:sau-start"]
-    assert r["sauKhiTha"]["mau"] is False and r["sauKhiTha"]["chu"] == "Giữ để nói"
-
-
-PAGE_DT = """<!doctype html><meta charset="utf-8"><body><div id="out">CHUA CHAY</div>
-<script src="file://@EQ@"></script><script src="file://@CARD@"></script>
-<script>(async () => {
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const choDen = async (dk) => { for (let i = 0; i < 400 && !dk(); i++) await sleep(50); };   // mic giả mở bất đồng bộ thật
-const entities = {}, states = {};
-const add = (id, tk, state, attrs) => { entities[id] = {platform: "r1_speaker", translation_key: tk, device_id: "d1"}; states[id] = {state, attributes: attrs || {}}; };
-add("switch.r1_dam_thoai", "intercom_open", "off", {giu_mo: false});
-add("sensor.r1_trang_thai_mic", "mic_status", "nghe", {phien: null});
-const wsList = [], ws_sent = [], callws = [];
-window.WebSocket = class { constructor(url) { this.url = url; this.readyState = 0; this.sent = []; wsList.push(this);
-  setTimeout(() => { this.readyState = 1; this.onopen && this.onopen(); }, 20); }
-  send(d) { this.sent.push(d); } close() { this.readyState = 3; this.closed = true; } };
-const hass = {entities, states, language: "vi", callService: () => Promise.resolve(),
-  callWS: (m) => { callws.push(m); return Promise.resolve({path: m.path + "?authSig=x"}); }};
-const card = document.createElement("r1-talk-card"); document.body.appendChild(card); card.setConfig({show_eq: false}); card.hass = hass;
-const sr = card.shadowRoot, q = (s) => sr.querySelector(s);
-const kq = {secure: window.isSecureContext, panelDau: q("[data-dt-panel]").style.display};
-const pe = (t) => new PointerEvent(t, {pointerId: 3, bubbles: true, cancelable: true});
-q("[data-dt-open]").click(); await choDen(() => wsList.length > 0 && wsList[0].readyState === 1);
-kq.sign = callws.map((m) => [m.type, m.path]);
-kq.ws = wsList.map((w) => w.url.replace(/^wss?:\/\/[^/]*/, ""));
-kq.panelMo = q("[data-dt-panel]").style.display; kq.nutDong = q("[data-dt-open]").textContent; kq.trangThai = q("[data-dt-status]").textContent;
-const w = wsList[0]; const h = q("[data-dt-hold]");
-await sleep(500); kq.guiKhiChuaGiu = w.sent.filter((x) => typeof x !== "string").length;   // chưa giữ: KHÔNG gửi mic
-h.dispatchEvent(pe("pointerdown")); await choDen(() => w.sent.some((x) => typeof x !== "string"));
-kq.khiGiu = {khoa: h.disabled, chu: h.textContent, nhiPhan: w.sent.filter((x) => typeof x !== "string").length,
-  kieu: w.sent.filter((x) => typeof x !== "string").map((x) => Object.prototype.toString.call(x))[0]};
-card.hass = {...hass, states: {...states}};                   // HA đổi trạng thái giữa chừng: nút không bị khoá/dựng lại
-kq.sauDoiTrangThai = {khoa: q("[data-dt-hold]").disabled, chu: q("[data-dt-hold]").textContent};
-h.dispatchEvent(pe("pointerup")); await sleep(300);
-kq.het = w.sent.filter((x) => typeof x === "string"); const n = w.sent.length; await sleep(500); kq.guiSauThaTay = w.sent.length - n;
-w.onmessage({data: new Int16Array(1600).fill(3000).buffer});   // tiếng loa về: không ném lỗi
-w.onmessage({data: JSON.stringify({loi: "loi thu"})}); kq.loiHienRa = q("[data-dt-err]").textContent;
-document.dispatchEvent(new Event("visibilitychange"));        // tab vẫn hiện: không đóng
-kq.vanMo = !w.closed;
-Object.defineProperty(document, "visibilityState", {value: "hidden", configurable: true});
-document.dispatchEvent(new Event("visibilitychange")); await sleep(200);
-kq.dongKhiAnTab = {wsDong: !!w.closed, panelAn: q("[data-dt-panel]").style.display === "none"};
-document.getElementById("out").textContent = JSON.stringify(kq);
-})();</script>"""
 
 
 def _chay_chrome_den_khi_xong(page, thoi_gian=40):
@@ -362,19 +242,110 @@ def _chay_chrome_den_khi_xong(page, thoi_gian=40):
             proc.kill()
 
 
+PAGE_DT = """<!doctype html><meta charset="utf-8"><body><div id="out">CHUA CHAY</div>
+<script src="file://@EQ@"></script><script src="file://@CARD@"></script>
+<script>(async () => {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const choDen = async (dk) => { for (let i = 0; i < 400 && !dk(); i++) await sleep(50); };   // mic giả mở bất đồng bộ thật
+const entities = {}, states = {};
+const add = (id, tk, state, attrs) => { entities[id] = {platform: "r1_speaker", translation_key: tk, device_id: "d1"}; states[id] = {state, attributes: attrs || {}}; };
+add("switch.r1_dam_thoai", "intercom_open", "off", {giu_mo: false});
+add("sensor.r1_trang_thai_mic", "mic_status", "nghe", {phien: null});
+const wsList = [], callws = [], calls = [];
+let moTre = 20, trongCuChi = false; const acTao = [];
+window.WebSocket = class { constructor(url) { this.url = url; this.readyState = 0; this.sent = []; wsList.push(this);
+  setTimeout(() => { this.readyState = 1; this.onopen && this.onopen(); }, moTre); }
+  send(d) { this.sent.push(d); } close() { this.readyState = 3; this.closed = true; } };
+const AC0 = window.AudioContext;
+window.AudioContext = class extends AC0 { constructor(o) { super(o); acTao.push({trongCuChi, rate: o && o.sampleRate}); } };
+const hass = {entities, states, language: "vi", callService: (d, s, x) => { calls.push([d, s, x]); return Promise.resolve(); },
+  callWS: (m) => { callws.push(m); return Promise.resolve({path: m.path + "?authSig=x"}); }};
+const tao = () => { const c = document.createElement("r1-talk-card"); document.body.appendChild(c); c.setConfig({show_eq: false}); c.hass = hass; return c; };
+const pe = (t) => new PointerEvent(t, {pointerId: 3, bubbles: true, cancelable: true});
+const nhiPhan = (w) => w.sent.filter((x) => typeof x !== "string").length;
+const kq = {secure: window.isSecureContext};
+let card = tao(); let sr = card.shadowRoot, q = (s) => sr.querySelector(s);
+const h = q("[data-hold]");
+kq.dau = {panel: q("[data-dt-panel]").style.display, callWS: callws.length, hold: h.textContent};
+// A) Giữ lần đầu: kênh mở NGAY trong cử chỉ (AudioContext tạo trong sự kiện bấm), nói khi kênh sẵn sàng
+trongCuChi = true; h.dispatchEvent(pe("pointerdown")); trongCuChi = false;
+kq.acTrongCuChi = acTao.map((a) => [a.trongCuChi, a.rate]);
+kq.dangNoi = h.textContent;
+await choDen(() => wsList.length > 0 && wsList[0].readyState === 1);
+await choDen(() => nhiPhan(wsList[0]) > 0);
+const w = wsList[0];
+kq.sign = callws.map((m) => [m.type, m.path]); kq.ws = wsList.map((x) => x.url.replace(/^wss?:\/\/[^/]*/, ""));
+kq.khiGiu = {khoa: h.disabled, chu: h.textContent, mau: h.classList.contains("noi"), nhiPhan: nhiPhan(w) > 0,
+  kieu: Object.prototype.toString.call(w.sent.find((x) => typeof x !== "string"))};
+card.hass = {...hass, states: {...states}};                        // HA đổi trạng thái giữa chừng: nút không bị khoá/dựng lại
+kq.sauDoiTrangThai = {khoa: q("[data-hold]").disabled, giong: q("[data-hold]") === h, chu: q("[data-hold]").textContent};
+kq.panelMo = q("[data-dt-panel]").style.display; kq.trangThai = q("[data-dt-status]").textContent;
+h.dispatchEvent(pe("pointerleave")); await sleep(400);              // kéo ngón ra ngoài nút: vẫn đang giữ
+const n1 = nhiPhan(w); await sleep(500); kq.vanNoiKhiRaNgoai = nhiPhan(w) > n1;
+h.dispatchEvent(pe("pointerup")); await sleep(300);
+kq.het1 = w.sent.filter((x) => typeof x === "string"); const n2 = nhiPhan(w); await sleep(600); kq.imSauTha = nhiPhan(w) === n2;
+kq.chuSauTha = h.textContent;
+// B) Kênh đã mở: giữ lần hai nói được liền; pointercancel (trình duyệt điện thoại huỷ cử chỉ) cũng thôi nói
+h.dispatchEvent(pe("pointerdown")); await choDen(() => nhiPhan(w) > n2);
+kq.lanHai = nhiPhan(w) > n2 && wsList.length === 1 && callws.length === 1;
+h.dispatchEvent(pe("pointercancel")); await sleep(300);
+kq.hetSauCancel = w.sent.filter((x) => typeof x === "string").length === 2;
+// C) «Bật mic luôn»: mic điện thoại đi liên tục không cần giữ; bấm lần nữa thì dừng
+const al = q("[data-always]"); const n3 = nhiPhan(w);
+al.click(); await choDen(() => nhiPhan(w) > n3 + 1);
+kq.luon = {chu: q("[data-always]").textContent, dang: nhiPhan(w) > n3 + 1, trangThai: q("[data-dt-status]").textContent};
+q("[data-always]").click(); await sleep(300); const n4 = nhiPhan(w); await sleep(600);
+kq.luonTat = {im: nhiPhan(w) === n4, chu: q("[data-always]").textContent, het: w.sent.filter((x) => typeof x === "string").length === 3};
+// D) Tiếng loa về + lỗi từ HA hiện ra
+w.onmessage({data: new Int16Array(1600).fill(3000).buffer});
+w.onmessage({data: JSON.stringify({loi: "loi thu"})}); kq.loiHienRa = q("[data-dt-err]").textContent;
+// E) Nút «Đóng kênh điện thoại» đóng hẳn
+q("[data-dt-close]").click(); await sleep(200);
+kq.dong = {ws: !!w.closed, panelAn: q("[data-dt-panel]").style.display === "none"};
+kq.dichVuMicDienThoai = calls.length;                                // giữ/«bật mic luôn» không gọi dịch vụ đàm thoại của HA
+card.remove();
+// F) Nhấn rồi thả TRƯỚC khi kênh sẵn sàng: mic không được đi (không rò tiếng sau khi đã thả tay)
+moTre = 1500; card = tao(); sr = card.shadowRoot; q = (s) => sr.querySelector(s);
+const hb = q("[data-hold]"); hb.dispatchEvent(pe("pointerdown")); await sleep(100); hb.dispatchEvent(pe("pointerup"));
+await choDen(() => wsList.length > 1 && wsList[1].readyState === 1); await sleep(800);
+kq.thaTruocKhiSan = {khongGui: nhiPhan(wsList[1]) === 0, het: wsList[1].sent.length};
+// G) Ẩn tab: đóng hẳn, mic không chạy ngầm
+Object.defineProperty(document, "visibilityState", {value: "hidden", configurable: true});
+document.dispatchEvent(new Event("visibilitychange")); await sleep(200);
+kq.anTab = {wsDong: !!wsList[1].closed, panelAn: q("[data-dt-panel]").style.display === "none"};
+Object.defineProperty(document, "visibilityState", {value: "visible", configurable: true});
+card.remove();
+// H) Không có ngữ cảnh an toàn (http trong nhà): nói rõ lý do, KHÔNG mở phiên rỗng
+Object.defineProperty(window, "isSecureContext", {value: false, configurable: true});
+const wsTruoc = wsList.length, sTruoc = callws.length; card = tao(); sr = card.shadowRoot; q = (s) => sr.querySelector(s);
+q("[data-hold]").dispatchEvent(pe("pointerdown")); await sleep(300); q("[data-hold]").dispatchEvent(pe("pointerup"));
+kq.http = {loi: q("[data-dt-err]").textContent, khongMo: wsList.length === wsTruoc && callws.length === sTruoc, dichVu: calls.length};
+document.getElementById("out").textContent = JSON.stringify(kq);
+})();</script>"""
+
+
 @pytest.mark.skipif(CHROME is None, reason="cần Chrome/Chromium")
-def test_giao_dien_mic_dien_thoai_chi_gui_khi_giu_va_dong_khi_an_tab(tmp_path):
+def test_giao_dien_giu_de_noi_la_mic_dien_thoai_nhu_camera(tmp_path):
+    """Nút chính «Giữ để nói» PHẢI là mic điện thoại (như bộ đàm camera của c2a), không phải nút mở phiên rỗng;
+    lỗi cũ «nhấn vào mất luôn» (nút bị khoá giữa chừng khi trạng thái HA đổi) cũng được giữ chặt ở đây."""
     page = tmp_path / "dt.html"
     page.write_text(PAGE_DT.replace("@EQ@", str(EQ)).replace("@CARD@", str(CARD)), encoding="utf-8")
     r = json.loads(_chay_chrome_den_khi_xong(page))
-    assert r["panelDau"] == "none"                                       # đóng mặc định
+    assert r["dau"] == {"panel": "none", "callWS": 0, "hold": "Giữ để nói"}   # chưa bấm: chưa xin mic, chưa nối gì
+    assert r["acTrongCuChi"] == [[True, 16000]]                               # AudioContext tạo NGAY trong cử chỉ bấm
     assert r["sign"] == [["auth/sign_path", "/api/r1_speaker/dam_thoai/sensor.r1_trang_thai_mic/ws"]]
     assert r["ws"] == ["/api/r1_speaker/dam_thoai/sensor.r1_trang_thai_mic/ws?authSig=x"]
-    assert r["panelMo"] == "" and "Đóng" in r["nutDong"] and "Đang nghe loa" in r["trangThai"]
-    assert r["guiKhiChuaGiu"] == 0                                       # chưa giữ nút thì mic điện thoại KHÔNG đi
     k = r["khiGiu"]
-    assert k["khoa"] is False and "Đang nói" in k["chu"] and k["nhiPhan"] > 0 and "ArrayBuffer" in k["kieu"]
-    assert r["sauDoiTrangThai"]["khoa"] is False and "Đang nói" in r["sauDoiTrangThai"]["chu"]
-    assert r["het"] == ["het"] and r["guiSauThaTay"] == 0                # thả tay: báo «het», rồi im
-    assert r["loiHienRa"] == "loi thu" and r["vanMo"] is True
-    assert r["dongKhiAnTab"] == {"wsDong": True, "panelAn": True}        # ẩn tab: đóng hẳn, mic không chạy ngầm
+    assert k["khoa"] is False and k["mau"] is True and "Đang nói" in k["chu"] and k["nhiPhan"] and "ArrayBuffer" in k["kieu"]
+    assert r["sauDoiTrangThai"] == {"khoa": False, "giong": True, "chu": k["chu"]}   # không bị khoá/dựng lại giữa chừng
+    assert r["panelMo"] == "" and "Mic điện thoại đã mở" in r["trangThai"]
+    assert r["vanNoiKhiRaNgoai"] is True                                       # kéo ngón ra ngoài nút: vẫn đang giữ
+    assert r["het1"] == ["het"] and r["imSauTha"] is True and r["chuSauTha"] == "Giữ để nói"
+    assert r["lanHai"] is True and r["hetSauCancel"] is True                   # kênh mở sẵn: nói liền; pointercancel = thả
+    assert r["luon"]["dang"] is True and r["luon"]["chu"].endswith("✓") and "liên tục" in r["luon"]["trangThai"]
+    assert r["luonTat"] == {"im": True, "chu": "Bật mic luôn", "het": True}
+    assert r["loiHienRa"] == "loi thu"
+    assert r["dong"] == {"ws": True, "panelAn": True} and r["dichVuMicDienThoai"] == 0
+    assert r["thaTruocKhiSan"]["khongGui"] is True                             # thả tay trước khi kênh sẵn sàng: không rò tiếng
+    assert r["anTab"] == {"wsDong": True, "panelAn": True}                     # ẩn tab: đóng hẳn, mic không chạy ngầm
+    assert "https" in r["http"]["loi"] and r["http"]["khongMo"] is True and r["http"]["dichVu"] == 0

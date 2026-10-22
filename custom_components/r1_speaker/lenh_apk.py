@@ -50,5 +50,5 @@ def _lenh_apk(hass: HomeAssistant, connection: websocket_api.ActiveConnection, m
     connection.send_result(msg["id"], {
         "loa": speaker_host(entry),
         "lenh": ("adb connect {loa}:5555 && adb -s {loa}:5555 shell /system/bin/am start "
-                 "-n vn.r1.bodam/.ManHinhChinh --es host {ha} --ei port {cong} --es khoa {khoa}"
+                 "-n vn.r1.bodam/.ManHinhChinh --es host {ha} --ei port {cong} --es khoa {khoa} --ez bat true"
                  ).format(loa=speaker_host(entry), ha=_host_ha(hass, entry), cong=cong, khoa=khoa)})
