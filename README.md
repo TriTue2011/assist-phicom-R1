@@ -49,7 +49,7 @@ Kho này gồm hai phần chạy cùng nhau để biến loa **Phicomm R1** thà
 4. Khoá và cổng nghe mic **do HA tự cấp** cho từng loa, không phải nhập. Muốn thêm loa thứ hai: thêm tích hợp
    lần nữa với IP khác. Tuỳ chọn đổi sau ở *Cấu hình*: IP/cổng loa, `ha_url` (địa chỉ HA mà loa/go2rtc gọi tới, dạng
    `http://<IP của HA>:8123`), và «thông số nâng cao» (ngưỡng bộ đàm, khử tạp, song công). Lệnh cài APK đã kèm khoá
-   hiện ở thẻ → Cài đặt → Kết nối (quản trị viên). Chi tiết: `docs/HUONG-DAN-CAI-DAT.md`.
+   hiện ở thẻ → Cài đặt → Kết nối (quản trị viên). Chi tiết: `docs/HUONG-DAN-CAI-DAT.md`; **từng cài đặt giải thích riêng ở `docs/CAI-DAT-CHI-TIET.md`**.
 
 **Kiểm nhanh:**
 
