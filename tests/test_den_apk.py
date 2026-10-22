@@ -134,15 +134,20 @@ async def test_sink_chi_san_sang_khi_loa_noi_va_apk_bao_firmware(hass, r1):
     assert e.runtime_data.lights.sink_state == "san_sang"
     await _bo_khung(reader)                                   # khung áp lại đèn hiện tại lúc sẵn sàng
     await sink.ap_dung_ham(rim=True, color=(0, 255, 0), effect="none", sang=60)
-    assert await _lay_id(reader, 2) == [501, 503]             # đáy xanh lá cố định, viền trắng
+    # Firmware chỉ giữ MỘT hiệu ứng: gửi thêm 503 sẽ đóng luôn hiệu ứng đáy (lỗi «đáy không sáng» 22/10/2026) → chỉ gửi đáy.
+    assert await _lay_id(reader, 1) == [501]
+    assert await _doc_khung_hoac_none(reader) is None         # KHÔNG có ID viền theo sau
     await sink.ap_dung_ham(rim=False, color=(0, 0, 255), effect="tho", sang=60)
-    assert await _lay_id(reader, 2) == [203, 505]             # đáy xanh dương thở, viền tắt
+    assert await _lay_id(reader, 1) == [203]                  # đáy xanh dương thở; không gửi 505 (sẽ đóng hiệu ứng đáy)
+    assert await _doc_khung_hoac_none(reader) is None
+    await sink.ap_dung_ham(rim=True, color=(0, 0, 0), effect="none", sang=60)
+    assert await _lay_id(reader, 1) == [503]                  # đáy tắt, viền bật → chỉ viền
     await sink.tat()
     assert await _lay_id(reader, 2) == [504, 505]
     from custom_components.r1_speaker.den_port import Step
     await sink.play_effect([Step(base=(255, 0, 0), rim=0, seconds=0.2), Step(base=(0, 255, 0), rim=255, seconds=0.2)], repeat=False)
-    # viền đã tắt sẵn (505) nên bước đầu chỉ đổi đáy: không dội lệnh thừa; bước hai: viền bật rồi đáy xanh lá
-    assert await _lay_id(reader, 3) == [500, 503, 501]
+    # mỗi bước đúng một ID: đáy đỏ; rồi đáy xanh lá (đáy sáng thì ưu tiên đáy, viền bật cũng không gửi thêm)
+    assert await _lay_id(reader, 2) == [500, 501]
     await sink.stop_effect()
     writer.close()
     await cho(lambda: not sink.available)
@@ -158,12 +163,12 @@ async def test_ap_dung_den_hien_tai_khi_apk_san_sang_va_tat_khi_do_sang_chung_ba
         "color": "#00ff00", "effect": "none", "brightness": 100}, blocking=True)
     reader, writer = await _noi_apk(e, port)
     await _bao(writer, True)                                   # APK báo sẵn sàng → HA TỰ áp lại đèn hiện tại
-    assert await _lay_id(reader, 2) == [501, 503]
+    assert await _lay_id(reader, 1) == [501]                   # đáy xanh lá (viền cùng bật nhưng firmware chỉ giữ một hiệu ứng)
     await _goi(hass, "number", "set_value", DO_SANG, value=0)  # độ sáng chung 0 = tắt cả hai
     assert lights.master == 0
     assert await _lay_id(reader, 2) == [504, 505]
     await _goi(hass, "number", "set_value", DO_SANG, value=70)
-    assert await _lay_id(reader, 2) == [501, 503]              # >0: bật lại (đèn firmware không chỉnh được mức sáng)
+    assert await _lay_id(reader, 1) == [501]                   # >0: bật lại (đèn firmware không chỉnh được mức sáng)
     writer.close()
 
 
@@ -192,7 +197,7 @@ async def test_hieu_ung_phan_mem_chay_bang_chuoi_id_firmware_va_hieu_ung_goc_dun
     thay2 = []
     while (k := await _doc_khung_hoac_none(reader, 0.5)) is not None:
         thay2.append(json.loads(k)["id"])
-    assert thay2 == [502, 505]                                 # sáng cố định xanh dương + viền tắt, rồi YÊN (hết chuỗi)
+    assert thay2 == [502]                                      # sáng cố định xanh dương (một ID), rồi YÊN (hết chuỗi)
     a = hass.states.get(CAI_DAT).attributes["anh_sang"]
     assert a["den_firmware"] is True and a["hieu_ung_ho_tro"] is None
     assert a["hieu_ung_goc"] == ["none", "tho", "nhap_nhay"]

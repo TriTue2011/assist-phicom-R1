@@ -7,7 +7,8 @@ của loa. Hệ quả: chỉ có tập màu/hiệu ứng khai trong tệp đó (
 * viền: trắng 503, tắt 505;
 * «thở» (đáy): cam 200, xanh dương 203, trắng 202, lục lam 204, đỏ 206.
 
-CHƯA xác nhận bằng mắt trên đèn thật (tên màu lấy từ chú thích trong tệp cấu hình của firmware)."""
+Đã xác nhận bằng mắt 22/10/2026 (gửi qua APK): đèn đáy lên màu, nhưng là sáng cố định/nhịp của firmware, không phải hiệu ứng tự dựng.
+Firmware chỉ chạy MỘT hiệu ứng tại một thời điểm: bật hiệu ứng mới là đóng hiệu ứng cũ (đáy và viền không sáng cùng lúc)."""
 
 from __future__ import annotations
 
