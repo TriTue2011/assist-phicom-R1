@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NV247 — BIEN THE PHAT HANH: khong co receiver kiem thu. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="vn.r1.bodam"
+    android:versionCode="2"
+    android:versionName="1.1">
+
+    <uses-sdk android:minSdkVersion="22" android:targetSdkVersion="22" />
+
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application
+        android:label="R1 Bộ đàm"
+        android:allowBackup="false">
+        <activity android:name=".ManHinhChinh" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <service android:name=".DichVuGhi" android:exported="false" />
+        <!-- Loa khoi dong lai thi tu bat mic neu da cau hinh. Khong exported: chi he thong gui duoc. -->
+        <receiver android:name=".KhoiDongReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        <!-- NV247: nhan nut giua khi app khong tien canh. Mac dinh TAT,
+             chi bat khi chu may dong y (cau hinh + bat trong Tro nang). -->
+        <service android:name=".TiepCanPhim"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice"
+                android:resource="@xml/tiep_can_phim" />
+        </service>
+    </application>
+</manifest>

@@ -56,23 +56,29 @@ Kho này gồm hai phần chạy cùng nhau để biến loa **Phicomm R1** thà
 - Sau khi thêm: có thiết bị **Phicomm R1** với 5 thực thể EQ (`number.phicomm_r1_eq_60_hz` … `_14_khz`), `number.phicomm_r1_volume`,
   `media_player.r1_loa`, `assist_satellite.r1`, `sensor.r1_trang_thai_mic`…
 - Kéo thử một dải EQ: lệnh ghi dải EQ đã được xác nhận trên loa thật; các lệnh khác xem bảng ở mục 7.
-- Thẻ: thêm `type: custom:r1-eq-card` vào bảng điều khiển (tải lại trình duyệt bằng Ctrl+F5 sau khi khởi động lại HA).
+- Thẻ: thêm tài nguyên Lovelace `/r1_speaker/r1-card.js` (loại Mô-đun JavaScript), rồi thêm thẻ `type: custom:r1-card`
+  (thẻ gộp, 3 tab Đàm thoại / EQ / Cài đặt, đóng sẵn). Chi tiết: `docs/HUONG-DAN-CAI-DAT.md` mục 2.
 - Phát tiếng ra loa (TTS/nhạc) cần thêm tích hợp **DLNA Digital Media Renderer** của HA cho loa — xem `docs/PHAT-RA-LOA.md`.
 
 ## 3. Cài APK lên loa (chỉ khi bạn đã quyết định)
 
-APK: `apk/vn-r1-bodam-nv245.apk` (gói `vn.r1.bodam`, **bản build số 245**, versionName 1.0, minSdk/targetSdk 22).
-Kiểm sha256 trước khi cài:
+APK: `apk/vn-r1-bodam.apk` (gói `vn.r1.bodam`, versionName 1.1, minSdk/targetSdk 22, ký bằng khoá debug),
+dựng từ mã nguồn trong `apk/nguon/` (xem `apk/nguon/README-BUILD.md`). Đây là **bản phát hành**: không có
+receiver kiểm thử. Kiểm sha256 trước khi cài:
 
 ```bash
-cd apk && sha256sum -c vn-r1-bodam-nv245.apk.sha256
-# kỳ vọng: 81f68c09ef6d87ac6e9c61f92ab6520532379e86037adac90cee33d86c0683c1  vn-r1-bodam-nv245.apk
+cd apk && sha256sum -c vn-r1-bodam.apk.sha256
 ```
+
+**Đã chạy trên loa thật (22/10/2026):** mic về HA, tự nối lại khi HA khởi động lại, phát tiếng từ HA xuống loa
+qua cùng kết nối, đèn theo nhạc của firmware (độ sáng/sắc độ/bật tắt), lệnh đổi cấu hình giả bị bỏ qua khi đã
+cấu hình. **Chưa kiểm:** tự bật mic sau khi loa khởi động lại (cần khởi động lại loa để chứng minh).
 
 **Đọc cảnh báo trước:**
 
-- Đây là **bản kiểm thử**: nó có `KiemMicReceiver` (xem mục 8) và được ký bằng **khoá debug** của Android. Không dùng như bản phát hành.
-- **Chưa được cài/kiểm trên loa thật** (xem mục 7). Các lệnh dưới đây là quy trình dự kiến, không phải quy trình đã chạy.
+- **Mic tự bật khi loa khởi động** nếu app đã cấu hình (host + port + khoá), và luôn gửi về HA đã cấu hình khi đang chạy.
+  HA từ chối kết nối khi bạn tắt mic (`switch.r1_tat_mic`), nhưng loa vẫn thử nối lại mỗi 2–30 giây (mỗi lần
+  chỉ mở mic rất ngắn, tiếng bị bỏ ở phía HA).
 - Firmware gốc của loa (Android 5.1.1) cho `adb` qua mạng cổng 5555 **không đòi xác thực** (theo số đo trên loa của chủ dự án): bật ADB nghĩa
   là bất kỳ máy nào trong LAN cũng có shell trên loa. Chỉ bật khi cần và tắt đi sau khi làm xong, đừng để loa lộ ra ngoài mạng.
 - Shell trên loa là `uid=2000` (không root, không `su`).
@@ -83,12 +89,18 @@ Các bước:
 # 1) Bật ADB trên loa (theo cách bạn đã dùng cho loa của mình), rồi nối:
 adb connect <IP-loa>:5555           # ví dụ 192.0.2.10:5555
 
-# 2) Đưa APK lên loa
-adb push apk/vn-r1-bodam-nv245.apk /data/local/tmp/
+# 2) Đưa APK lên loa và cài. Lệnh `pm` trần bị chặn trên loa: BẮT BUỘC dùng đường dẫn đầy đủ /system/bin/pm
+adb push apk/vn-r1-bodam.apk /data/local/tmp/
+adb shell /system/bin/pm install -r /data/local/tmp/vn-r1-bodam.apk
 
-# 3) Cài. Lệnh `pm` trần bị chặn trên loa: BẮT BUỘC dùng đường dẫn đầy đủ /system/bin/pm
-adb shell /system/bin/pm install -r /data/local/tmp/vn-r1-bodam-nv245.apk
+# 3) Cấu hình LẦN ĐẦU (chỉ nhận khi app chưa cấu hình), rồi bật mic:
+adb shell /system/bin/am start -n vn.r1.bodam/.ManHinhChinh --es host <IP-HA> --ei port 18765 --es khoa <khoá>
+adb shell /system/bin/am start -n vn.r1.bodam/.ManHinhChinh --ez bat true
 ```
+
+Khoá lấy từ tuỳ chọn `mic_listen_key` của tích hợp. Muốn đổi cấu hình về sau: `adb shell /system/bin/pm clear
+vn.r1.bodam` rồi làm lại bước 3 (app đã cấu hình thì bỏ qua lệnh đổi, để app khác trên loa không chuyển được
+đích đến của tiếng mic).
 
 Tuỳ chọn, **chỉ khi chủ loa quyết định** — ẩn gói gốc của hãng cho khỏi tranh mic/nút:
 
@@ -192,8 +204,8 @@ Kiểm thử không cần nút giữa (chỉ bản NV245 kiểm thử): `adb she
 - Tắt mic bằng `switch.r1_tat_mic` trong HA đóng kết nối của loa (mục 6).
 - **Đường truyền không mã hoá**: khoá và tiếng đi qua TCP trơn trong LAN. Chỉ dùng trong mạng tin cậy; đầu nhận lọc theo IP loa và khoá nhưng IP có thể bị giả mạo trong LAN.
 - **Khoá nằm dạng chữ thường trong SharedPreferences của app** (`allowBackup=false`, dữ liệu riêng của app).
-- **Bản NV245 có `KiemMicReceiver` công khai (`exported=true`)**: bất kỳ ứng dụng nào trên loa (hoặc người có shell) gửi được lệnh bật mic tới HA đã cấu hình.
-  Phải gỡ khỏi bản phát hành (việc sửa chưa làm).
+- **Bản kiểm thử (`apk/nguon`, biến thể kiemthu) có receiver exported** (`KIEM_MIC`, `KIEM_DEN_NHAC`): bất kỳ app nào trên loa gửi được lệnh bật mic tới
+  host bất kỳ. **Bản phát hành `apk/vn-r1-bodam.apk` không có chúng**, và cửa cấu hình bằng intent của `ManHinhChinh` chỉ nhận khi app CHƯA cấu hình.
 - Đừng đặt loa ở nơi người ngoài ra lệnh được cho nhà (mic + từ đánh thức); đừng dán URL bộ đàm (chứa khoá) ra ngoài.
 
 ## 9. Chạy test
@@ -213,7 +225,7 @@ của RFC 5737 hoặc `127.0.0.1`); không có bí mật thật. Bộ test nặn
 
 ```
 custom_components/r1_speaker/   tích hợp HA (mã, translations/, www/ chứa 3 thẻ Lovelace)
-apk/                            vn-r1-bodam-nv245.apk + .sha256 (không có mã nguồn)
+apk/                            vn-r1-bodam.apk + .sha256; nguon/ = mã nguồn APK + test Java + README-BUILD
 docs/                           HUONG-DAN-CAI-DAT.md, HOP-DONG-PHIA-LOA.md, DEN-LED.md, PHAT-RA-LOA.md, THIET-KE-MIC.md, BAI-HOC-TU-CAMERA.md
 tests/                          test pytest (loa giả)
 requirements-test.txt  pytest.ini  hacs.json
@@ -224,13 +236,10 @@ requirements-test.txt  pytest.ini  hacs.json
 
 ## 11. Việc còn thiếu đã biết
 
-- **Mã nguồn APK chưa nằm trong kho** (không có sẵn lúc đóng gói). Cần bổ sung `src/`, `test/`, `build.sh` (đã yêu cầu bên build nộp). Không có nó thì không build lại
-  hay kiểm lại được; chỉ có file APK và sha256.
-- **Không có cách cấu hình APK không cần màn hình** (host/cổng/khoá) — lỗ hổng lớn nhất.
-- **Nút giữa chỉ chạy khi app ở tiền cảnh.**
-- Kết nối của APK không có thời gian chờ và có thể tạo hai luồng khi bật/tắt nhanh; thông báo «Đang gửi» hiện trước khi kết nối được.
-- `KiemMicReceiver` còn trong bản này; APK ký khoá debug.
+- **Nút giữa chỉ chạy khi app ở tiền cảnh**, hoặc khi bật dịch vụ tiếp cận phím (mặc định tắt).
+- Cấu hình APK không cần màn hình chỉ làm được LẦN ĐẦU bằng `am start` (mục 3); đổi về sau phải `pm clear`.
+- APK ký bằng khoá debug; mic tự bật sau khi loa khởi động lại (đã viết, **chưa kiểm** bằng khởi động lại thật).
 - `mic_host` đóng hai vai (mục 6; `docs/HOP-DONG-PHIA-LOA.md` 2b).
 - Giấy phép: **CHỦ MÁY CHỌN GIẤY PHÉP** (chưa có `LICENSE`).
-- Chưa có: phát PCM thô về loa, từ đánh thức trên loa, dịch vụ đèn trên loa, đàm thoại song công từ HA kèm lọc tiếng người bằng VAD (chưa hoàn thành).
+- Chưa có: từ đánh thức phát hiện NGAY TRÊN loa (từ đánh thức đang chạy ở phía HA bằng openWakeWord khi mic gửi liên tục), dịch vụ đèn trên loa (xem `docs/DEN-LED.md`).
 - Các giá trị mặc định đánh dấu «CHƯA ĐO» trong tuỳ chọn (ngưỡng bộ đàm, +12 dB mic, cổng 18765, 8765…) là số đề xuất.
