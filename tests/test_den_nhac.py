@@ -7,6 +7,7 @@ dạng tách gọn): đổi một byte là APK từ chối.
 
 import asyncio
 import socket
+from unittest import mock
 
 import pytest
 from homeassistant.exceptions import HomeAssistantError
@@ -186,3 +187,31 @@ async def test_co_khoa_dau_nhan_thi_khong_chay_vong_noi_ra_cong_cu(hass, r1):
     reader, writer = await _noi_apk(e, port)                 # đường vào vẫn chạy
     assert e.runtime_data.mic.connected
     writer.close()
+
+
+async def test_dong_may_chu_mic_nha_cong_du_con_ket_noi_treo(hass, r1):
+    """Lỗi thật 22/10: xoá rồi thêm lại tích hợp thì cổng nghe vẫn bị máy chủ cũ giữ («address in use»), vì
+    ``wait_closed`` (Python ≥ 3.12) chờ MỌI kết nối kết thúc, kể cả kết nối chưa gửi hello."""
+    e, port = await _them_co_dau_nhan(hass, r1)
+    reader, writer = await _noi_apk(e, port)                          # APK đang nối
+    treo_r, treo_w = await asyncio.open_connection("127.0.0.1", port)  # kết nối thứ hai: im lặng, không hello
+    await asyncio.sleep(0.1)
+    assert await asyncio.wait_for(hass.config_entries.async_remove(e.entry_id), 10)   # xoá tích hợp: không được treo
+    with socket.socket() as s:                                        # cổng đã nhả: mở lại được ngay
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(("0.0.0.0", port))
+    writer.close()
+    treo_w.close()
+
+
+async def test_may_chu_cu_con_giu_cong_thi_may_chu_moi_doi_la_nha(hass, r1):
+    """Tái hiện đúng sự cố: máy chủ của mục cũ còn giữ cổng (HA không dỡ tải mục đã «chưa nạp» trước khi xoá)."""
+    from custom_components.r1_speaker.mic_server import R1MicServer
+    cu = R1MicServer(mock.MagicMock(), 0, "khoa-cu", "127.0.0.1")
+    await cu.start()
+    cong = cu.port
+    assert cong > 0
+    moi = R1MicServer(mock.MagicMock(), cong, "khoa-moi", "127.0.0.1")
+    await moi.start()                                         # trước đây: «address in use», máy chủ mới không mở được
+    assert moi._server is not None and cu._server is None
+    await moi.async_close()

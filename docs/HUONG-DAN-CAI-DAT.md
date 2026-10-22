@@ -50,11 +50,20 @@ Cài đặt → Thiết bị & dịch vụ → Phicomm R1 Speaker → **Cấu h�
 | Đổi khoá URL bộ đàm | sinh khoá mới; dòng go2rtc cũ ngừng chạy | tắt |
 | Chỉnh thông số nâng cao | tích để sang bước hai: ngưỡng tiếng người / im bao lâu / giữ đầu câu / chờ loa tắt của bộ đàm; khử tạp, AGC, hạn đỉnh phía HA; sáu tham số đàm thoại song công | tắt (mọi số là mặc định CHƯA ĐO trên R1) |
 
-**Khoá và cổng nghe mic KHÔNG phải nhập.** Khi thêm loa, HA tự sinh khoá nghe mic (24 byte ngẫu nhiên) và cấp
-cổng nghe riêng cho loa đó (từ 18765 trở lên, không trùng loa khác), lưu một lần rồi giữ nguyên qua các lần khởi
-động lại. IP mic lấy theo IP loa. Lệnh cài APK **đã kèm khoá** hiện ở thẻ → Cài đặt → **Kết nối** → «Hiện lệnh
-cài APK» (chỉ quản trị viên; khoá không nằm trong trạng thái thực thể nên người xem thường không đọc được).
-Khoá/cổng đã đặt tay từ phiên bản cũ vẫn được giữ và không bị ghi đè; lưu form không làm rơi chúng.
+**Khoá và cổng nghe mic KHÔNG phải nhập, cũng không phải copy sang loa.** Khi thêm loa, HA tự sinh khoá nghe mic
+(24 byte ngẫu nhiên) và cấp cổng nghe riêng (từ 18765 trở lên, không trùng loa khác). **Ghép tự động:** APK trên loa bị
+từ chối (khoá cũ/trống) thì tự gọi `POST /api/r1_speaker/ghep`; HA trao khoá đúng MỘT lần, và chỉ cho địa chỉ nguồn
+trùng IP loa của mục đang chờ ghép; APK lưu khoá+cổng rồi nối lại. Cửa ghép đóng ngay khi APK xác thực thành công
+(app khác trên loa không xin được) và TỰ MỞ LẠI khi loa gửi khoá sai (APK đã mất khoá) — đánh đổi có chủ ý: trong lúc
+cửa mở, app nào trên loa cũng xin được khoá; chỉ áp dụng cho khoá do HA sinh. Xoá rồi thêm lại tích hợp, hoặc tích «Ghép lại APK» trong Tuỳ chọn → khoá mới và cửa
+ghép mở lại; APK tự lấy khoá mới sau vài giây. Cài APK lần đầu chỉ cần địa chỉ HA:
+`am start -n vn.r1.bodam/.ManHinhChinh --es host <IP-HA> --ei port 18765 --ez bat true` (cổng HTTP của HA mặc định
+8123). Lệnh kèm khoá vẫn có ở thẻ → Cài đặt → Kết nối (quản trị viên) cho ai muốn cấp tay. Khoá/cổng đã đặt tay từ
+phiên bản cũ vẫn giữ và KHÔNG có cửa ghép.
+
+**Cài đặt chi tiết** (ngưỡng tiếng người, khử tạp, AGC, hạn đỉnh, đàm thoại song công, 19 mục) chỉnh thẳng ở thẻ →
+Cài đặt → Âm thanh → «Cài đặt nâng cao» (dịch vụ `r1_speaker.set_advanced_option`; mục khác mặc định có dấu `*`).
+Đổi một mục nạp lại tích hợp để áp dụng (mic nối lại sau vài giây). Vẫn còn ở Tuỳ chọn → «Chỉnh thông số nâng cao».
 
 **Nhiều loa:** thêm tích hợp lần nữa với IP loa khác. Mỗi loa có khoá, cổng nghe, phiên song công, đèn và thực
 thể riêng (tên thêm hậu tố `_2`, `_3`…). Thẻ nhận `device_id` để chọn loa. Dịch vụ nhận `entity_id` của loa cần

@@ -57,6 +57,19 @@ public final class DieuKhienGhi {
         public static NoiLai macDinh() { return new NoiLai(2000, 30000, 5000, 12); }
     }
 
+    /** Xin khoa tu HA khi bi tu choi (ghep khoa tu dong). null = khong ghep (hanh vi cu). */
+    public interface GhepKhoa {
+        /** {cong, khoa} neu HA trao khoa; null neu khong. */
+        String[] thu(String host);
+        void luu(int port, String khoa);
+    }
+
+    private volatile GhepKhoa ghep;
+
+    public void datGhep(GhepKhoa g) { this.ghep = g; }
+
+    private static final long GHEP_CACH_MS = 20000;
+
     private final NoiLai noiLai; // null = khong noi lai (hanh vi cu)
 
     public DieuKhienGhi() { this(null); }
@@ -147,6 +160,7 @@ public final class DieuKhienGhi {
         long cho = noiLai.choDauMs;
         int thatBai = 0;
         boolean daTungNoi = false;
+        long lanGhepCuoi = 0;
         while (true) {
             long dai = vongGhi(theHeCuaToi, host, port, khoaMayGhi, gainDb, nhaTao, loc);
             if (daNgung(theHeCuaToi)) break;
@@ -156,6 +170,22 @@ public final class DieuKhienGhi {
                 cho = noiLai.choDauMs;
             } else {
                 thatBai++;
+                // Bi tu choi lien tiep (khoa cu/trong): xin khoa moi tu HA roi noi lai ngay, khong phai copy tay.
+                GhepKhoa g = ghep;
+                long bay = System.currentTimeMillis();
+                if (g != null && thatBai >= 2 && bay - lanGhepCuoi >= GHEP_CACH_MS) {
+                    lanGhepCuoi = bay;
+                    String[] kq = null;
+                    try { kq = g.thu(host); } catch (Throwable boQua) { }
+                    if (kq != null && kq.length == 2) {
+                        port = Integer.parseInt(kq[0]);
+                        khoaMayGhi = kq[1];
+                        try { g.luu(port, khoaMayGhi); } catch (Throwable boQua) { }
+                        thatBai = 0;
+                        cho = noiLai.choDauMs;
+                        continue;
+                    }
+                }
             }
             if (!daTungNoi && thatBai >= noiLai.toiDaThuKhiChuaNoi) {
                 benNhan.doiTrangThai("loi");

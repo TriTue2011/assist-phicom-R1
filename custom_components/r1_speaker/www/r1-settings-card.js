@@ -31,6 +31,17 @@
       audio: "Âm thanh", light: "Ánh sáng", conn: "Kết nối",
       none: "Không tìm thấy thực thể r1_speaker nào.",
       volume: "Âm lượng", eq: "EQ", mic_gain: "Tăng mic (dB)", mute: "Tắt mic",
+      adv: "Cài đặt nâng cao", adv_note: "Mọi số là mặc định CHƯA đo trên loa R1. Đổi một mục sẽ nạp lại tích hợp để áp dụng (mic nối lại sau vài giây).",
+      adv_group: { thoai: "Cổng thoại bộ đàm", khu_tap: "Khử tạp âm", agc: "Tự chỉnh mức (AGC)", han_dinh: "Bộ hạn đỉnh", song_cong: "Đàm thoại song công" },
+      adv_label: {
+        talk_threshold_db: "Ngưỡng có tiếng người (dBFS)", talk_silence_s: "Im bao lâu thì đóng loa (giây)",
+        talk_preroll_s: "Giữ đầu câu (giây)", talk_tail_s: "Chờ loa tắt trước khi mở mic (giây)",
+        noise_suppress: "Bật khử tạp", noise_strength_db: "Giảm tối đa mỗi dải (dB)", noise_voice_db: "Ngưỡng nhận tiếng người (dB trên nền)",
+        agc_enable: "Bật AGC", agc_target_db: "Mức đích RMS (dBFS)", agc_max_gain_db: "Tăng tối đa (dB)", agc_silence_db: "Dưới mức này coi là im lặng (dBFS)",
+        limiter_enable: "Bật hạn đỉnh", limiter_ceiling: "Trần biên độ (0,89 ≈ -1 dBFS)",
+        duplex_vad_threshold: "Ngưỡng tiếng người VAD (xác suất 0–1)", duplex_preroll_s: "Giữ tiếng trước câu nói (giây)",
+        duplex_hangover_s: "Giữ tiếng sau câu nói (giây)", duplex_max_s: "Thời gian tối đa của phiên (giây)",
+        duplex_duck: "Cắt vọng: bỏ tiếng mic nhỏ khi HA đang phát", duplex_duck_db: "Ngưỡng mức tiếng cắt vọng (dBFS)" },
       read_only: "Chỉ đọc — sửa ở trang Tuỳ chọn của tích hợp", noise: "Khử tạp âm",
       agc: "Tự chỉnh mức (AGC)", limiter: "Bộ hạn đỉnh", on: "Bật", off: "Tắt", goto: "Mở tuỳ chọn",
       sink_pending: "Chưa có dịch vụ đèn trên loa: cài đặt được lưu nhưng đèn CHƯA sáng.",
@@ -61,6 +72,17 @@
       audio: "Audio", light: "Light", conn: "Connection",
       none: "No r1_speaker entity found.",
       volume: "Volume", eq: "EQ", mic_gain: "Mic gain (dB)", mute: "Mute mic",
+      adv: "Advanced settings", adv_note: "Every value is a default NOT yet measured on the R1. Changing one reloads the integration to apply it (the mic reconnects in a few seconds).",
+      adv_group: { thoai: "Intercom voice gate", khu_tap: "Noise suppression", agc: "Auto gain (AGC)", han_dinh: "Peak limiter", song_cong: "Duplex call" },
+      adv_label: {
+        talk_threshold_db: "Voice threshold (dBFS)", talk_silence_s: "Silence before closing the speaker (s)",
+        talk_preroll_s: "Pre-roll kept before speech (s)", talk_tail_s: "Wait after playback before reopening the mic (s)",
+        noise_suppress: "Noise suppression on", noise_strength_db: "Max reduction per band (dB)", noise_voice_db: "Voice threshold (dB above floor)",
+        agc_enable: "AGC on", agc_target_db: "Target RMS level (dBFS)", agc_max_gain_db: "Max gain (dB)", agc_silence_db: "Below this counts as silence (dBFS)",
+        limiter_enable: "Limiter on", limiter_ceiling: "Ceiling (0.89 ≈ -1 dBFS)",
+        duplex_vad_threshold: "VAD voice threshold (probability 0–1)", duplex_preroll_s: "Audio kept before speech (s)",
+        duplex_hangover_s: "Audio kept after speech (s)", duplex_max_s: "Max session length (s)",
+        duplex_duck: "Echo cut: drop quiet mic audio while HA is playing", duplex_duck_db: "Echo-cut level threshold (dBFS)" },
       read_only: "Read-only — change it on the integration's Options page",
       noise: "Noise suppression", agc: "Auto gain (AGC)", limiter: "Peak limiter", on: "On", off: "Off",
       goto: "Open options",
@@ -161,6 +183,7 @@
         mute: { entity: ent.mute || null, present: !!ent.mute, available: isUp(mst),
                 on: isUp(mst) ? mst.state === "on" : null },
         noise: am.khu_tap || null, agc: am.agc || null, limiter: am.han_dinh || null,
+        adv: Array.isArray(am.nang_cao) ? am.nang_cao : [],
       },
       light: {
         sink: { state: al.dich_vu_den || null, ready: al.dich_vu_den === "san_sang",
@@ -214,6 +237,12 @@
       d[a.field] = coerce(a.field, a.value);
       return ["r1_speaker", "set_light_function", d];
     }
+    if (a.type === "opt" && typeof a.key === "string") {
+      var kieuBat = !!a.bool;
+      var val = kieuBat ? (a.value === true || a.value === "true" || a.value === "on") : Number(a.value);
+      if (!kieuBat && !isFinite(val)) return null;
+      return ["r1_speaker", "set_advanced_option", { entity_id: sid, key: a.key, value: val }];
+    }
     if (a.type === "music") {
       var m = { entity_id: sid };
       m[a.field] = coerce(a.field, a.value);
@@ -262,14 +291,24 @@
       '<span class="val">' + esc(A.micGain.value === null ? "—" : A.micGain.value) + "</span></div>";
     if (!m.gop) h += '<div class="row"><label>' + esc(t.mute) + '</label><input type="checkbox" data-mute' +
       (A.mute.on ? " checked" : "") + (A.mute.available ? "" : " disabled") + "></div>";
-    h += '<section class="ro"><div class="note">' + esc(t.read_only) + "</div>";
-    h += '<div class="row"><span>' + esc(t.noise) + "</span><b>" + esc(A.noise ? onoff(A.noise, t) : "—") +
-      (A.noise && A.noise.bat ? " (" + esc(A.noise.do_giam_db) + " dB)" : "") + "</b></div>";
-    h += '<div class="row"><span>' + esc(t.agc) + "</span><b>" + esc(A.agc ? onoff(A.agc, t) : "—") +
-      (A.agc && A.agc.bat ? " (" + esc(A.agc.dich_db) + " dBFS)" : "") + "</b></div>";
-    h += '<div class="row"><span>' + esc(t.limiter) + "</span><b>" + esc(A.limiter ? onoff(A.limiter, t) : "—") +
-      "</b></div>";
-    h += '<button class="sec" data-goto>' + esc(t.goto) + "</button></section></div>";
+    if (A.adv && A.adv.length) {
+      h += '<section class="adv"><b>' + esc(t.adv) + '</b><div class="note">' + esc(t.adv_note) + "</div>";
+      var gr = "";
+      A.adv.forEach(function (o) {
+        if (o.nhom !== gr) { gr = o.nhom; h += '<div class="grp">' + esc((t.adv_group || {})[gr] || gr) + "</div>"; }
+        var lb = (t.adv_label || {})[o.k] || o.k, ch = o.v !== o.mac_dinh ? " *" : "";
+        h += '<div class="row"><label>' + esc(lb + ch) + "</label>";
+        if (o.kieu === "bat") {
+          h += '<input type="checkbox" data-opt="' + esc(o.k) + '" data-bool="1"' + (o.v ? " checked" : "") + ">";
+        } else {
+          h += '<input type="number" data-opt="' + esc(o.k) + '" min="' + esc(o.min) + '" max="' + esc(o.max) +
+            '" step="' + esc(o.buoc) + '" value="' + esc(o.v) + '">';
+        }
+        h += "</div>";
+      });
+      h += "</section>";
+    }
+    h += '<button class="sec" data-goto>' + esc(t.goto) + "</button></div>";
     return h;
   }
 
@@ -379,7 +418,7 @@
     ".tabs{display:flex;gap:6px;margin:10px 0}", ".tab.sel{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff)}",
     "button{font:inherit;padding:6px 14px;border-radius:8px;border:1px solid var(--divider-color,#bbb);",
     "background:transparent;color:inherit;cursor:pointer}", "button.sec{margin-top:4px}",
-    ".warn{color:var(--error-color,#db4437)}", ".small{font-size:.8em}", ".note{font-size:.8em;opacity:.75}", "pre.lenh{white-space:pre-wrap;word-break:break-all;font-size:.75em;user-select:all;margin:6px 0}",
+    ".warn{color:var(--error-color,#db4437)}", ".small{font-size:.8em}", ".note{font-size:.8em;opacity:.75}", ".grp{font-weight:600;margin-top:8px}", "input[type=number]{width:90px}", "pre.lenh{white-space:pre-wrap;word-break:break-all;font-size:.75em;user-select:all;margin:6px 0}",
     ".ok{color:var(--success-color,#43a047)}", ".sink{margin:8px 0;font-size:.9em}",
     ".tag{font-size:.75em;padding:1px 6px;border-radius:8px;background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff)}",
   ].join("");
@@ -479,6 +518,12 @@
       all("[data-music-field]", function (el) {
         el.addEventListener("change", function () {
           dispatch({ type: "music", field: el.dataset.musicField, value: el.type === "checkbox" ? el.checked : el.value });
+        });
+      });
+      all("[data-opt]", function (el) {
+        el.addEventListener("change", function () {
+          var bat = el.dataset.bool === "1";
+          dispatch({ type: "opt", key: el.dataset.opt, bool: bat, value: bat ? el.checked : el.value });
         });
       });
       all("[data-preview]", function (el) {

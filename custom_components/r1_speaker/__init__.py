@@ -25,12 +25,13 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.typing import ConfigType
 
-from . import lenh_apk, media_player
+from . import lenh_apk, media_player, nang_cao
 from .client import R1Client
-from .const import (CARD_GOP_URL, CARD_URL, CONF_INTERCOM_KEY, CONF_MIC_LISTEN_KEY, CONF_MIC_LISTEN_PORT, DOMAIN, SETTINGS_CARD_URL, TALK_CARD_URL,
+from .const import (CARD_GOP_URL, CARD_URL, CONF_INTERCOM_KEY, CONF_MIC_CHUA_GHEP, CONF_MIC_LISTEN_KEY, CONF_MIC_LISTEN_PORT, DOMAIN, SETTINGS_CARD_URL, TALK_CARD_URL,
                     WAKE_SPEAKER)
 from .cong_vao import PingView, WakeView
 from .dam_thoai_ws import DamThoaiWsView
+from .ghep_khoa import GhepKhoaView
 from .den import R1Lights, dang_ky_dich_vu as dang_ky_dich_vu_den
 from .den_apk import ApkLights
 from .dam_thoai import R1Talk
@@ -62,11 +63,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.http.register_view(MicView())
     hass.http.register_view(DuplexView())
     hass.http.register_view(DamThoaiWsView())
+    hass.http.register_view(GhepKhoaView())
     hass.http.register_view(WakeView())
     hass.http.register_view(PingView())
     await _register_card(hass)
     dang_ky_dich_vu_den(hass)
     lenh_apk.dang_ky(hass)
+    nang_cao.dang_ky_dich_vu(hass)
 
     def _entry_va_goc(call: ServiceCall):
         entity_id = call.data["entity_id"]
@@ -187,7 +190,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
     if not mic_listen(entry)[1] and not mic_address(entry)[0]:
         # Đường mic mới (APK nối vào HA): tự sinh khoá và cấp cổng riêng cho loa này, sinh một lần rồi giữ
         # (APK đã cài khoá này phải còn đúng sau mỗi lần HA khởi động lại). Không bắt người dùng nhập gì.
-        cap = {CONF_MIC_LISTEN_KEY: secrets.token_urlsafe(24)}
+        cap = {CONF_MIC_LISTEN_KEY: secrets.token_urlsafe(24), CONF_MIC_CHUA_GHEP: True}
         if CONF_MIC_LISTEN_PORT not in entry.options and CONF_MIC_LISTEN_PORT not in entry.data:
             cap[CONF_MIC_LISTEN_PORT] = cong_nghe_trong(hass.config_entries.async_entries(DOMAIN), entry)
         hass.config_entries.async_update_entry(entry, data={**entry.data, **cap})
@@ -206,6 +209,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
     listen_port, listen_key = mic_listen(entry)
     coordinator.mic_server = R1MicServer(
         coordinator.mic, listen_port, listen_key, mic_host_hieu_luc(entry))
+    def _dong_cua_ghep() -> None:
+        # APK đã chứng minh biết khoá: khoá không còn cần trao nữa, đóng cửa ghép (app khác trên loa không xin được).
+        if entry.data.get(CONF_MIC_CHUA_GHEP):
+            hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_MIC_CHUA_GHEP: False})
+
+    def _mo_cua_ghep() -> None:
+        # APK gửi khoá sai = nó đã mất khoá (xoá/thêm lại tích hợp, cài lại APK): mở lại cửa ghép để nó tự xin khoá
+        # (chỉ với khoá do HA sinh; khoá người dùng tự đặt không có cờ nên không bao giờ mở).
+        if entry.data.get(CONF_MIC_CHUA_GHEP) is False:
+            hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_MIC_CHUA_GHEP: True})
+
+    coordinator.mic_server.khi_xac_thuc = _dong_cua_ghep
+    coordinator.mic_server.khi_sai_khoa = _mo_cua_ghep
     await coordinator.mic_server.start()
     coordinator.playback = R1Playback(*play_address(entry), via=coordinator.mic_server)
     coordinator.music = MusicKeeper(
@@ -237,6 +253,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
 
     entry.async_on_unload(async_track_time_interval(hass, _hoi_den, timedelta(seconds=30)))
     return True
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> None:
+    """Xoá mục: nhả cổng nghe mic nếu máy chủ của mục còn giữ (mục xoá lúc «chưa nạp» thì HA không dỡ tải)."""
+    coordinator = getattr(entry, "runtime_data", None)
+    if coordinator is not None and getattr(coordinator, "mic_server", None) is not None:
+        await coordinator.mic_server.async_close()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:

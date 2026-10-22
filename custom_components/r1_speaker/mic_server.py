@@ -61,6 +61,11 @@ def _la_khung_json(payload: bytes) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+#: Máy chủ đang giữ cổng, theo số cổng. Mục cấu hình bị xoá lúc đang «chưa nạp» thì HA không gọi dỡ tải, máy chủ cũ
+#: (khoá cũ) vẫn giữ cổng và chặn mục thêm lại («address in use»): máy chủ mới đòi cổng thì máy chủ cũ phải nhả.
+_DANG_GIU: dict[int, "R1MicServer"] = {}
+
+
 class R1MicServer:
     """Máy chủ TCP nhận luồng mic từ APK loa. Vòng đời: ``start()`` khi setup tích hợp,
     ``async_close()`` khi unload."""
@@ -75,6 +80,10 @@ class R1MicServer:
         self._on_state: list[Callable[[], None]] = []
         #: Máy chủ đèn quyền shell trên loa có chạy không (APK báo): None = chưa biết / loa chưa nối.
         self.den_san_sang: bool | None = None
+        #: Gọi mỗi khi APK xác thực thành công (hello đúng khoá): dùng để đóng «cửa ghép khoá».
+        self.khi_xac_thuc: Callable[[], None] | None = None
+        #: Gọi khi loa (đúng IP) gửi hello nhưng SAI khoá: APK đã mất khoá, cần được ghép lại.
+        self.khi_sai_khoa: Callable[[], None] | None = None
 
     # ── Trạng thái ────────────────────────────────────────────────────────────
 
@@ -109,9 +118,14 @@ class R1MicServer:
         if self.port < 0:
             _LOGGER.warning("R1 mic server: cổng nghe %s không hợp lệ — không mở", self.port)
             return
+        cu = _DANG_GIU.get(self.port)
+        if cu is not None and cu is not self:
+            _LOGGER.warning("R1 mic server: cổng %s còn do máy chủ của mục cũ giữ — đóng nó trước", self.port)
+            await cu.async_close()
         try:
             self._server = await asyncio.start_server(self._handle, "0.0.0.0", self.port)
             self.port = self._server.sockets[0].getsockname()[1]
+            _DANG_GIU[self.port] = self
         except OSError as exc:
             _LOGGER.error("R1 mic server: mở cổng %s thất bại: %s", self.port, exc)
             self._server = None
@@ -183,9 +197,15 @@ class R1MicServer:
             with contextlib.suppress(ConnectionError, OSError):
                 await writer.wait_closed()
         if self._server is not None:
-            self._server.close()
-            await self._server.wait_closed()
-            self._server = None
+            server, self._server = self._server, None
+            if _DANG_GIU.get(self.port) is self:
+                del _DANG_GIU[self.port]
+            server.close()
+            # Python ≥ 3.12: wait_closed chờ MỌI kết nối kết thúc; kết nối treo không được giữ cổng mãi.
+            if hasattr(server, "close_clients"):
+                server.close_clients()
+            with contextlib.suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(server.wait_closed(), 3)
         self._mic.set_inbound_closer(None)
         self._mic.note_listening(False)
         self._mic.note_inbound(False)
@@ -216,9 +236,14 @@ class R1MicServer:
                 # KHÔNG log khoá (kể cả khoá sai bên kia gửi).
                 _LOGGER.warning("R1 mic server: khung hello sai (khoá/phiên bản) từ %s — đóng",
                                 ip)
+                if (data is not None and data.get("type") == "hello" and data.get("version") == 1
+                        and self.khi_sai_khoa is not None):
+                    self.khi_sai_khoa()
                 return
             self._writer = writer
             self.den_san_sang = None
+            if self.khi_xac_thuc is not None:
+                self.khi_xac_thuc()
             self._mic.note_inbound(True)
             self._notify_state()
             _LOGGER.debug("R1 mic server: loa %s đã nối, bắt đầu nhận tiếng", ip)

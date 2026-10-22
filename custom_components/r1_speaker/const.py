@@ -58,6 +58,8 @@ DEFAULT_MIC_PORT = 8765
 # ── Đầu NHẬN mic: APK trên loa kết nối TỚI HA (mic_server.py) ─────────────
 CONF_MIC_LISTEN_PORT = "mic_listen_port"
 CONF_MIC_LISTEN_KEY = "mic_listen_key"
+#: True = khoá do HA tự sinh và CHƯA trao cho APK (cửa ghép mở, xem ghep_khoa.py).
+CONF_MIC_CHUA_GHEP = "mic_chua_ghep"
 #: Cổng HA lắng nghe luồng mic từ APK loa. CHƯA ĐO: APK NV243 chưa nối thử vào HA thật nên
 #: chưa có số đo nào chốt cổng này; 18765 là số chọn tạm, đổi được trong tuỳ chọn. Đầu nhận
 #: chỉ mở khi ĐÃ đặt khoá (``mic_listen_key``) và IP loa (``mic_host``) — xem mic_server.py.

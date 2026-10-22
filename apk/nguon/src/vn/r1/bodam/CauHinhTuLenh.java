@@ -39,10 +39,9 @@ public final class CauHinhTuLenh {
                 || khoaHienTai == null || khoaHienTai.isEmpty();
     }
 
-    /** Du cau hinh de tu bat mic: host, port hop le va CO khoa (khong tu bat khi chua cau hinh). */
+    /** Du cau hinh de tu bat mic: host va port hop le. Khoa co the CHUA co: APK se tu xin khoa tu HA (Ghep). */
     public static boolean nenTuBat(String host, int port, String khoa) {
-        return host != null && !host.trim().isEmpty() && port >= 1 && port <= 65535
-                && khoa != null && !khoa.isEmpty();
+        return host != null && !host.trim().isEmpty() && port >= 1 && port <= 65535;
     }
 
     /**

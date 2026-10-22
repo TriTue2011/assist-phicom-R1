@@ -54,7 +54,7 @@ async def test_form_co_du_truong(hass, r1):
     res = await hass.config_entries.options.async_init(e.entry_id)
     khoa = {str(k) for k in res["data_schema"].schema}
     # Form chính chỉ còn thứ người dùng biết; khoá/cổng nghe mic tự cấp, mục chết đã gỡ khỏi form.
-    assert khoa == {"host", "port", "ha_url", "rotate_intercom_key", "nang_cao"}
+    assert khoa == {"host", "port", "ha_url", "rotate_intercom_key", "ghep_lai_apk", "nang_cao"}
     macdinh = {str(k): k.default() for k in res["data_schema"].schema
                if k.default is not vol.UNDEFINED}
     assert macdinh["host"] == "127.0.0.1" and macdinh["port"] == r1.port

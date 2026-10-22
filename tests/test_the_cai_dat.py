@@ -341,3 +341,29 @@ async def test_quan_tri_thay_nut_lenh_apk_va_lenh_chi_hien_khi_da_lay(hass, r1):
     h = _html(m, {"open": True, "tab": "conn"})
     assert "data-apk-cmd" in h and "KHOA-GIA" in h and "Ẩn lệnh" in h
     assert e.data["mic_listen_key"] not in json.dumps(_mo_hinh(g))  # mô hình sinh từ trạng thái không chứa khoá
+
+
+@need_node
+async def test_cai_dat_chi_tiet_chinh_duoc_o_the_va_thanh_lenh_dich_vu(hass, r1):
+    e = await _them(hass, r1)
+    g = _hass_gia(hass)
+    m = _mo_hinh(g)
+    adv = m["audio"]["adv"]
+    assert len(adv) == 19 and {o["nhom"] for o in adv} == {"thoai", "khu_tap", "agc", "han_dinh", "song_cong"}
+    h = _html(m, {"open": True, "tab": "audio"})
+    assert h.count('data-opt="') == 19 and h.count('data-bool="1"') == 4      # 4 công tắc, 15 ô số
+    assert "Ngưỡng có tiếng người" in h and "Cắt vọng" in h or "cắt vọng" in h
+    assert 'min="0.2" max="10" step="0.1"' in h                              # khoảng lấy từ HA, không mã cứng ở thẻ
+    sid = m["settings"]["entity"]
+
+    def call(**a):
+        return _node("c.makeCall(i.m,i.a)", m=m, a=a)
+
+    assert call(type="opt", key="talk_silence_s", bool=False, value="0.8") == [
+        "r1_speaker", "set_advanced_option", {"entity_id": sid, "key": "talk_silence_s", "value": 0.8}]
+    assert call(type="opt", key="noise_suppress", bool=True, value=True) == [
+        "r1_speaker", "set_advanced_option", {"entity_id": sid, "key": "noise_suppress", "value": True}]
+    assert call(type="opt", key="talk_silence_s", bool=False, value="abc") is None      # không phải số: không gọi gì
+    # mục đã chỉnh khác mặc định được đánh dấu *
+    g["states"][sid]["attributes"]["am_thanh"]["nang_cao"][1]["v"] = 0.8
+    assert " *" in _html(_mo_hinh(g), {"open": True, "tab": "audio"})

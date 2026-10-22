@@ -22,6 +22,22 @@ get_wake_endpoint:
       example: "http://ha.local:8123"
       selector:
         text:
+set_advanced_option:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+    key:
+      required: true
+      selector:
+        text:
+    value:
+      required: true
+      selector:
+        text:
+
 set_light_function:
   fields:
     entity_id:

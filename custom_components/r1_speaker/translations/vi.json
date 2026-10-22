@@ -131,7 +131,8 @@
           "port": "Cổng điều khiển / EQ",
           "ha_url": "Địa chỉ HA mà loa gọi tới (trống = tự đoán)",
           "rotate_intercom_key": "Đổi khoá URL bộ đàm (các dòng go2rtc cũ sẽ ngừng chạy)",
-          "nang_cao": "Chỉnh thông số nâng cao (cổng thoại, khử tạp, song công)"
+          "nang_cao": "Chỉnh thông số nâng cao (cổng thoại, khử tạp, song công)",
+          "ghep_lai_apk": "Ghép lại APK (sinh khoá mới; APK tự lấy, không phải copy)"
         }
       },
       "nang_cao": {
@@ -266,6 +267,24 @@
         "seconds": {
           "name": "Số giây",
           "description": "Hiện bao lâu (1–30)."
+        }
+      }
+    },
+    "set_advanced_option": {
+      "name": "Đặt cài đặt nâng cao",
+      "description": "Đổi một cài đặt âm thanh nâng cao (cổng thoại, khử tạp, AGC, hạn đỉnh, song công). Nạp lại tích hợp để áp dụng (mic nối lại sau vài giây).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Loa"
+        },
+        "key": {
+          "name": "Khoá cài đặt",
+          "description": "Khoá cài đặt"
+        },
+        "value": {
+          "name": "Giá trị (số hoặc true/false)",
+          "description": "Giá trị (số hoặc true/false)"
         }
       }
     }

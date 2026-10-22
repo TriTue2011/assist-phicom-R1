@@ -131,7 +131,8 @@
           "port": "Control / EQ port",
           "ha_url": "Home Assistant address the speaker calls (empty = guess)",
           "rotate_intercom_key": "Rotate the intercom URL key (old go2rtc lines stop working)",
-          "nang_cao": "Edit advanced parameters (voice gate, noise, duplex)"
+          "nang_cao": "Edit advanced parameters (voice gate, noise, duplex)",
+          "ghep_lai_apk": "Re-pair the speaker APK (new key; the APK fetches it by itself)"
         }
       },
       "nang_cao": {
@@ -266,6 +267,24 @@
         "seconds": {
           "name": "Seconds",
           "description": "How long to show it (1-30)."
+        }
+      }
+    },
+    "set_advanced_option": {
+      "name": "Set an advanced option",
+      "description": "Change one advanced audio setting (voice gate, noise, AGC, limiter, duplex). Reloads the integration to apply (the mic reconnects in a few seconds).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Speaker"
+        },
+        "key": {
+          "name": "Setting key",
+          "description": "Setting key"
+        },
+        "value": {
+          "name": "Value (number or true/false)",
+          "description": "Value (number or true/false)"
         }
       }
     }

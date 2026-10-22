@@ -22,6 +22,7 @@ from homeassistant.const import EntityCategory
 from .const import CONF_INTERCOM_KEY, DEFAULT_PORT
 from .coordinator import R1ConfigEntry
 from .entity import R1MicEntity
+from . import nang_cao
 from .settings import (wake_settings, agc_settings, conf, ha_url, limiter_settings, mic_address, mic_listen, noise_settings,
                        play_address, speaker_host, speaker_port, wake_mode)
 
@@ -37,7 +38,8 @@ def am_thanh(entry: R1ConfigEntry) -> dict:
         "agc": {"bat": a.enabled, "dich_db": a.target_db, "tang_toi_da_db": a.max_gain_db,
                 "im_lang_db": a.silence_db},
         "han_dinh": {"bat": lim.enabled, "tran": lim.ceiling},
-        "sua_o": "tuy_chon",     # thẻ chỉ đọc; sửa ở trang tuỳ chọn của tích hợp
+        "sua_o": "the",          # chỉnh trực tiếp ở thẻ (dịch vụ set_advanced_option)
+        "nang_cao": nang_cao.thuoc_tinh(entry),
     }
 
 

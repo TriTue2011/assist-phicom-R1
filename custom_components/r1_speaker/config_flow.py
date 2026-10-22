@@ -12,6 +12,7 @@ from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .client import R1Client, R1Error
+from .const import CONF_MIC_CHUA_GHEP
 from .cong_vao import kiem_tra_ha_url, xoa_canh_bao_khoa
 from .const import (CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, CONF_AGC_TARGET_DB,
                     CONF_DUPLEX_DUCK, CONF_DUPLEX_DUCK_DB, CONF_DUPLEX_HANGOVER,
@@ -35,6 +36,7 @@ from .const import (CONF_WAKE_ENABLE, CONF_WAKE_SENSITIVITY, CONF_WAKE_WORD,
 
 CONF_ROTATE_KEY = "rotate_intercom_key"
 CONF_NANG_CAO = "nang_cao"
+CONF_GHEP_LAI = "ghep_lai_apk"
 
 
 class R1ConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -157,6 +159,11 @@ class R1OptionsFlow(OptionsFlowWithReload):
                         entry, data={**entry.data,
                                      CONF_INTERCOM_KEY: secrets.token_urlsafe(24)})
                     xoa_canh_bao_khoa(self.hass, entry.entry_id)
+                if user_input.pop(CONF_GHEP_LAI, False):
+                    # Khoá nghe mic mới + mở lại cửa ghép: APK tự xin khoá mới, không phải copy tay.
+                    self.hass.config_entries.async_update_entry(
+                        entry, data={**entry.data, CONF_MIC_LISTEN_KEY: secrets.token_urlsafe(24),
+                                     CONF_MIC_CHUA_GHEP: True})
                 self._co_ban = {CONF_HOST: host, CONF_PORT: port, CONF_HA_URL: url.rstrip("/")}
                 if user_input.get(CONF_NANG_CAO):
                     return await self.async_step_nang_cao()
@@ -169,6 +176,7 @@ class R1OptionsFlow(OptionsFlowWithReload):
             vol.Optional(CONF_HA_URL, description={
                 "suggested_value": v.get(CONF_HA_URL, ha_url(entry))}): str,
             vol.Optional(CONF_ROTATE_KEY, default=False): bool,
+            vol.Optional(CONF_GHEP_LAI, default=False): bool,
             vol.Optional(CONF_NANG_CAO, default=False): bool,
         }))
 

@@ -51,6 +51,7 @@ public class DichVuGhi extends Service {
         hienThongBao("Đang kết nối…");
         final CauHinh cfg = CauHinh.doc(this);
         final DichVuGhi dichVu = this;
+        dieuKhien.datGhep(new Ghep(this));
         dieuKhien.bat(cfg.host, cfg.port, cfg.khoa, cfg.gainDb, nhaTaoThat(),
                 new DieuKhienGhi.BenNhanTrangThai() {
                     @Override public void doiTrangThai(final String trangThai) {

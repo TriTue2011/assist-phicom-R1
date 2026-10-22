@@ -561,7 +561,7 @@ async def test_thuoc_tinh_cho_the_ba_nhom_va_khong_lo_khoa(hass, r1):
     assert a["ket_noi"]["ha_url"] == "http://ha.example:8123" and a["ket_noi"]["mic_cong"] == 9999
     assert a["ket_noi"]["tuy_chon"].startswith("/config/integrations/")
     assert a["am_thanh"]["khu_tap"]["bat"] is False and a["am_thanh"]["agc"]["bat"] is False
-    assert a["am_thanh"]["sua_o"] == "tuy_chon"
+    assert a["am_thanh"]["sua_o"] == "the"
     al = a["anh_sang"]
     assert list(al["chuc_nang"]) == list(FUNCTIONS) and al["thu_tu_uu_tien"] == list(UU_TIEN)
     assert [h["id"] for h in al["hieu_ung"]] == list(hieu_ung.HIEU_UNG)

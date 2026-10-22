@@ -634,6 +634,63 @@ public class KiemTra {
             ok(het, "may chu den: lenh la/ngoai khoang/chen chuoi bi tu choi");
         }
 
+        // (f11d) Ghep khoa tu dong: bi tu choi lien tiep -> xin khoa tu HA (co gioi han tan suat), nhan duoc thi noi lai ngay
+        {
+            final java.util.List<String> goiNoi = java.util.Collections.synchronizedList(new ArrayList<String>());
+            DieuKhienGhi.NhaTao chiNhanCongMoi = new DieuKhienGhi.NhaTao() {
+                public java.net.Socket ketNoi(String host, int port) throws IOException {
+                    goiNoi.add(host + ":" + port);
+                    if (port != 18770) throw new IOException("tu choi (gia)");
+                    return new SocketGia();
+                }
+                public DieuKhienGhi.MayDocAm taoMayDoc(int n) { return new MayDocVo(); }
+            };
+            final java.util.List<String> daLuu = java.util.Collections.synchronizedList(new ArrayList<String>());
+            final java.util.concurrent.atomic.AtomicInteger soLanXin = new java.util.concurrent.atomic.AtomicInteger();
+            final java.util.List<String> hostXin = java.util.Collections.synchronizedList(new ArrayList<String>());
+            DieuKhienGhi.GhepKhoa ghepGia = new DieuKhienGhi.GhepKhoa() {
+                public String[] thu(String host) { soLanXin.incrementAndGet(); hostXin.add(host); return new String[]{"18770", "khoa-moi"}; }
+                public void luu(int port, String khoa) { daLuu.add(port + "/" + khoa); }
+            };
+            TrangThaiGia tt = new TrangThaiGia();
+            final DieuKhienGhi dk = new DieuKhienGhi(new DieuKhienGhi.NoiLai(10, 40, 0, 50));
+            dk.datGhep(ghepGia);
+            dk.bat("ha.example", 18765, "khoa-cu", 0.0, chiNhanCongMoi, tt);
+            doiKhongQua(4000, new DieuKien() { public boolean dat() { return goiNoi.contains("ha.example:18770"); } });
+            ok(goiNoi.contains("ha.example:18770") && soLanXin.get() == 1 && hostXin.get(0).equals("ha.example")
+                    && daLuu.size() == 1 && daLuu.get(0).equals("18770/khoa-moi"),
+                    "ghep: bi tu choi -> xin khoa dung host, luu cong+khoa moi, noi lai bang cong moi " + goiNoi);
+            dk.tat();
+            doiKhongQua(2000, new DieuKien() { public boolean dat() { return dk.soLuongLuocSong() == 0; } });
+
+            // HA khong trao (da ghep / sai IP): xin RAT THUA (cach nhau >= 20 s), khong dap lien tuc vao HA
+            final java.util.concurrent.atomic.AtomicInteger xin2 = new java.util.concurrent.atomic.AtomicInteger();
+            DieuKhienGhi.GhepKhoa tuChoi = new DieuKhienGhi.GhepKhoa() {
+                public String[] thu(String host) { xin2.incrementAndGet(); return null; }
+                public void luu(int port, String khoa) { throw new IllegalStateException("khong duoc luu"); }
+            };
+            final DieuKhienGhi dk2 = new DieuKhienGhi(new DieuKhienGhi.NoiLai(10, 40, 0, 500));
+            dk2.datGhep(tuChoi);
+            dk2.bat("ha.example", 18765, "khoa-cu", 0.0, new NhaTaoKichBan(NhaTaoKichBan.Kieu.LOI), new TrangThaiGia());
+            Thread.sleep(1500);
+            dk2.tat();
+            ok(xin2.get() == 1, "ghep: HA khong trao -> chi xin 1 lan trong 1,5 s (gioi han tan suat), da xin " + xin2.get());
+            doiKhongQua(2000, new DieuKien() { public boolean dat() { return dk2.soLuongLuocSong() == 0; } });
+
+            // Khong dat ghep (hanh vi cu): khong goi gi them
+            ok(Ghep.phanTichTraLoi("{\"port\":18765,\"key\":\"abcDEF_123-xyz9\"}") != null
+                    && Ghep.phanTichTraLoi("{\"port\":18765,\"key\":\"abcDEF_123-xyz9\"}")[1].equals("abcDEF_123-xyz9")
+                    && Ghep.phanTichTraLoi("{\"port\":70000,\"key\":\"abcDEF_123-xyz9\"}") == null
+                    && Ghep.phanTichTraLoi("{\"port\":0,\"key\":\"abcDEF_123-xyz9\"}") == null
+                    && Ghep.phanTichTraLoi("{\"port\":1,\"key\":\"ngan\"}") == null
+                    && Ghep.phanTichTraLoi("{\"loi\":\"x\"}") == null && Ghep.phanTichTraLoi(null) == null,
+                    "ghep: doc tra loi HA chat (cong 1..65535, khoa 8..128 ky tu hop le)");
+            ok(Ghep.hostHopLe("172.16.10.200") && Ghep.hostHopLe("ha.example")
+                    && !Ghep.hostHopLe("a/b") && !Ghep.hostHopLe("a:80") && !Ghep.hostHopLe("a b") && !Ghep.hostHopLe("")
+                    && !Ghep.hostHopLe(null) && !Ghep.hostHopLe("h@evil"),
+                    "ghep: host chi gom ky tu ten/IP, khong chen duoc duong dan/cong/tai khoan vao URL");
+        }
+
         // (f12) Ban phat hanh: cua cau hinh bang intent chi mo LAN DAU; tu bat mic chi khi du cau hinh
         {
             ok(CauHinhTuLenh.choPhepDoiCauHinh("", "") && CauHinhTuLenh.choPhepDoiCauHinh(null, null),
@@ -644,8 +701,8 @@ public class KiemTra {
                     "cau-hinh: DA cau hinh -> tu choi lenh doi (app khac khong chuyen duoc dich den mic)");
             ok(CauHinhTuLenh.nenTuBat("192.0.2.10", 18765, "khoa"), "tu-bat: du host/port/khoa -> tu bat");
             ok(!CauHinhTuLenh.nenTuBat("", 18765, "khoa") && !CauHinhTuLenh.nenTuBat("h", 0, "khoa")
-                    && !CauHinhTuLenh.nenTuBat("h", 70000, "khoa") && !CauHinhTuLenh.nenTuBat("h", 18765, "")
-                    && !CauHinhTuLenh.nenTuBat(null, 1, "k") && !CauHinhTuLenh.nenTuBat("h", 1, null),
+                    && !CauHinhTuLenh.nenTuBat("h", 70000, "khoa") && CauHinhTuLenh.nenTuBat("h", 18765, "")
+                    && !CauHinhTuLenh.nenTuBat(null, 1, "k") && CauHinhTuLenh.nenTuBat("h", 1, null),
                     "tu-bat: thieu host/port hop le/khoa -> KHONG tu bat mic");
         }
     }
