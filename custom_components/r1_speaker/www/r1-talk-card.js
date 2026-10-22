@@ -13,7 +13,7 @@
  */
 (function () {
   "use strict";
-  var BUILD = "2026-10-22.10";
+  var BUILD = "2026-10-22.11";
 
   var PLATFORM = "r1_speaker";
   var STATUS = { tat: "off", nghe: "listening", gui: "sending" };
@@ -40,6 +40,7 @@
       huong_loa: "Đang nghe loa (quyền nói ở loa)", huong_dien_thoai: "Điện thoại đang nói — mic loa tạm bỏ",
       huong_song_song: "Song song — hai bên cùng nghe", dt_assist: "Assist tạm nghỉ chờ từ khoá trong lúc đàm thoại.",
       gain_nghe: "Âm lượng nghe trên điện thoại", dt_wait: "Đang nối…",
+      vol_loa: "Âm lượng loa", vol_off: "Chưa chỉnh được: loa chưa nối hoặc APK cũ chưa báo âm lượng.",
       dt_on: "Mic điện thoại sẵn sàng — giữ nút để nói", dt_on_luon: "Mic điện thoại mở liên tục",
       dt_https: "Trình duyệt chỉ cho dùng mic khi mở Home Assistant bằng https (địa chỉ ngoài hoặc https trong nhà).",
       dt_err: "Không mở được mic điện thoại", dt_busy: "Loa đang có kênh khác (điện thoại khác hoặc phiên đang mở).",
@@ -67,6 +68,7 @@
       huong_loa: "Listening to the speaker (floor on the speaker)", huong_dien_thoai: "Phone is talking — speaker mic paused",
       huong_song_song: "Parallel — both sides hear each other", dt_assist: "Assist is paused (no wake word) during the intercom.",
       gain_nghe: "Listening volume on this phone", dt_wait: "Connecting…",
+      vol_loa: "Speaker volume", vol_off: "Not adjustable: speaker offline or the old APK does not report volume.",
       dt_on: "Phone microphone ready — hold to talk", dt_on_luon: "Phone microphone open continuously",
       dt_https: "The browser only allows the microphone when Home Assistant is opened over https.",
       dt_err: "Could not open the phone microphone", dt_busy: "The speaker already has another channel (another phone or an open session).",
@@ -103,7 +105,7 @@
     return {
       intercom: by("switch", "intercom_open"), song: by("switch", "song_song"),
       mic_status: by("sensor", "mic_status"), wake: by("binary_sensor", "wake"),
-      speaker: by("media_player", "speaker"), mute: by("switch", "mute"),
+      speaker: by("media_player", "speaker"), mute: by("switch", "mute"), volume: by("number", "volume"),
       device_id: mine.length ? reg[mine[0]].device_id : null,
     };
   }
@@ -130,6 +132,12 @@
                      on: !!ist && ist.state === "on",
                      giuMo: !!ist && !!ist.attributes && ist.attributes.giu_mo === true,
                      huong: (ist && ist.attributes && ist.attributes.huong) || null };
+    // Âm lượng nhạc của loa (number do APK báo/đặt): không khả dụng thì thanh trượt tắt và nói rõ lý do.
+    var vst = stateOf(hass, ent.volume);
+    var vnum = vst ? Number(vst.state) : NaN;
+    var vol = { entity: ent.volume || null, present: !!ent.volume, available: isUp(vst) && !isNaN(vnum),
+                value: isNaN(vnum) ? null : vnum,
+                max: (vst && vst.attributes && Number(vst.attributes.max)) || 15 };
     var sst = stateOf(hass, ent.song);
     var song = { entity: ent.song || null, present: !!ent.song, available: isUp(sst), on: !!sst && sst.state === "on" };
     // «Giữ để nói» / «Bật mic luôn» bấm được khi công tắc đàm thoại sẵn sàng (mic đã nối, chưa tắt)
@@ -158,7 +166,7 @@
     var wake = { entity: ent.wake || null, present: !!ent.wake, on: !!wst && wst.state === "on",
                  pending: wa.phia_loa === "CHO_PHIA_LOA", mode: wa.che_do || mic.mode };
     return {
-      found: !!(ent.intercom || ent.mic_status || ent.speaker), mic: mic, talk: talk, intercom: intercom, song: song,
+      found: !!(ent.intercom || ent.mic_status || ent.speaker), mic: mic, talk: talk, intercom: intercom, song: song, volume: vol,
       music: music, always: always, mute: mute, wake: wake, deviceId: ent.device_id,
       showEq: config.show_eq !== false,
     };
@@ -239,6 +247,8 @@
         '<div class="row"><label>' + esc(t.song_song) + '</label><ha-switch data-song-song></ha-switch></div>' +
         '<div class="note" data-ss-note></div>' +
         '<div class="row"><button data-hold>' + esc(t.hold) + '</button><button class="sec" data-always>' + esc(t.always) + "</button></div>" +
+        '<div class="row" data-vol-row><label>' + esc(t.vol_loa) + '</label><input type="range" data-vol min="0" max="15" step="1">' +
+        '<span class="val" data-vol-val></span></div><div class="note" data-vol-off style="display:none">' + esc(t.vol_off) + "</div>" +
         '<div class="row"><label>' + esc(t.gain_nghe) + '</label><input type="range" data-nghe-gain min="100" max="800" step="50">' +
         '<span class="val" data-gain-val></span></div></section>' +
         '<div class="row" data-ng-row style="display:none"><button class="sec" data-nghe>' + esc(t.ng_on) + "</button>" +
@@ -291,6 +301,11 @@
       if (ss) ss.addEventListener("change", function () {
         var m = now();
         if (m.song.available) self._call("switch", ss.checked ? "turn_on" : "turn_off", { entity_id: m.song.entity });
+      });
+      var vs = root.querySelector("[data-vol]");
+      if (vs) vs.addEventListener("change", function () {
+        var m2 = now();
+        if (m2.volume.available) self._call("number", "set_value", { entity_id: m2.volume.entity, value: Number(vs.value) });
       });
       var gs = root.querySelector("[data-nghe-gain]");
       if (gs) gs.addEventListener("input", function () { self._datGain(Number(gs.value)); });
@@ -656,6 +671,14 @@
       var nt = q("[data-ss-note]");
       if (nt) nt.textContent = m.song.on ? t.ss_note_on : t.ss_note_off;
       this._huong = m.intercom.huong;
+      var vs = q("[data-vol]"), vv = q("[data-vol-val]"), vrow = q("[data-vol-row]"), voff = q("[data-vol-off]");
+      if (vrow) vrow.style.display = m.volume.present ? "" : "none";
+      if (vs) {
+        vs.max = String(m.volume.max); vs.disabled = !m.volume.available;
+        if (m.volume.available && root.activeElement !== vs) vs.value = String(m.volume.value);
+      }
+      if (vv) vv.textContent = m.volume.available ? String(m.volume.value) : "—";
+      if (voff) voff.style.display = m.volume.present && !m.volume.available ? "" : "none";
       var gs = q("[data-nghe-gain]");
       if (gs && root.activeElement !== gs) gs.value = String(Math.round(this._gainNghe() * 100));
       var gv = q("[data-gain-val]");

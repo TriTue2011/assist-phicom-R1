@@ -580,6 +580,38 @@ public class KiemTra {
             };
             ok(LenhDieuKhien.xuLyDen("{\"type\":\"den_vien\",\"muc\":5}", no) != null, "den: dich nem loi -> tra ly do");
 
+            // Am luong nhac: dinh dang khung chat, khoang 0..toiDa, dich nem loi khong giet luong
+            final List<Integer> amDat = new ArrayList<Integer>();
+            LenhDieuKhien.DichAm am = new LenhDieuKhien.DichAm() {
+                public String dat(int muc) { amDat.add(muc); return null; }
+                public int muc() { return 7; }
+                public int toiDa() { return 15; }
+            };
+            ok(LenhDieuKhien.laAmLuong("{\"type\":\"am_luong\",\"muc\":8}") && LenhDieuKhien.laAmLuong("{\"type\":\"am_hoi\"}"),
+                    "am luong: nhan dang khung am_luong va am_hoi");
+            boolean amChan = true;
+            for (String h : new String[] {null, "", "rac", "{\"type\":\"am_luong\",\"muc\":-1}", "{\"type\":\"am_luong\",\"muc\":100}",
+                    "{\"type\":\"am_luong\",\"muc\":\"8\"}", "{\"type\":\"am_luong\", \"muc\":8}", "{\"muc\":8,\"type\":\"am_luong\"}",
+                    "{\"type\":\"den_vien\",\"muc\":8}"}) {
+                if (LenhDieuKhien.laAmLuong(h)) amChan = false;
+            }
+            ok(amChan, "am luong: khung hong/lech dinh dang khong duoc nhan dang");
+            ok(LenhDieuKhien.xuLyAm("{\"type\":\"am_luong\",\"muc\":8}", am) == null && amDat.toString().equals("[8]"),
+                    "am luong: muc 8 duoc dat dung mot lan");
+            amDat.clear();
+            ok(LenhDieuKhien.xuLyAm("{\"type\":\"am_luong\",\"muc\":16}", am) != null && amDat.isEmpty(),
+                    "am luong: muc 16 > toi da 15 bi chan, khong goi dich");
+            ok(LenhDieuKhien.xuLyAm("{\"type\":\"am_hoi\"}", am) == null && amDat.isEmpty(),
+                    "am luong: am_hoi chi bao lai, khong dat");
+            LenhDieuKhien.DichAm amNo = new LenhDieuKhien.DichAm() {
+                public String dat(int muc) { throw new IllegalStateException("no"); }
+                public int muc() { throw new IllegalStateException("no"); }
+                public int toiDa() { throw new IllegalStateException("no"); }
+            };
+            ok(LenhDieuKhien.xuLyAm("{\"type\":\"am_luong\",\"muc\":8}", amNo) != null, "am luong: dich nem loi -> tra ly do, khong nem ra ngoai");
+            ok(new String(Khung.amLuong(7, 15), java.nio.charset.Charset.forName("UTF-8")).endsWith("{\"type\":\"am_luong_trang_thai\",\"muc\":7,\"toi_da\":15}"),
+                    "am luong: khung trang thai dung hop dong voi HA");
+
             // Hang doi: gui lien tuc thi chi muc moi nhat cua tung loai; hoi san sang -> bao lai; dich nem loi khong giet luong
             final List<Boolean> baoLai = new ArrayList<Boolean>();
             daGui.clear();

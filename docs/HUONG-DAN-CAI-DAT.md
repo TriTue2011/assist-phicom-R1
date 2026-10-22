@@ -32,7 +32,7 @@ Cần: Home Assistant 2026.2 trở lên (hacs.json; test chạy trên 2026.2.3),
 | `binary_sensor.r1_bo_dam` | kênh phát về loa của bộ đàm (chẩn đoán) |
 
 > **Lệnh chưa xác nhận.** Chỉ `set_eq_bandlevel` (5 dải) và `set_bass_enable` đã được ghi thử
-> thật trên loa. Bật/tắt EQ, cường độ bass, loudness, âm lượng, DLNA/AirPlay đã viết theo tài
+> thật trên loa. Âm lượng đã nghe xác nhận (đặt qua APK, cần APK bản mới). Bật/tắt EQ, cường độ bass, loudness, DLNA/AirPlay đã viết theo tài
 > liệu dịch ngược nhưng **chưa thử ghi**; thực thể có thuộc tính `confirmed: false` và thẻ gắn
 > nhãn «chưa xác nhận». Loa không nhận lệnh thì HA báo lỗi chứ không đổi trạng thái giả.
 

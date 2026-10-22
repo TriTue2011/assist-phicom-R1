@@ -80,6 +80,8 @@ class R1MicServer:
         self._on_state: list[Callable[[], None]] = []
         #: Máy chủ đèn quyền shell trên loa có chạy không (APK báo): None = chưa biết / loa chưa nối.
         self.den_san_sang: bool | None = None
+        #: Âm lượng NHẠC của loa (APK báo): ``(mức, tối đa)``; None = chưa biết / loa chưa nối / APK cũ không báo.
+        self.am_luong: tuple[int, int] | None = None
         #: Gọi mỗi khi APK xác thực thành công (hello đúng khoá): dùng để đóng «cửa ghép khoá».
         self.khi_xac_thuc: Callable[[], None] | None = None
         #: Gọi khi loa (đúng IP) gửi hello nhưng SAI khoá: APK đã mất khoá, cần được ghép lại.
@@ -170,6 +172,18 @@ class R1MicServer:
             raise ValueError(f"hiệu ứng đèn ngoài danh sách cho phép: {ma!r}")
         await self._gui_khung(json.dumps({"type": "den_hieu_ung", "id": ma}, separators=(",", ":")).encode())
 
+    async def gui_am_luong(self, muc: int) -> None:
+        """Đặt âm lượng NHẠC của loa (0–``VOL_MAX``) qua APK (``AudioManager.setStreamVolume``). Hợp đồng khung với
+        ``LenhDieuKhien.java``. APK trả lại ``am_luong_trang_thai`` với mức thật."""
+        from .const import VOL_MAX, VOL_MIN
+        if isinstance(muc, bool) or not isinstance(muc, int) or not VOL_MIN <= muc <= VOL_MAX:
+            raise ValueError(f"âm lượng ngoài {VOL_MIN}–{VOL_MAX}: {muc!r}")
+        await self._gui_khung(json.dumps({"type": "am_luong", "muc": muc}, separators=(",", ":")).encode())
+
+    async def hoi_am_luong(self) -> None:
+        """Hỏi APK mức âm lượng hiện tại; APK trả ``am_luong_trang_thai``."""
+        await self._gui_khung(b'{"type":"am_hoi"}')
+
     async def gui_den_vien(self, muc: int) -> None:
         """Đèn viền (CHỈ trắng) mức 0–255 qua APK loa → máy chủ đèn quyền shell. Hợp đồng khung với
         ``LenhDieuKhien.java`` (khoá đúng thứ tự, dạng tách gọn)."""
@@ -249,6 +263,7 @@ class R1MicServer:
                 return
             self._writer = writer
             self.den_san_sang = None
+            self.am_luong = None
             if self.khi_xac_thuc is not None:
                 self.khi_xac_thuc()
             self._mic.note_inbound(True)
@@ -265,6 +280,14 @@ class R1MicServer:
                         loai = ctrl.get("type")
                         if loai == "end":
                             break                   # loa báo kết thúc phiên
+                        if loai == "am_luong_trang_thai":
+                            muc, toi_da = ctrl.get("muc"), ctrl.get("toi_da")
+                            if (isinstance(muc, int) and isinstance(toi_da, int) and not isinstance(muc, bool)
+                                    and not isinstance(toi_da, bool) and 0 < toi_da <= 100 and 0 <= muc <= toi_da):
+                                if (muc, toi_da) != self.am_luong:
+                                    self.am_luong = (muc, toi_da)
+                                    self._notify_state()
+                            continue
                         if loai == "den_trang_thai":
                             # Chỉ coi là sẵn sàng khi APK báo ĐÈN FIRMWARE (APK cũ dùng máy chủ shell không báo che_do).
                             moi = ctrl.get("san_sang") is True and ctrl.get("che_do") == "firmware"
@@ -283,6 +306,7 @@ class R1MicServer:
                 if self._writer is writer:
                     self._writer = None
                     self.den_san_sang = None
+                    self.am_luong = None
                 self._mic.note_inbound(False)
                 self._notify_state()
                 _LOGGER.debug("R1 mic server: phiên từ %s đã đóng", ip)

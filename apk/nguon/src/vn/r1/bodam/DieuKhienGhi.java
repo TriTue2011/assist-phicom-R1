@@ -72,6 +72,9 @@ public final class DieuKhienGhi {
 
     private final NoiLai noiLai; // null = khong noi lai (hanh vi cu)
 
+    /** Am luong nhac that (AudioManager); DichVuGhi gan Context qua AmLuong.khoiTao. */
+    private static final AmLuong AM_THAT = new AmLuong();
+
     public DieuKhienGhi() { this(null); }
 
     public DieuKhienGhi(NoiLai noiLai) { this.noiLai = noiLai; }
@@ -266,6 +269,7 @@ public final class DieuKhienGhi {
         luongDen.setDaemon(true);
         luongDen.start();
         hangDen.dat("{\"type\":\"den_hoi\"}");                   // bao HA trang thai may chu den ngay khi noi
+        try { mayGhiCuoi.guiKhung(Khung.amLuong(AM_THAT.muc(), AM_THAT.toiDa())); } catch (IOException boQua) { }  // va muc am luong hien tai
 
         // Luồng nhận PCM từ HA (phát xuống loa) trên cùng kết nối; khung JSON điều khiển bị bỏ qua.
         final PhatAm phat = new PhatAm();
@@ -291,6 +295,11 @@ public final class DieuKhienGhi {
                         if (pcm[0] == '{') {                       // khung JSON điều khiển (đèn nhạc, đèn viền/đáy)
                             if (len <= LenhDieuKhien.DAI_TOI_DA) {
                                 String khungJson = new String(pcm, 0, len, java.nio.charset.Charset.forName("UTF-8"));
+                                if (LenhDieuKhien.laAmLuong(khungJson)) {      // am luong nhac: dat xong bao lai muc that
+                                    LenhDieuKhien.xuLyAm(khungJson, AM_THAT);
+                                    try { mayGhiCuoi.guiKhung(Khung.amLuong(AM_THAT.muc(), AM_THAT.toiDa())); } catch (IOException boQua) { }
+                                    continue;
+                                }
                                 if (!hangDen.dat(khungJson)) {
                                     LenhDieuKhien.xuLy(khungJson, LenhDieuKhien.THAT);
                                 }

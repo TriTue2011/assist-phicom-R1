@@ -184,7 +184,7 @@ Kiểm thử không cần nút giữa (chỉ bản NV245 kiểm thử): `adb she
 **CHỈ kiểm bằng mock/loa giả (chưa thử trên loa thật hoặc HA thật cùng loa):**
 
 - Toàn bộ tích hợp HA: **316 ca test** với loa giả ở `127.0.0.1` (WebSocket giả, renderer UPnP giả, client TCP giả), xem mục 9.
-- Các lệnh còn lại: bật/tắt EQ, cường độ bass, loudness, âm lượng, DLNA/AirPlay (viết theo tài liệu dịch ngược, **chưa ghi thử**; thực thể mang
+- **Âm lượng** đã xác nhận (nghe thật 22/10/2026): đặt qua APK bằng `AudioManager.setStreamVolume`, không qua cổng 8080. Các lệnh còn lại: bật/tắt EQ, cường độ bass, loudness, DLNA/AirPlay (viết theo tài liệu dịch ngược, **chưa ghi thử**; thực thể mang
   thuộc tính `confirmed: false`, thẻ ghi «chưa xác nhận»). Preset EQ chỉ hiển thị.
 - Phát TTS/nhạc qua DLNA (`Set_DLNA_Open`, cổng của renderer, định dạng âm thanh nhận được).
 - **Đầu nhận mic của HA** (`mic_server.py`) với **client TCP giả** theo giao thức APK; **APK chưa từng nối vào HA thật**.

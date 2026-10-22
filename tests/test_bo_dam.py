@@ -243,7 +243,7 @@ async def test_kenh_phat_hong_thi_khong_sap_va_nha_mic(hass, r1, pcm_server, cap
     await _cho(lambda: hass.states.get(LINK).state == STATE_OFF, hass)
     await _cho(lambda: not c.mic.holding, hass)                  # mic không kẹt
     assert not c.intercom.talking
-    assert _state(hass, "number.phicomm_r1_volume") not in (None, STATE_UNAVAILABLE)
+    assert _state(hass, "sensor.phicomm_r1_device_state") not in (None, STATE_UNAVAILABLE)
     for _ in range(4):
         c.intercom.feed(tieng8k(0))              # đóng cổng sạch sau lỗi
     c.intercom.feed(tieng8k(3000))               # và mở lại được

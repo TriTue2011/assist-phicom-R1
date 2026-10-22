@@ -209,7 +209,7 @@ CONF_INTERCOM_KEY = "intercom_key"
 #: Lệnh ghi lên loa ĐÃ XÁC NHẬN bằng ghi thật + đọc lại (21/10/2026). Mọi lệnh khác của
 #: tích hợp (set_eq_enable, set_bass_strength, set_loudness_*, set_volume, preset) CHƯA xác nhận;
 #: thẻ Lovelace gắn nhãn «chưa xác nhận» dựa vào danh sách này.
-CONFIRMED_COMMANDS = frozenset({"set_eq_bandlevel", "set_bass_enable"})
+CONFIRMED_COMMANDS = frozenset({"set_eq_bandlevel", "set_bass_enable", "set_volume"})
 
 #: Đường tĩnh của thẻ Lovelace (tệp nằm trong custom_components/r1_speaker/www).
 CARD_URL = "/r1_speaker/r1-eq-card.js"

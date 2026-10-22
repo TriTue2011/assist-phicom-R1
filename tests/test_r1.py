@@ -37,7 +37,7 @@ async def _them(hass, r1) -> MockConfigEntry:
     return e
 
 
-async def _chu_ky(hass: HomeAssistant, eid="number.phicomm_r1_volume", state=None):
+async def _chu_ky(hass: HomeAssistant, eid="sensor.phicomm_r1_device_state", state=None):
     """Tới chu kỳ hỏi loa kế tiếp, rồi chờ thực thể ``eid`` đạt ``state`` (làm mới chạy ở
     tác vụ nền nên async_block_till_done không đợi nó)."""
     async_fire_time_changed(hass, dt_util.utcnow() + const.SCAN_INTERVAL + timedelta(seconds=1))
@@ -60,7 +60,7 @@ def _st(hass, eid):
 
 async def test_doc_get_info(hass, r1):
     e = await _them(hass, r1)
-    assert _num(hass, "number.phicomm_r1_volume") == 7
+    assert _st(hass, "sensor.phicomm_r1_device_state").state == "1"
     assert _st(hass, "switch.phicomm_r1_dlna").state == STATE_ON
     assert _st(hass, "switch.phicomm_r1_airplay").state == STATE_OFF
     assert _st(hass, "sensor.phicomm_r1_device_state").state == "1"
@@ -97,25 +97,6 @@ async def test_doi_tung_switch(hass, r1, entity, field, msg_type, payload):
     assert _st(hass, entity).state == (STATE_ON if turn_on else STATE_OFF)
 
 
-async def test_doi_am_luong(hass, r1):
-    await _them(hass, r1)
-    await hass.services.async_call("number", "set_value",
-                                   {"entity_id": "number.phicomm_r1_volume", "value": 12},
-                                   blocking=True)
-    (cmd,) = r1.commands("send_message")
-    assert cmd["data"] == {"what": 4, "arg1": 5, "arg2": 12}
-    assert _num(hass, "number.phicomm_r1_volume") == 12
-
-
-async def test_am_luong_ngoai_khoang_bi_chan(hass, r1):
-    await _them(hass, r1)
-    with pytest.raises(Exception):
-        await hass.services.async_call("number", "set_value",
-                                       {"entity_id": "number.phicomm_r1_volume", "value": 99},
-                                       blocking=True)
-    assert not r1.commands("send_message")
-
-
 @pytest.mark.parametrize("band,name", enumerate(
     ["60_hz", "230_hz", "910_hz", "3_6_khz", "14_khz"]))
 async def test_eq_tung_dai(hass, r1, band, name):
@@ -140,43 +121,42 @@ async def test_bass_strength_va_loudness_gain(hass, r1):
 
 async def test_mat_ket_noi_roi_tu_khoi_phuc(hass, r1, caplog):
     await _them(hass, r1)
-    assert _num(hass, "number.phicomm_r1_volume") == 7
+    assert _st(hass, "sensor.phicomm_r1_device_state").state == "1"
     await r1.stop()
     with caplog.at_level(logging.WARNING):
         await _chu_ky(hass, state=STATE_UNAVAILABLE)
-    for eid in ("number.phicomm_r1_volume", "switch.phicomm_r1_dlna",
-                "sensor.phicomm_r1_device_state", "number.phicomm_r1_eq_60_hz"):
+    for eid in ("switch.phicomm_r1_dlna", "sensor.phicomm_r1_device_state", "number.phicomm_r1_eq_60_hz"):
         assert _st(hass, eid).state == STATE_UNAVAILABLE
     assert any(r.levelno == logging.WARNING and "R1" in r.message for r in caplog.records)
     await r1.start()  # cùng cổng
-    r1.state["vol"] = 3
+    r1.state["device_state"] = 3
     await _chu_ky(hass, state="3")
-    assert _num(hass, "number.phicomm_r1_volume") == 3
+    assert _st(hass, "sensor.phicomm_r1_device_state").state == "3"
 
 
 async def test_loa_tat_luc_khoi_dong_van_them_va_hoi_phuc(hass, r1):
     await r1.stop()
     await _them(hass, r1)
-    assert _st(hass, "number.phicomm_r1_volume").state == STATE_UNAVAILABLE
+    assert _st(hass, "sensor.phicomm_r1_device_state").state == STATE_UNAVAILABLE
     await r1.start()
-    await _chu_ky(hass, state="7")
-    assert _num(hass, "number.phicomm_r1_volume") == 7
+    await _chu_ky(hass, state="1")
+    assert _st(hass, "sensor.phicomm_r1_device_state").state == "1"
 
 
 @pytest.mark.parametrize("mode", ["garbage_info", "silent", "drop"])
 async def test_phan_hoi_sai_khong_crash(hass, r1, mode):
     r1.mode = mode
     await _them(hass, r1)
-    assert _st(hass, "number.phicomm_r1_volume").state == STATE_UNAVAILABLE
+    assert _st(hass, "sensor.phicomm_r1_device_state").state == STATE_UNAVAILABLE
     r1.mode = "ok"
-    await _chu_ky(hass, state="7")
-    assert _num(hass, "number.phicomm_r1_volume") == 7
+    await _chu_ky(hass, state="1")
+    assert _st(hass, "sensor.phicomm_r1_device_state").state == "1"
 
 
 async def test_eq_sai_dinh_dang_chi_mat_phan_eq(hass, r1):
     r1.mode = "bad_eq"
     await _them(hass, r1)
-    assert _num(hass, "number.phicomm_r1_volume") == 7
+    assert _st(hass, "sensor.phicomm_r1_device_state").state == "1"
     assert _st(hass, "switch.phicomm_r1_bass_boost").state == STATE_UNAVAILABLE
     assert _st(hass, "number.phicomm_r1_eq_60_hz").state == STATE_UNAVAILABLE
 
@@ -188,7 +168,7 @@ async def test_gui_lenh_khi_loa_chet_bao_loi_khong_sap_vong(hass, r1):
         await hass.services.async_call("switch", "turn_off", {
             "entity_id": "switch.phicomm_r1_dlna"}, blocking=True)
     await r1.start()
-    r1.state["vol"] = 5
+    r1.state["device_state"] = 5
     await _chu_ky(hass, state="5")  # vòng cập nhật vẫn sống sau lệnh hỏng
     assert _st(hass, "switch.phicomm_r1_dlna").state == STATE_ON
 

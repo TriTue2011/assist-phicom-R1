@@ -48,8 +48,8 @@ async def test_thuoc_tinh_thuc_the_cho_the(hass, r1):
         assert st.attributes["min"] == -1500 and st.attributes["max"] == 1500   # từ loa báo
     assert [float(hass.states.get(e).state) for e in BANDS] == [
         b["BandLevel"] for b in GET_EQ_CONFIG["eq"]["Bands"]["list"]]
-    # Chỉ hai lệnh đã xác nhận bằng ghi thật.
-    assert CONFIRMED_COMMANDS == {"set_eq_bandlevel", "set_bass_enable"}
+    # Chỉ các lệnh đã xác nhận bằng ghi thật (set_volume: chủ máy nghe xác nhận 22/10/2026, qua APK AudioManager).
+    assert CONFIRMED_COMMANDS == {"set_eq_bandlevel", "set_bass_enable", "set_volume"}
     assert hass.states.get("switch.phicomm_r1_bass_boost").attributes["confirmed"] is True
     for eid in ("switch.phicomm_r1_eq", "switch.phicomm_r1_loudness",
                 "number.phicomm_r1_bass_strength", "number.phicomm_r1_loudness_gain"):

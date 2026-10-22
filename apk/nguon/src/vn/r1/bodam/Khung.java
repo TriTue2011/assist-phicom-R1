@@ -30,6 +30,11 @@ public final class Khung {
         return dongGoi(utf8("{\"type\":\"den_trang_thai\",\"san_sang\":" + (sanSang ? "true" : "false") + ",\"che_do\":\"firmware\"}"));
     }
 
+    /** Bao HA muc am luong nhac hien tai va muc toi da cua loa. */
+    public static byte[] amLuong(int muc, int toiDa) {
+        return dongGoi(utf8("{\"type\":\"am_luong_trang_thai\",\"muc\":" + muc + ",\"toi_da\":" + toiDa + "}"));
+    }
+
     static byte[] utf8(String s) {
         try {
             return s.getBytes("UTF-8");

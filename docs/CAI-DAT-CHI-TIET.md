@@ -43,7 +43,7 @@ nữa với IP khác, mỗi loa có khoá, cổng, phiên, đèn và thực th�
 
 | Thực thể (tên hiển thị) | Loại | Làm gì | Khoảng / ghi chú |
 |---|---|---|---|
-| Âm lượng | number | Âm lượng loa | 0–15 |
+| Âm lượng | number | Âm lượng NHẠC của loa, đặt qua APK bằng `AudioManager.setStreamVolume` (chủ máy nghe xác nhận 22/10/2026: 0 mất tiếng, 8 to hơn). Chỉ chỉnh được khi APK đã nối và là bản mới biết báo âm lượng; không thì không khả dụng. Cũng chỉnh được bằng `volume_set` trên `media_player.r1_loa` (thẻ YouTube dùng cái này) và thanh «Âm lượng loa» trong tab Đàm thoại. Không đổi âm lượng của vuốt dải cảm ứng trên đỉnh loa (luồng thông báo/hệ thống, đèn xanh dương theo mức) | 0–15 |
 | EQ 60 Hz, 230 Hz, 910 Hz, 3,6 kHz, 14 kHz | number | Năm dải EQ | −1500…+1500 mB (1 dB = 100 mB) |
 | Chế độ EQ | select | Chọn 1 trong 10 preset Android: Normal, Classical, Dance, Flat, Folk, Heavy Metal, Hip Hop, Jazz, Pop, Rock. Chọn = ghi năm dải theo bảng của firmware; kéo tay một dải thì ô này hiện «không rõ» | |
 | EQ | switch | Bật/tắt toàn bộ EQ | |

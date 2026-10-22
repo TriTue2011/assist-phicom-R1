@@ -131,7 +131,9 @@ class R1Player(R1Entity, MediaPlayerEntity):
                                 | MediaPlayerEntityFeature.MEDIA_ANNOUNCE
                                 | MediaPlayerEntityFeature.PAUSE
                                 | MediaPlayerEntityFeature.PLAY
-                                | MediaPlayerEntityFeature.STOP)
+                                | MediaPlayerEntityFeature.STOP
+                                | MediaPlayerEntityFeature.VOLUME_SET
+                                | MediaPlayerEntityFeature.VOLUME_STEP)
 
     def __init__(self, coordinator: R1Coordinator) -> None:
         super().__init__(coordinator, "speaker")
@@ -140,6 +142,28 @@ class R1Player(R1Entity, MediaPlayerEntity):
         await super().async_added_to_hass()
         self.async_on_remove(self.hass.bus.async_listen(
             EVENT_STATE_CHANGED, self._khi_dmr_doi, event_filter=self._la_dmr))
+        # Âm lượng là của APK (mức nhạc): đổi ở loa/ở số → cập nhật thanh trượt của thẻ YouTube.
+        self.async_on_remove(self.coordinator.mic_server.add_state_listener(self.async_write_ha_state))
+
+    # Âm lượng nhạc qua APK (cùng đường với ``number.r1_am_luong``): thẻ YouTube chỉnh âm lượng loa bằng ``volume_set``.
+    @property
+    def volume_level(self) -> float | None:
+        am = self.coordinator.mic_server.am_luong
+        return round(am[0] / am[1], 4) if am else None
+
+    @property
+    def volume_step(self) -> float:
+        am = self.coordinator.mic_server.am_luong
+        return 1 / am[1] if am else 1 / const.VOL_MAX
+
+    async def async_set_volume_level(self, volume: float) -> None:
+        am = self.coordinator.mic_server.am_luong
+        toi_da = am[1] if am else const.VOL_MAX
+        muc = min(max(round(volume * toi_da), 0), toi_da)
+        try:
+            await self.coordinator.mic_server.gui_am_luong(muc)
+        except (ConnectionError, OSError, TimeoutError, ValueError) as exc:
+            raise HomeAssistantError("Loa chưa nối về HA (APK mic): chưa đổi được âm lượng") from exc
 
     @callback
     def _la_dmr(self, data: dict[str, Any]) -> bool:

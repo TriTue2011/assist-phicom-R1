@@ -5,6 +5,7 @@ from __future__ import annotations
 from homeassistant.components.number import NumberEntity, NumberMode, RestoreNumber
 from homeassistant.const import EntityCategory, UnitOfSoundPressure
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import (DEFAULT_MIC_GAIN_DB, EQ_BAND_NAMES, EQ_BANDS, EQ_MAX, EQ_MIN, GAIN_MAX, GAIN_MIN, MIC_GAIN_MAX,
@@ -33,6 +34,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
 
 
 class R1Volume(R1Entity, NumberEntity):
+    """Âm lượng NHẠC của loa: ĐỌC và GHI qua APK (``AudioManager.setStreamVolume(STREAM_MUSIC)``, chủ máy nghe xác nhận
+    22/10/2026: 0 mất tiếng, 8 to hơn). Đường cũ ``send_message`` (cổng 8080) không có tác dụng nên đã bỏ.
+    Không khả dụng khi APK chưa nối hoặc là bản cũ không báo âm lượng — không giả vờ."""
+
     _attr_translation_key = "volume"
     command = "set_volume"
     _attr_native_min_value, _attr_native_max_value = VOL_MIN, VOL_MAX
@@ -43,17 +48,27 @@ class R1Volume(R1Entity, NumberEntity):
         super().__init__(coordinator, "volume")
 
     def _value(self):
-        return self.coordinator.data.vol
+        am = self.coordinator.mic_server.am_luong
+        return am[0] if am else None
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.mic_server.receiving and self.coordinator.mic_server.am_luong is not None
 
     @property
     def native_value(self) -> float | None:
-        return self._value() if self.coordinator.data is not None else None
+        return self._value()
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self.coordinator.mic_server.add_state_listener(self.async_write_ha_state))
 
     async def async_set_native_value(self, value: float) -> None:
         vol = int(round(value))
-        # send_message: CHƯA KIỂM trên thiết bị (xem client.set_volume).
-        await self.coordinator.async_command(
-            lambda: self.coordinator.client.set_volume(vol), vol=vol)
+        try:
+            await self.coordinator.mic_server.gui_am_luong(vol)
+        except (ConnectionError, OSError, TimeoutError) as exc:
+            raise HomeAssistantError("Loa chưa nối về HA (APK mic): chưa đổi được âm lượng") from exc
 
 
 class R1EqBand(R1Entity, NumberEntity):
