@@ -13,7 +13,7 @@
  */
 (function () {
   "use strict";
-  var BUILD = "2026-10-22.7";
+  var BUILD = "2026-10-22.8";
 
   var PLATFORM = "r1_speaker";
   var STATUS = { tat: "off", nghe: "listening", gui: "sending" };
@@ -23,6 +23,7 @@
       off: "Tắt", listening: "Đang nghe", sending: "Đang gửi", unknown: "Không rõ",
       off_tip: "Không có tiếng nào rời loa.",
       listening_tip: "Loa chờ từ đánh thức; chưa gửi tiếng nào về Home Assistant.",
+      listening_tip_ha: "Mic loa gửi tiếng LIÊN TỤC về Home Assistant; HA đang dò từ đánh thức trong luồng đó.",
       sending_tip: "Tiếng mic đang được gửi về Home Assistant.",
       unknown_tip: "Không đọc được trạng thái mic — coi như mic có thể đang mở.",
       busy: "Đang có phiên", mute: "Tắt mic", music: "Nhạc", pause: "Tạm dừng", play: "Phát",
@@ -43,6 +44,7 @@
       off: "Off", listening: "Listening", sending: "Sending", unknown: "Unknown",
       off_tip: "No audio leaves the speaker.",
       listening_tip: "The speaker waits for the wake word; nothing is sent to Home Assistant yet.",
+      listening_tip_ha: "The speaker microphone streams CONTINUOUSLY to Home Assistant; HA listens for the wake word in that stream.",
       sending_tip: "Microphone audio is being sent to Home Assistant.",
       unknown_tip: "Mic status unreadable — assume the mic may be open.",
       busy: "Session in progress", mute: "Mute mic", music: "Music", pause: "Pause", play: "Play",
@@ -529,7 +531,9 @@
       var q = function (s) { return root.querySelector(s); };
       q("[data-mic]").dataset.status = m.mic.status;
       q("[data-mic-text]").textContent = t[m.mic.status];
-      q("[data-mic-tip]").textContent = t[m.mic.status + "_tip"] || "";
+      // Chế độ «ha»: luồng mic chảy liên tục về HA để HA dò từ đánh thức, nên «Đang nghe» KHÔNG có nghĩa là chưa gửi gì.
+      q("[data-mic-tip]").textContent = (m.mic.status === "listening" && m.mic.mode !== "speaker"
+        ? t.listening_tip_ha : t[m.mic.status + "_tip"]) || "";
       var hold = q("[data-hold]"), al = q("[data-always]");
       // Nút «giữ để nói» KHÔNG được vô hiệu hoá khi ngón tay còn đang giữ: phiên vừa mở làm trạng thái HA đổi
       // thoáng chốc, nút bị khoá giữa chừng là trình duyệt huỷ thao tác giữ và đàm thoại tắt ngay (như nút camera

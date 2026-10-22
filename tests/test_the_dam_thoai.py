@@ -140,7 +140,10 @@ const sr=card.shadowRoot, q=s=>sr.querySelector(s);
 const nghe={mic:q("[data-mic-text]").textContent, status:q("[data-mic]").dataset.status,
  holdDisabled:q("[data-hold]").disabled, alwaysDisabled:q("[data-always]").disabled,
  pauseDisabled:q("[data-pause]").disabled, playDisabled:q("[data-play]").disabled,
- noTalkButton:!q("[data-talk]") && !q("[data-end]")};
+ noTalkButton:!q("[data-talk]") && !q("[data-end]"), tipLoa:q("[data-mic-tip]").textContent};
+states["sensor.r1_trang_thai_mic"]={state:"nghe",attributes:{phien:null,che_do_tu_danh_thuc:"ha"}}; card.hass=mk();   // chế độ HA dò từ đánh thức
+nghe.tipHa=q("[data-mic-tip]").textContent;
+states["sensor.r1_trang_thai_mic"]={state:"nghe",attributes:{phien:null,che_do_tu_danh_thuc:"speaker",phia_loa:"da_ket_noi",so_lan_tu_choi:0}}; card.hass=mk();
 q("[data-pause]").click();                                          // tạm dừng nhạc (nút mic điện thoại có test riêng)
 // 3) Đang có phiên, mic đang gửi.
 states["sensor.r1_trang_thai_mic"]={state:"gui",attributes:{phien:"button",so_lan_tu_choi:1,tu_choi_gan_nhat:"x"}};
@@ -173,9 +176,12 @@ def test_giao_dien_the_dam_thoai_trang_thai_mic_nut_va_thuc_the_den_muon(tmp_pat
     assert m, out.stderr[-500:]
     r = json.loads(html.unescape(m.group(1)))
     assert r["truoc"] is True and r["loi"] is None              # thực thể đến muộn không làm hỏng thẻ
-    assert r["nghe"] == {"mic": "Đang nghe", "status": "listening", "holdDisabled": False,
+    nghe = {k: v for k, v in r["nghe"].items() if k not in ("tipLoa", "tipHa")}
+    assert nghe == {"mic": "Đang nghe", "status": "listening", "holdDisabled": False,
                          "alwaysDisabled": False, "pauseDisabled": False, "playDisabled": True,
                          "noTalkButton": True}                  # không còn nút «Đàm thoại» / «Kết thúc»
+    assert "chưa gửi tiếng nào" in r["nghe"]["tipLoa"]           # từ đánh thức trên loa: đúng là chưa gửi
+    assert "LIÊN TỤC" in r["nghe"]["tipHa"] and "dò từ đánh thức" in r["nghe"]["tipHa"]   # chế độ HA: luồng chảy liên tục
     assert r["gui"]["mic"] == "Đang gửi" and r["gui"]["status"] == "sending"
     assert r["gui"]["holdDisabled"] is True and r["gui"]["alwaysDisabled"] is True
     assert r["gui"]["holdTitle"] == "Đang có phiên" and r["gui"]["refused"]
