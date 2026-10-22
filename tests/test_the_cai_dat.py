@@ -147,14 +147,18 @@ async def test_nhom_anh_sang_hien_du_chuc_nang_hieu_ung_nhac_va_noi_ro_chua_co_d
         assert f'data-music-field="{field}"' in h
     assert "không trả lời" in h and 'class="sink warn"' in h          # nói thật: loa chưa nối (mat_ket_noi)
     assert h.count("kno.wled.ge") == 6                                # nguồn của từng hiệu ứng
-    assert "Đỏ chưa xác nhận" in h                                    # «lỗi» / «tắt mic» mặc định là đỏ
+    # Đèn firmware (mặc định): màu chọn trong bảng của firmware, có lời nhắn về làm tròn màu và độ sáng
+    assert 'data-fn="cho" data-field="color"' in h and "<select data-fn=\"cho\" data-field=\"color\">" in h
+    assert "Màu làm tròn về bảng màu của firmware" in h
+    for ten in ("Đỏ", "Xanh lá", "Xanh dương", "Cam", "Tím", "Lục lam", "Trắng"):
+        assert f">{ten}</option>" in h, ten
     assert "mặc định đề xuất, chưa đo" in h
     assert "Đèn theo nhạc của firmware" in h and "luma=50" in h       # đèn nhạc firmware: số đo; chỉnh ở thực thể
-    # loa nối nhưng máy chủ đèn quyền shell chưa chạy: nói rõ và chỉ cách bật
+    # loa nối nhưng APK chưa báo đèn firmware (APK bản cũ): nói rõ và chỉ cách xử lý
     g = _hass_gia(hass)
     g["states"][SID]["attributes"]["anh_sang"]["dich_vu_den"] = "CHO_DICH_VU_DEN"
     h2 = _html(_mo_hinh(g), {"open": True, "tab": "light"})
-    assert "chưa chạy" in h2 and "den_loa.sh" in h2 and 'class="sink warn"' in h2
+    assert "APK mới nhất" in h2 and "den_loa.sh" not in h2 and 'class="sink warn"' in h2
     # đèn sẵn sàng thì không còn cảnh báo
     g = _hass_gia(hass)
     g["states"][SID]["attributes"]["anh_sang"]["dich_vu_den"] = "san_sang"

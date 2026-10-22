@@ -27,7 +27,7 @@ public final class Khung {
 
     /** Bao HA may chu den (quyen shell) tren loa co chay khong. */
     public static byte[] trangThaiDen(boolean sanSang) {
-        return dongGoi(utf8("{\"type\":\"den_trang_thai\",\"san_sang\":" + (sanSang ? "true" : "false") + "}"));
+        return dongGoi(utf8("{\"type\":\"den_trang_thai\",\"san_sang\":" + (sanSang ? "true" : "false") + ",\"che_do\":\"firmware\"}"));
     }
 
     static byte[] utf8(String s) {

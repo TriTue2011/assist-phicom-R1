@@ -43,6 +43,33 @@ public final class TrungTamTin {
         }
     }
 
+    /** Nhom cua hieu ung den co san trong /system/etc/lights_effects.conf (cach app AI box dieu khien den). */
+    public static final int NHOM_HIEU_UNG = 0x1000;
+    /** ID hieu ung cho phep (200-206 tho, 251-255 sang co dinh, 500-505 mau thu nha may + tat, 510-515 tho 4 giay). */
+    private static final int[] HIEU_UNG_HOP_LE = {
+        200, 201, 202, 203, 204, 206, 251, 252, 253, 254, 255, 500, 501, 502, 503, 504, 505, 510, 511, 512, 513, 514, 515};
+
+    public static boolean laHieuUngHopLe(int id) {
+        for (int x : HIEU_UNG_HOP_LE) if (x == id) return true;
+        return false;
+    }
+
+    /** Gui mot hieu ung den cua firmware: sendMsg(0x1000, id, 0). Chi nhan ID trong danh sach cho phep. */
+    public static String guiHieuUng(int id) {
+        return laHieuUngHopLe(id) ? gui(NHOM_HIEU_UNG, id, 0) : "hieu ung den khong cho phep: " + id;
+    }
+
+    /** Co lay duoc dich vu msgcenter khong (dieu kien de dieu khien den bang hieu ung firmware). */
+    public static boolean sanSang() {
+        try {
+            Class<?> sm = Class.forName("android.os.ServiceManager");
+            IBinder b = (IBinder) sm.getMethod("getService", String.class).invoke(null, "msgcenter");
+            return b != null;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     /** Gui lenh den nhac (da kiem khoang gia tri). */
     public static String guiDenNhac(int ma, int giaTri) {
         String loi = hopLeDenNhac(ma, giaTri);

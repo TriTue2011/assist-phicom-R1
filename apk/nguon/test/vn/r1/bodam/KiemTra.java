@@ -547,6 +547,7 @@ public class KiemTra {
                 public String guiVien(int muc) { daGui.add("V" + muc); return null; }
                 public String guiDay(String rgb) { daGui.add("D" + rgb); return null; }
                 public boolean sanSang() { return true; }
+                public String guiHieuUng(int id) { daGui.add("E" + id); return null; }
             };
             ok(LenhDieuKhien.loaiDen("{\"type\":\"den_vien\",\"muc\":128}") == 1
                     && LenhDieuKhien.loaiDen("{\"type\":\"den_day\",\"rgb\":\"00ff7f\"}") == 2
@@ -575,6 +576,7 @@ public class KiemTra {
                 public String guiVien(int muc) { throw new IllegalStateException("no"); }
                 public String guiDay(String rgb) { throw new IllegalStateException("no"); }
                 public boolean sanSang() { throw new IllegalStateException("no"); }
+                public String guiHieuUng(int id) { daGui.add("E" + id); return null; }
             };
             ok(LenhDieuKhien.xuLyDen("{\"type\":\"den_vien\",\"muc\":5}", no) != null, "den: dich nem loi -> tra ly do");
 
@@ -610,9 +612,47 @@ public class KiemTra {
             ok(daGui.contains("V77") && !tl.isAlive(), "den: luong hang doi xu ly roi dung duoc");
 
             byte[] tt = Khung.trangThaiDen(true), tf = Khung.trangThaiDen(false);
-            ok(new String(tt, 4, tt.length - 4, "UTF-8").equals("{\"type\":\"den_trang_thai\",\"san_sang\":true}")
-                    && new String(tf, 4, tf.length - 4, "UTF-8").equals("{\"type\":\"den_trang_thai\",\"san_sang\":false}")
+            ok(new String(tt, 4, tt.length - 4, "UTF-8").equals("{\"type\":\"den_trang_thai\",\"san_sang\":true,\"che_do\":\"firmware\"}")
+                    && new String(tf, 4, tf.length - 4, "UTF-8").equals("{\"type\":\"den_trang_thai\",\"san_sang\":false,\"che_do\":\"firmware\"}")
                     && tt[3] == (byte) (tt.length - 4), "den: khung trang thai dung dinh dang HA doi");
+        }
+
+        // (f11e) Hieu ung den co san cua firmware (cach AI box): chi ID trong danh sach cho phep, khung chat, khong can may chu
+        {
+            final List<String> daGui2 = new ArrayList<String>();
+            LenhDieuKhien.DichDen gia2 = new LenhDieuKhien.DichDen() {
+                public String guiVien(int muc) { return "khong dung"; }
+                public String guiDay(String rgb) { return "khong dung"; }
+                public boolean sanSang() { return true; }
+                public String guiHieuUng(int id) { daGui2.add("E" + id); return null; }
+            };
+            ok(LenhDieuKhien.loaiDen("{\"type\":\"den_hieu_ung\",\"id\":501}") == 4, "hieu ung: nhan dang khung");
+            int[] tot = {200, 201, 202, 203, 204, 206, 251, 252, 253, 254, 255, 500, 501, 502, 503, 504, 505, 510, 511, 512, 513, 514, 515};
+            boolean heTot = true;
+            for (int id : tot) {
+                if (LenhDieuKhien.xuLyDen("{\"type\":\"den_hieu_ung\",\"id\":" + id + "}", gia2) != null) heTot = false;
+            }
+            ok(heTot && daGui2.size() == tot.length && daGui2.get(0).equals("E200"), "hieu ung: moi ID cho phep deu duoc gui");
+            int truoc2 = daGui2.size();
+            String[] xau = {"{\"type\":\"den_hieu_ung\",\"id\":0}", "{\"type\":\"den_hieu_ung\",\"id\":205}",
+                "{\"type\":\"den_hieu_ung\",\"id\":999}", "{\"type\":\"den_hieu_ung\",\"id\":4096}",
+                "{\"type\":\"den_hieu_ung\",\"id\":-1}", "{\"type\":\"den_hieu_ung\",\"id\":\"501\"}",
+                "{\"id\":501,\"type\":\"den_hieu_ung\"}", "{\"type\":\"den_hieu_ung\",\"id\":501,\"x\":1}",
+                "{\"type\":\"den_hieu_ung\",\"id\":501} "};
+            boolean chan2 = true;
+            for (String x : xau) if (LenhDieuKhien.xuLyDen(x, gia2) == null) chan2 = false;
+            ok(chan2 && daGui2.size() == truoc2, "hieu ung: ID la/ngoai danh sach/khung lech dinh dang khong bao gio gui");
+            final List<Boolean> bao = new ArrayList<Boolean>();
+            DenHangDoi hh = new DenHangDoi(gia2, new DenHangDoi.Ben() { public void baoSanSang(boolean b) { bao.add(b); } });
+            daGui2.clear();
+            hh.dat("{\"type\":\"den_hieu_ung\",\"id\":500}");
+            hh.dat("{\"type\":\"den_hieu_ung\",\"id\":501}");     // moi nhat thang o o day
+            hh.dat("{\"type\":\"den_hieu_ung\",\"id\":505}");
+            hh.dat("{\"type\":\"den_hieu_ung\",\"id\":503}");     // moi nhat thang o o vien
+            hh.chayMotLuot();
+            ok(daGui2.toString().equals("[E501, E503]"), "hieu ung: hang doi giu moi nhat cua day (501) va vien (503), day truoc vien: " + daGui2);
+            ok(!TrungTamTin.laHieuUngHopLe(0) && TrungTamTin.laHieuUngHopLe(503) && !TrungTamTin.laHieuUngHopLe(205),
+                    "hieu ung: danh sach cho phep");
         }
 
         // (f11c) May chu den quyen shell: chi nhan dung ba lenh, khong bao gio chay chuoi do nguoi gui dua vao

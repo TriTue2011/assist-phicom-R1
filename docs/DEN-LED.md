@@ -7,6 +7,14 @@ có). Vì vậy HA lưu cài đặt và tính ra đèn nào cần sáng nhưng *
 một bản `LightsSink` thật. Giao diện: `den_port.py`; bộ điều khiển: `den.py`; hiệu ứng:
 `hieu_ung.py`; tóm tắt cho thẻ: `cai_dat.py` (`sensor.r1_cai_dat`); thẻ: `www/r1-settings-card.js`.
 
+## 0. ĐƯỜNG CHÍNH (23/10/2026): hiệu ứng có sẵn của firmware, không cần máy chủ
+
+Các mục 1 và dưới đây mô tả đường «máy chủ đèn quyền shell» (`lights_test`, `scripts/den_loa.sh`) đã dùng trước đó; **mặc định
+nay HA điều khiển đèn bằng hiệu ứng có sẵn của firmware** như app AI box: APK gọi `msgcenter.sendMsg(0x1000, ID, 0)`
+(`TrungTamTin.guiHieuUng`, danh sách ID cho phép, `LenhDieuKhien` khung `{"type":"den_hieu_ung","id":N}`), HA ánh xạ màu/hiệu
+ứng sang ID ở `den_firmware.py` (bảng màu, ID, giới hạn). Không có màu tuỳ ý, không chỉnh độ sáng riêng; xem
+`docs/CAI-DAT-CHI-TIET.md` mục 5. Máy chủ shell chỉ còn là đường dự phòng cho hiệu ứng phần mềm (không dùng mặc định).
+
 ## 1. Phần cứng đã kiểm (chủ máy xác nhận bằng mắt)
 
 | Đèn | Mặt nạ | Màu | Ghi chú |

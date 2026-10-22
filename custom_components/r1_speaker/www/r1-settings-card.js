@@ -45,7 +45,8 @@
       read_only: "Chỉ đọc — sửa ở trang Tuỳ chọn của tích hợp", noise: "Khử tạp âm",
       agc: "Tự chỉnh mức (AGC)", limiter: "Bộ hạn đỉnh", on: "Bật", off: "Tắt", goto: "Mở tuỳ chọn",
       sink_pending: "Chưa có dịch vụ đèn trên loa: cài đặt được lưu nhưng đèn CHƯA sáng.",
-      sink_svc: "Dịch vụ đèn trên loa chưa chạy: cài đặt được lưu, đèn sẽ sáng khi bật (scripts/den_loa.sh).",
+      sink_svc: "Loa chưa sẵn sàng điều khiển đèn bằng hiệu ứng firmware: hãy cài APK mới nhất lên loa.",
+      fw_sang: "Đèn firmware không chỉnh độ sáng từng chức năng: 0 = tắt, lớn hơn 0 = bật. Màu làm tròn về bảng màu của firmware; thở và nháy chạy gốc, các hiệu ứng còn lại chạy bằng cách đổi liên tục màu.",
       sink_lost: "Dịch vụ đèn trên loa không trả lời.", sink_ready: "Dịch vụ đèn: sẵn sàng",
       sink_err: "Lỗi gần nhất",
       fn: { cho: "Chờ / từ đánh thức", nghe: "Đang nghe", nghi: "Đang nghĩ", phan_hoi: "Đang trả lời",
@@ -87,7 +88,8 @@
       noise: "Noise suppression", agc: "Auto gain (AGC)", limiter: "Peak limiter", on: "On", off: "Off",
       goto: "Open options",
       sink_pending: "No light service on the speaker yet: settings are saved but the light does NOT shine.",
-      sink_svc: "The light service on the speaker is not running: settings are saved, the light shines once it is started (scripts/den_loa.sh).",
+      sink_svc: "The speaker is not ready for firmware light effects: install the latest APK on the speaker.",
+      fw_sang: "Firmware lights have no per-function brightness: 0 = off, above 0 = on. Colours snap to the firmware palette; breathe and blink run natively, other effects run by cycling colours.",
       sink_lost: "The light service on the speaker is not answering.", sink_ready: "Light service: ready",
       sink_err: "Last error",
       fn: { cho: "Idle / wake word", nghe: "Listening", nghi: "Thinking", phan_hoi: "Responding",
@@ -189,6 +191,8 @@
         sink: { state: al.dich_vu_den || null, ready: al.dich_vu_den === "san_sang",
                 lost: al.dich_vu_den === "mat_ket_noi", svc: al.dich_vu_den === "CHO_DICH_VU_DEN", error: al.loi_dich_vu || null },
         functions: fns, music: music, current: al.dang_ap_dung || null,
+        fw: al.den_firmware === true, hoTro: Array.isArray(al.hieu_ung_ho_tro) ? al.hieu_ung_ho_tro : null,
+        bangMau: Array.isArray(al.bang_mau_firmware) ? al.bang_mau_firmware : [],
         effects: (al.hieu_ung || []).map(function (h) {
           return { id: h.id, name: h.ten, nameEn: h.ten_en, source: h.nguon, rimNote: h.vien };
         }),
@@ -322,6 +326,30 @@
     return h + "</select>";
   }
 
+  /* Đèn firmware: chỉ các hiệu ứng làm được; màu chọn trong bảng của firmware (màu gần nhất với màu đang lưu). */
+  function hieuUngDung(L) {
+    if (!L.hoTro) return L.effects;
+    return L.effects.filter(function (e) { return L.hoTro.indexOf(e.id) >= 0; });
+  }
+  function rgbOf(hex) { return [1, 3, 5].map(function (i) { return parseInt(String(hex).substr(i, 2), 16) || 0; }); }
+  function mauGan(hex, bang) {
+    var c = rgbOf(hex), best = null, bd = 1e12;
+    bang.forEach(function (b) {
+      var r = rgbOf(b.rgb), d = 0;
+      for (var i = 0; i < 3; i++) d += (c[i] - r[i]) * (c[i] - r[i]);
+      if (d < bd) { bd = d; best = b; }
+    });
+    return best;
+  }
+  function mauSelect(attrs, hex, L, lg) {
+    var gan = mauGan(hexOk(hex), L.bangMau), o = "";
+    L.bangMau.forEach(function (b) {
+      o += '<option value="' + esc(b.rgb) + '"' + (gan && gan.rgb === b.rgb ? " selected" : "") + ">" +
+        esc(lg === "vi" ? b.ten : b.ten_en) + (b.tho ? "" : "") + "</option>";
+    });
+    return "<select " + attrs + ">" + o + "</select>";
+  }
+
   function htmlLight(m, t, lg) {
     var L = m.light, h = '<div data-panel="light">';
     var s = L.sink;
@@ -338,7 +366,7 @@
         '<div class="row"><label>' + esc(t.enabled) + '</label><input type="checkbox" data-music-field="enabled"' +
         (mu.enabled ? " checked" : "") + "></div>" +
         '<div class="row"><label>' + esc(t.effect) + "</label>" +
-        effectSelect('data-music-field="effect"', mu.effect, L.effects, t, lg) + "</div>" +
+        effectSelect('data-music-field="effect"', mu.effect, hieuUngDung(L), t, lg) + "</div>" +
         '<div class="row"><label>' + esc(t.brightness) + "</label>" +
         slider('data-music-field="brightness"', mu.brightness, 0, 100, 5, false) +
         '<span class="val">' + esc(mu.brightness) + "</span></div>" +
@@ -364,11 +392,13 @@
       (f.enabled ? " checked" : "") + "></div>" +
       '<div class="row"><label>' + esc(t.rim) + "</label><input type=\"checkbox\" " + d + '"rim"' +
       (f.rim ? " checked" : "") + "></div>" +
-      '<div class="row"><label>' + esc(t.color) + '</label><input type="color" ' + d + '"color" value="' +
-      esc(hexOk(f.color)) + '"></div>' +
-      (isRed(f.color) ? '<div class="warn small">' + esc(t.red_warn) + "</div>" : "") +
-      '<div class="row"><label>' + esc(t.effect) + "</label>" + effectSelect(d + '"effect"', f.effect, L.effects, t, lg) +
+      '<div class="row"><label>' + esc(t.color) + "</label>" + (L.fw && L.bangMau.length
+        ? mauSelect(d + '"color"', f.color, L, lg)
+        : '<input type="color" ' + d + '"color" value="' + esc(hexOk(f.color)) + '">') + "</div>" +
+      (!L.fw && isRed(f.color) ? '<div class="warn small">' + esc(t.red_warn) + "</div>" : "") +
+      '<div class="row"><label>' + esc(t.effect) + "</label>" + effectSelect(d + '"effect"', f.effect, hieuUngDung(L), t, lg) +
       "</div>" +
+      (L.fw ? '<div class="note">' + esc(t.fw_sang) + "</div>" : "") +
       '<div class="row"><label>' + esc(t.brightness) + "</label>" + slider(d + '"brightness"', f.brightness, 0, 100, 5, false) +
       '<span class="val">' + esc(f.brightness) + "</span></div>" +
       (f.isDefault ? '<div class="note">' + esc(t.proposal) + "</div>" : "") +

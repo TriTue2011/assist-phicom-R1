@@ -62,7 +62,7 @@ nữa với IP khác, mỗi loa có khoá, cổng, phiên, đèn và thực th�
 | Loa | media_player | Phát nhạc, tạm dừng, âm lượng; nhận `play_media`, TTS, thông báo | |
 | Bộ đàm | binary_sensor | Bật khi loa đã nối về HA (kênh phát sẵn sàng) | |
 | Từ đánh thức | binary_sensor | Bật thoáng chốc khi có trigger từ đánh thức | |
-| Dịch vụ đèn | binary_sensor | Máy chủ đèn quyền shell trên loa có chạy không (mục 5) | tắt = chưa chạy |
+| Dịch vụ đèn | binary_sensor | APK trên loa có sẵn sàng điều khiển đèn bằng hiệu ứng firmware không (mục 5) | tắt = APK chưa nối hoặc là bản cũ |
 | Trạng thái mic | sensor | `tat` / `nghe` / `gui`; ở chế độ HA, «nghe» = luồng chảy liên tục về HA và HA đang dò từ đánh thức | |
 | Tóm tắt cài đặt | sensor | Dữ liệu cho thẻ (đừng dùng trong tự động hoá) | |
 | Trạng thái thiết bị | sensor | Số đo thiết bị từ loa | |
@@ -167,10 +167,28 @@ Nhạc phát qua AirPlay/DLNA không đi qua đường tiếng của HA nên kh�
 
 ## 5. Đèn
 
-Loa có **đèn viền** (chỉ màu trắng, chỉnh mức sáng) và **đèn đáy** (RGB). HA điều khiển chúng qua **máy chủ đèn
-quyền shell** trên loa; máy chủ này **không tự sống sau khi loa khởi động lại**, nên cần một tiến trình
-`scripts/den_loa.sh <IP-loa> giam-sat` chạy liên tục ở một máy trong nhà. Cảm biến «Dịch vụ đèn» cho biết nó chạy chưa.
-Chưa chạy thì cài đặt vẫn lưu, đèn chưa sáng. **Chưa có xác nhận bằng mắt cho đường HA → APK → máy chủ đèn.**
+Loa có **đèn viền** (24 đèn, chỉ màu trắng) và **đèn đáy** (15 đèn, RGB). HA điều khiển chúng bằng **hiệu ứng CÓ SẴN
+của firmware**, đúng cách app AI box làm: HA gửi `den_hieu_ung` xuống APK trên loa, APK gọi dịch vụ hệ thống
+`msgcenter.sendMsg(0x1000, ID, 0)` với ID lấy từ `/system/etc/lights_effects.conf`. **Không cần máy chủ quyền shell, không
+cần máy ngoài**: chỉ cần APK mới đang nối vào HA (cảm biến «Dịch vụ đèn» = bật). Hệ quả: chỉ có tập màu và hiệu ứng khai
+trong tệp của firmware, không có màu tuỳ ý, không chỉnh độ sáng từng chức năng (độ sáng 0 hoặc «Độ sáng đèn» = 0 là
+TẮT, lớn hơn 0 là bật). **Chưa có xác nhận bằng mắt của chủ nhà cho tên màu của từng ID** (tên lấy từ chú thích của tệp).
+
+| Màu (đèn đáy) | Sáng cố định | Thở | Ghi chú |
+|---|---|---|---|
+| Đỏ | 500 | 206 (nháy nhanh, chu kỳ 0,5 s) | «Nháy» chỉ có màu đỏ |
+| Xanh lá | 501 | không có | thở rơi về sáng cố định |
+| Xanh dương | 502 | 203 | |
+| Cam | 252 | 200 | |
+| Tím | 253 | không có | |
+| Lục lam | 255 | 204 | |
+| Trắng | không có | 202 | đáy không có «sáng cố định trắng» |
+| Tắt | 504 | | |
+
+Viền: trắng 503, tắt 505. **Hiệu ứng:** «sáng cố định», «thở» và «nhấp nháy» (đỏ) là hiệu ứng GỐC của firmware (một ID); «cầu vồng»,
+«nhịp tim», «pháo hoa», «chớp» chạy bằng cách HA đổi liên tiếp giữa các màu của firmware (như AI box gửi chuỗi ID kèm nghỉ
+ngắn), nên màu bị làm tròn về bảng trên và bước tối thiểu khoảng 0,1 giây. Firmware còn có tăng dần/giảm dần xanh dương theo
+bước (300–315, 400–415) và các mẫu xoay vòng quanh viền (1–25); **chưa dùng**.
 
 Tám chức năng, mỗi chức năng có: **bật/tắt**, **dùng đèn viền**, **màu đèn đáy**, **hiệu ứng**, **độ sáng 0–100**. Khi
 nhiều chức năng cùng đúng, chức năng đứng trước thắng:
@@ -188,10 +206,8 @@ nhiều chức năng cùng đúng, chức năng đứng trước thắng:
 | `loi` Lỗi | Phiên bị lỗi | bật / có / đỏ / nhấp nháy / 80 |
 | `tat_mic` Tắt mic | Mic đang tắt | bật / có / đỏ / không / 25 |
 
-Hiệu ứng: `không`, `thở`, `cầu vồng`, `nhấp nháy`, `nhịp tim`, `pháo hoa`, `chớp` (mô tả và nguồn tham khảo ở thẻ).
-Màu đỏ mặc định cho «Lỗi»/«Tắt mic» **chưa xác nhận** bằng mắt: chủ nhà chỉ xác nhận xanh lá và xanh dương trên đèn đáy.
-**Độ sáng đèn** (thanh «Độ sáng đèn») là độ sáng chung nhân vào độ sáng từng chức năng. Nút **Thử** của mỗi chức năng
-bật thử đèn đó vài giây. **Đèn theo nhạc của firmware** (công tắc + hai thanh) là đèn riêng của hãng, chỉnh được từ app.
+Hiệu ứng của tích hợp: `không`, `thở`, `cầu vồng`, `nhấp nháy`, `nhịp tim`, `pháo hoa`, `chớp`; trên đèn firmware tất cả đều
+chạy (xem bảng trên). Máy chủ đèn quyền shell cũ (`scripts/den_loa.sh`) không còn dùng mặc định. Nút **Thử** của mỗi chức năng bật thử đèn đó vài giây. **Đèn theo nhạc của firmware** (công tắc + hai thanh) là đèn riêng của hãng, chỉnh được từ app.
 
 ---
 

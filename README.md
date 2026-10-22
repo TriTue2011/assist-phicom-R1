@@ -152,10 +152,11 @@ adb shell /system/bin/lights_test set 7fff 00ff00         # đáy xanh lá
 adb shell /system/bin/lights_test set 7fff 0000ff         # đáy xanh dương
 ```
 
-**Đèn chỉ sáng khi có dịch vụ trên loa.** Không có đường nào từ HA tới `lights_test`: tích hợp tính toán và lưu cài đặt đèn theo chức
-năng (nghe, nghĩ, phản hồi, lỗi, tắt mic…) nhưng **không gửi gì tới loa** cho tới khi có một dịch vụ đèn trên loa; dịch vụ đó **chưa tồn tại** và APK
-`vn.r1.bodam` cũng **không điều khiển đèn**. Thẻ cài đặt nói thẳng điều này. Chi tiết: `docs/DEN-LED.md`. Hiệu ứng của firmware (ID 200–412) không áp dụng
-được từ shell; các màu pha (vàng, tím…) và mọi giá trị mặc định của bảng chức năng đều **chưa đo**.
+**Đèn chạy bằng hiệu ứng CÓ SẴN của firmware, như app AI box.** HA gửi khung `den_hieu_ung` xuống APK `vn.r1.bodam`, APK gọi
+`msgcenter.sendMsg(0x1000, ID, 0)`; không cần máy chủ quyền shell hay máy ngoài (cần APK mới). Chỉ có tập màu của firmware (đỏ,
+xanh lá, xanh dương, cam, tím, lục lam, trắng) và hiệu ứng sáng cố định / thở / nháy gốc; cầu vồng, nhịp tim, pháo hoa, chớp chạy
+bằng chuỗi ID. Không chỉnh được độ sáng riêng (0 = tắt). Chi tiết: `docs/CAI-DAT-CHI-TIET.md` mục 5. **Tên màu của từng ID chưa xác nhận
+bằng mắt**; mọi giá trị mặc định của bảng chức năng đều **chưa đo**.
 
 ## 6. Nối mic loa về HA
 
@@ -192,7 +193,7 @@ Kiểm thử không cần nút giữa (chỉ bản NV245 kiểm thử): `adb she
   đối chiếu bytecode của APK: khung giao thức, mã 195, `repeatCount==0`, manifest khớp báo cáo.
 - **Chưa kiểm trên loa thật**: cài APK; mic qua `AudioRecord` có ra tiếng không và ai đang giữ mic (ứng dụng giọng nói gốc của loa có thể giữ); độ trễ; nút giữa
   có tới được app; Bluetooth bật/tắt; `pm hide`; mọi đèn do HA điều khiển; thẻ trong trình duyệt thật ngoài Chrome không đầu.
-- **Chưa có**: dịch vụ phát PCM thô ra loa (bộ đàm nói vào loa), từ đánh thức chạy trên loa, dịch vụ đèn trên loa, đàm thoại hai chiều song công từ HA
+- **Chưa có**: dịch vụ phát PCM thô ra loa (bộ đàm nói vào loa), từ đánh thức chạy trên loa (đèn đã có bằng hiệu ứng firmware; đàm thoại hai chiều đã có ở thẻ)
   (việc này đang được làm, chưa hoàn thành).
 
 ## 8. Quyền riêng tư
@@ -200,7 +201,7 @@ Kiểm thử không cần nút giữa (chỉ bản NV245 kiểm thử): `adb she
 - **Mic chỉ gửi khi được bật.** APK không ghi âm ra bộ nhớ hay log, không tự khởi động cùng máy (không có receiver khởi động), không có wake-word, chỉ ghi
   khi bạn bật bằng nút trên màn hình, nút giữa, hoặc lệnh kiểm thử. Tắt là dừng ghi, gửi khung `end` và đóng kết nối.
 - **Báo hiệu khi đang gửi:** APK chạy dịch vụ tiền cảnh với thông báo «Đang gửi mic về Home Assistant»; trong HA, `sensor.r1_trang_thai_mic` hiện `gui`.
-  **Nhưng:** loa không có màn hình nên thông báo gần như không ai thấy, và **chưa có đèn báo** (không có dịch vụ đèn trên loa — mục 5). Đừng coi hai thứ này
+  **Nhưng:** loa không có màn hình nên thông báo gần như không ai thấy, và đèn báo chạy bằng hiệu ứng firmware (cần APK mới, mục 5; màu CHƯA xác nhận bằng mắt). Đừng coi hai thứ này
   là chỉ báo đủ cho người đứng cạnh loa.
 - Tắt mic bằng `switch.r1_tat_mic` trong HA đóng kết nối của loa (mục 6).
 - **Đường truyền không mã hoá**: khoá và tiếng đi qua TCP trơn trong LAN. Chỉ dùng trong mạng tin cậy; đầu nhận lọc theo IP loa và khoá nhưng IP có thể bị giả mạo trong LAN.

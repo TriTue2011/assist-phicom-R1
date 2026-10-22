@@ -13,7 +13,7 @@ public final class DenHangDoi implements Runnable {
 
     private final LenhDieuKhien.DichDen dich;
     private final Ben ben;
-    private String vien, day;
+    private String vien, day, heRim, heDay;
     private boolean hoi, dung;
 
     public DenHangDoi(LenhDieuKhien.DichDen dich, Ben ben) {
@@ -27,6 +27,10 @@ public final class DenHangDoi implements Runnable {
         if (loai == 1) vien = khung;
         else if (loai == 2) day = khung;
         else if (loai == 3) hoi = true;
+        else if (loai == 4) {
+            // Hieu ung firmware: ID 503/505 la den vien, con lai la den day — moi bo mot o «moi nhat thang».
+            if (khung.endsWith(":503}") || khung.endsWith(":505}")) heRim = khung; else heDay = khung;
+        }
         else return false;
         notifyAll();
         return true;
@@ -39,13 +43,17 @@ public final class DenHangDoi implements Runnable {
 
     /** Lam het viec dang cho (khong doi). Tra ve true neu co viec. */
     public boolean chayMotLuot() {
-        String v, d;
+        String v, d, hr, hd;
         boolean h;
         synchronized (this) {
             v = vien; vien = null;
             d = day; day = null;
+            hr = heRim; heRim = null;
+            hd = heDay; heDay = null;
             h = hoi; hoi = false;
         }
+        if (hd != null) LenhDieuKhien.xuLyDen(hd, dich);
+        if (hr != null) LenhDieuKhien.xuLyDen(hr, dich);
         if (v != null) LenhDieuKhien.xuLyDen(v, dich);
         if (d != null) LenhDieuKhien.xuLyDen(d, dich);
         if (h) {
@@ -53,13 +61,13 @@ public final class DenHangDoi implements Runnable {
             try { san = dich.sanSang(); } catch (Throwable t) { san = false; }
             ben.baoSanSang(san);
         }
-        return v != null || d != null || h;
+        return v != null || d != null || hr != null || hd != null || h;
     }
 
     @Override public void run() {
         while (true) {
             synchronized (this) {
-                while (!dung && vien == null && day == null && !hoi) {
+                while (!dung && vien == null && day == null && heRim == null && heDay == null && !hoi) {
                     try { wait(); } catch (InterruptedException e) { return; }
                 }
                 if (dung) return;

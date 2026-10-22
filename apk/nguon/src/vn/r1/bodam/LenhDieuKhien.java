@@ -35,24 +35,29 @@ public final class LenhDieuKhien {
         /** rgb: sau so hex thuong. */
         String guiDay(String rgb);
         boolean sanSang();
+        /** Hieu ung den co san cua firmware (ID da kiem danh sach cho phep o noi goi). null = gui duoc. */
+        String guiHieuUng(int id);
     }
 
     public static final DichDen DEN_THAT = new DichDen() {
+        @Override public String guiHieuUng(int id) { return TrungTamTin.guiHieuUng(id); }
         @Override public String guiVien(int muc) { return DenCau.vien(muc); }
         @Override public String guiDay(String rgb) { return DenCau.day(rgb); }
-        @Override public boolean sanSang() { return DenCau.sanSang(); }
+        @Override public boolean sanSang() { return TrungTamTin.sanSang(); }
     };
 
     private static final Pattern DEN_VIEN = Pattern.compile("^\\{\"type\":\"den_vien\",\"muc\":(\\d{1,3})\\}$");
     private static final Pattern DEN_DAY = Pattern.compile("^\\{\"type\":\"den_day\",\"rgb\":\"([0-9a-f]{6})\"\\}$");
+    private static final Pattern DEN_HIEU_UNG = Pattern.compile("^\\{\"type\":\"den_hieu_ung\",\"id\":(\\d{1,3})\\}$");
     private static final String DEN_HOI = "{\"type\":\"den_hoi\"}";
 
-    /** Loai khung den: 1 = vien, 2 = day, 3 = hoi san sang, 0 = khong phai khung den hop le. */
+    /** Loai khung den: 1 = vien, 2 = day, 3 = hoi san sang, 4 = hieu ung firmware, 0 = khong phai khung den hop le. */
     public static int loaiDen(String khung) {
         if (khung == null || khung.length() > DAI_TOI_DA) return 0;
         if (DEN_HOI.equals(khung)) return 3;
         if (DEN_VIEN.matcher(khung).matches()) return 1;
         if (DEN_DAY.matcher(khung).matches()) return 2;
+        if (DEN_HIEU_UNG.matcher(khung).matches()) return 4;
         return 0;
     }
 
@@ -73,7 +78,14 @@ public final class LenhDieuKhien {
                 m.matches();
                 return dich.guiDay(m.group(1));
             }
-            return "khong phai lenh den vien/day";
+            if (loai == 4) {
+                Matcher m = DEN_HIEU_UNG.matcher(khung);
+                m.matches();
+                int id = Integer.parseInt(m.group(1));
+                if (!TrungTamTin.laHieuUngHopLe(id)) return "hieu ung den khong cho phep: " + id;
+                return dich.guiHieuUng(id);
+            }
+            return "khong phai lenh den vien/day/hieu ung";
         } catch (Throwable t) {
             return t.toString();
         }

@@ -163,6 +163,13 @@ class R1MicServer:
         """Gửi một khúc PCM16 16 kHz mono xuống APK loa (cùng kết nối đang nhận mic)."""
         await self._gui_khung(pcm)
 
+    async def gui_hieu_ung(self, ma: int) -> None:
+        """Hiệu ứng đèn CÓ SẴN của firmware (ID trong ``den_firmware.ID_HOP_LE``). Hợp đồng khung với ``LenhDieuKhien.java``."""
+        from .den_firmware import ID_HOP_LE
+        if isinstance(ma, bool) or not isinstance(ma, int) or ma not in ID_HOP_LE:
+            raise ValueError(f"hiệu ứng đèn ngoài danh sách cho phép: {ma!r}")
+        await self._gui_khung(json.dumps({"type": "den_hieu_ung", "id": ma}, separators=(",", ":")).encode())
+
     async def gui_den_vien(self, muc: int) -> None:
         """Đèn viền (CHỈ trắng) mức 0–255 qua APK loa → máy chủ đèn quyền shell. Hợp đồng khung với
         ``LenhDieuKhien.java`` (khoá đúng thứ tự, dạng tách gọn)."""
@@ -259,7 +266,8 @@ class R1MicServer:
                         if loai == "end":
                             break                   # loa báo kết thúc phiên
                         if loai == "den_trang_thai":
-                            moi = ctrl.get("san_sang") is True
+                            # Chỉ coi là sẵn sàng khi APK báo ĐÈN FIRMWARE (APK cũ dùng máy chủ shell không báo che_do).
+                            moi = ctrl.get("san_sang") is True and ctrl.get("che_do") == "firmware"
                             if moi != self.den_san_sang:
                                 self.den_san_sang = moi
                                 self._notify_state()

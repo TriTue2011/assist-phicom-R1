@@ -43,6 +43,7 @@ from homeassistant.helpers.storage import Store
 
 from .coordinator import R1ConfigEntry
 from .const import DOMAIN, LIGHT_ERROR_HOLD_S, LIGHT_PREVIEW_MAX_S, LIGHT_PREVIEW_S
+from . import den_firmware as fw
 from .den_port import RGB, LightsError, LightsSink, NullLights
 from .hieu_ung import HIEU_UNG, KHONG, dung, sang_rgb, sang_vien
 
@@ -401,6 +402,9 @@ class R1Lights:
     # ── Áp xuống sink ─────────────────────────────────────────────────────────
 
     async def _tat(self, sink: LightsSink) -> None:
+        if getattr(sink, "firmware", False):
+            await sink.tat()
+            return
         await sink.set_rim(0)
         await sink.set_base((0, 0, 0))
 
@@ -416,6 +420,9 @@ class R1Lights:
                 await sink.stop_effect()          # KHÔNG bao giờ để hai nơi cùng ghi đèn
                 if not p.enabled:
                     await self._tat(sink)
+                elif getattr(sink, "firmware", False) and p.effect in getattr(sink, "hieu_ung_goc", ()):
+                    # Hiệu ứng GỐC của firmware (một ID): màu gần nhất trong bảng; sáng cố định / thở / nháy; viền trắng.
+                    await sink.ap_dung_ham(rim=p.rim, color=mau_rgb(p.color), effect=p.effect, sang=sang)
                 elif p.effect != KHONG:
                     await sink.play_effect(
                         dung(p.effect, mau_rgb(p.color), sang, p.rim, self._rng),
@@ -443,6 +450,12 @@ class R1Lights:
             "hieu_ung": [{"id": h.id, "ten": h.ten, "ten_en": h.ten_en, "mo_ta": h.mo_ta,
                           "vien": h.vien, "nguon": h.nguon} for h in HIEU_UNG.values()],
             "dich_vu_den": self.sink_state,
+            # Đèn firmware chỉ làm được tập màu/hiệu ứng cố định (None = làm được mọi thứ như sink phần mềm).
+            "den_firmware": bool(getattr(self._sink, "firmware", False)),
+            "hieu_ung_ho_tro": list(getattr(self._sink, "hieu_ung_ho_tro", None) or []) or None,
+            "hieu_ung_goc": list(getattr(self._sink, "hieu_ung_goc", None) or []) or None,
+            "bang_mau_firmware": [{"ten": m.ten, "ten_en": m.ten_en, "rgb": "#%02x%02x%02x" % m.rgb,
+                                   "tho": m.tho is not None} for m in fw.MAU.values()],
             "do_sang_chung": self.master,
             "loi_dich_vu": self.last_error,
             # Đèn theo nhạc CỦA FIRMWARE: đọc ở đây; điều khiển bằng các thực thể ``r1_*_den_nhac`` (qua APK).
