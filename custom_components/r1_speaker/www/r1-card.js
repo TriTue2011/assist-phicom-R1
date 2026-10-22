@@ -5,7 +5,7 @@
  * dưới tên riêng (r1-*-card-n): trình duyệt/ứng dụng HA/proxy giữ bản cũ của URL cố định hàng giờ (có
  * lớp đệm còn bỏ qua cả tham số ?...), nên dùng thẳng ``<r1-talk-card>`` thì sửa xong vẫn thấy bản cũ.
  * Nếu vẫn nhận bản cũ thì dùng tạm thẻ cũ và ghi rõ ở cuối thẻ. */
-const BUILD = "2026-10-22.9";
+const BUILD = "2026-10-22.10";
 
 const TABS = [
   { id: "talk", tag: "r1-talk-card-n", ten: "Đàm thoại", cfg: { show_eq: false } },
@@ -52,18 +52,17 @@ class R1Card extends HTMLElement {
       ".tab{flex:0 0 auto;border:0;border-radius:16px;padding:6px 12px;font-size:.85rem;cursor:pointer;background:var(--secondary-background-color,#2a2a2a);color:var(--primary-text-color,#fff)}",
       ".tab.sel{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff)}",
       ".ver{font-size:.7rem;opacity:.5;padding:2px 4px}",
+      ".tieude{font-size:1.1rem;font-weight:600;padding:4px 4px 2px}",
     ].join("");
     this._root.appendChild(style);
-    const head = document.createElement("button");
-    head.className = "tab sel";
-    head.textContent = "Loa R1 ▸";
-    head.addEventListener("click", () => this._mo(!this._open));
+    // Tên loa và hàng tab LUÔN hiện; chỉ NỘI DUNG (Đàm thoại / EQ / Cài đặt-âm thanh) đóng sẵn tới khi bấm tab.
+    const head = document.createElement("div");
+    head.className = "tieude";
+    head.textContent = "Loa R1";
     this._root.appendChild(head);
     this._head = head;
     this._body = document.createElement("div");
-    this._body.style.display = "none";
     this._root.appendChild(this._body);
-    this._open = false;
     this._parts = {};
     this._btn = {};
     this._sel = null;
@@ -99,11 +98,6 @@ class R1Card extends HTMLElement {
     d.className = "ver";
     d.textContent = "Không nạp được thẻ R1: " + loi;
     this._body.appendChild(d);
-  }
-  _mo(mo) {
-    this._open = mo;
-    this._body.style.display = mo ? "" : "none";
-    this._head.textContent = mo ? "Loa R1 ▾" : "Loa R1 ▸";
   }
   _chon(id) {
     // Bấm tab đang mở thì đóng lại; bấm tab khác thì mở tab đó (mặc định đều đóng)

@@ -73,7 +73,7 @@ nữa với IP khác, mỗi loa có khoá, cổng, phiên, đèn và thực th�
 
 Thêm tài nguyên (Cài đặt → Bảng điều khiển → ⋮ → Tài nguyên, loại *Mô-đun JavaScript*):
 `/r1_speaker/r1-card.js`, `/r1_speaker/r1-talk-card.js`, `/r1_speaker/r1-settings-card.js`. Rồi thêm thẻ
-`type: custom:r1-card` (nhiều loa: thêm `device_id`). Thẻ đóng sẵn; bấm tab để mở.
+`type: custom:r1-card` (nhiều loa: thêm `device_id`). Tên loa và hàng tab luôn hiện; nội dung từng tab đóng sẵn, bấm tab để mở.
 Nếu thẻ báo «Custom element not found»: tải lại cưỡng bức, xoá đệm giao diện, hoặc thêm `?v=<số>` sau địa chỉ tài nguyên.
 
 **Tab Đàm thoại**

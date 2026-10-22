@@ -51,8 +51,8 @@ const vis=el=>!!el && el.style.display!=="none";
 const tabs=[...sr.querySelectorAll(".tabs .tab")];
 const trang=()=>({thanVao:vis(card._body), talk:vis(card._parts.talk), eq:vis(card._parts.eq), settings:vis(card._parts.settings)});
 const dau=trang();
-sr.querySelector("button.tab.sel").click();                       // mở thẻ
-const moThe=trang();
+const moThe=trang();                                              // tên loa + hàng tab LUÔN hiện; nội dung vẫn đóng
+const tenLoa=q(".tieude").textContent, soTab=sr.querySelectorAll(".tabs .tab").length;
 tabs.find(b=>b.textContent==="Đàm thoại").click();
 const t=card._parts.talk.shadowRoot;
 const talk={...trang(), giu:!!t.querySelector("[data-hold]"), luon:!!t.querySelector("[data-always]"),
@@ -67,7 +67,7 @@ const eq=trang();
 tabs.find(b=>b.textContent==="EQ").click();                       // bấm lại: đóng
 const dongLai=trang();
 const ver=q(".ver").textContent;
-document.getElementById("out").textContent=JSON.stringify({dau,moThe,talk,caiDat,eq,dongLai,ver});
+document.getElementById("out").textContent=JSON.stringify({dau,moThe,talk,caiDat,eq,dongLai,ver,tenLoa,soTab});
 })();</script>"""
 
 
@@ -88,8 +88,9 @@ def test_giao_dien_the_gop_dong_mac_dinh_va_khong_trung_cai_dat(tmp_path):
     m = re.search(r'<div id="out">(.*?)</div>', out.stdout, re.S)
     assert m, out.stderr[-500:]
     r = json.loads(html_lib.unescape(m.group(1)))
-    assert r["dau"] == {"thanVao": False, "talk": False, "eq": False, "settings": False}   # đóng hết
-    assert r["moThe"] == {"thanVao": True, "talk": False, "eq": False, "settings": False}  # tab con vẫn đóng
+    assert r["dau"] == {"thanVao": True, "talk": False, "eq": False, "settings": False}    # hàng tab hiện, NỘI DUNG đóng hết
+    assert r["moThe"] == r["dau"]                                                           # chưa bấm tab nào: vẫn đóng
+    assert r["tenLoa"] == "Loa R1" and r["soTab"] == 3                                      # tên loa và ba tab luôn hiện
     assert r["talk"]["talk"] and not r["talk"]["eq"] and not r["talk"]["settings"]        # chỉ một tab
     assert r["talk"]["giu"] and r["talk"]["luon"] and r["talk"]["mute"]                  # nút mới + Tắt mic
     assert not r["talk"]["eqNhung"]                                                       # EQ không nhúng
