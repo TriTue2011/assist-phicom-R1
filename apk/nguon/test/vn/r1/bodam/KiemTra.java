@@ -685,7 +685,7 @@ public class KiemTra {
                     && Ghep.phanTichTraLoi("{\"port\":1,\"key\":\"ngan\"}") == null
                     && Ghep.phanTichTraLoi("{\"loi\":\"x\"}") == null && Ghep.phanTichTraLoi(null) == null,
                     "ghep: doc tra loi HA chat (cong 1..65535, khoa 8..128 ky tu hop le)");
-            ok(Ghep.hostHopLe("172.16.10.200") && Ghep.hostHopLe("ha.example")
+            ok(Ghep.hostHopLe("192.0.2.200") && Ghep.hostHopLe("ha.example")
                     && !Ghep.hostHopLe("a/b") && !Ghep.hostHopLe("a:80") && !Ghep.hostHopLe("a b") && !Ghep.hostHopLe("")
                     && !Ghep.hostHopLe(null) && !Ghep.hostHopLe("h@evil"),
                     "ghep: host chi gom ky tu ten/IP, khong chen duoc duong dan/cong/tai khoan vao URL");
