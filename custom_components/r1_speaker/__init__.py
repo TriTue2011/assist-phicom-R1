@@ -6,12 +6,14 @@ bộ đàm nửa công (``intercom.py``) và thẻ Lovelace chỉnh EQ (``www/r1
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 from pathlib import Path
 
 import voluptuous as vol
-from homeassistant.components.http import StaticPathConfig
+from aiohttp import web
+from homeassistant.components.http import HomeAssistantView
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
 from homeassistant.exceptions import ServiceValidationError
@@ -22,7 +24,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from . import media_player
 from .client import R1Client
-from .const import (CARD_URL, CONF_INTERCOM_KEY, DOMAIN, SETTINGS_CARD_URL, TALK_CARD_URL,
+from .const import (CARD_GOP_URL, CARD_URL, CONF_INTERCOM_KEY, DOMAIN, SETTINGS_CARD_URL, TALK_CARD_URL,
                     WAKE_SPEAKER)
 from .cong_vao import PingView, WakeView
 from .den import R1Lights, dang_ky_dich_vu as dang_ky_dich_vu_den
@@ -33,24 +35,27 @@ from .intercom import IntercomView, MicView, R1Intercom, go2rtc_source, wake_end
 from .mic import R1Mic
 from .mic_server import R1MicServer
 from .playback import R1Playback
-from .settings import (TalkSettings, agc_settings, limiter_settings, noise_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
+from .settings import (DuplexSettings, TalkSettings, agc_settings, limiter_settings, noise_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
                        speaker_port, wake_mode)
+from .song_cong import DuplexView, R1Duplex
 
 _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-PLATFORMS = [Platform.ASSIST_SATELLITE, Platform.BINARY_SENSOR, Platform.BUTTON, Platform.MEDIA_PLAYER,
+PLATFORMS = [Platform.ASSIST_SATELLITE, Platform.BINARY_SENSOR, Platform.MEDIA_PLAYER,
              Platform.NUMBER, Platform.SELECT, Platform.SENSOR, Platform.SWITCH]
 
 _WWW = Path(__file__).parent / "www"
 _CARDS = ((CARD_URL, _WWW / "r1-eq-card.js"), (TALK_CARD_URL, _WWW / "r1-talk-card.js"),
-          (SETTINGS_CARD_URL, _WWW / "r1-settings-card.js"))
+          (SETTINGS_CARD_URL, _WWW / "r1-settings-card.js"),
+          (CARD_GOP_URL, _WWW / "r1-card.js"))
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.http.register_view(IntercomView())
     hass.http.register_view(MicView())
+    hass.http.register_view(DuplexView())
     hass.http.register_view(WakeView())
     hass.http.register_view(PingView())
     await _register_card(hass)
@@ -92,21 +97,78 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                                  supports_response=SupportsResponse.ONLY)
     hass.services.async_register(DOMAIN, "get_wake_endpoint", _diem_cuoi_wake, schema=schema,
                                  supports_response=SupportsResponse.ONLY)
+
+    def _coordinator(call: ServiceCall) -> R1Coordinator:
+        entity_id = call.data["entity_id"]
+        rec = er.async_get(hass).async_get(entity_id)
+        entry = hass.config_entries.async_get_entry(rec.config_entry_id) if rec else None
+        if entry is None or entry.domain != DOMAIN or getattr(entry, "runtime_data", None) is None:
+            raise ServiceValidationError(f"{entity_id} không phải thực thể của r1_speaker")
+        return entry.runtime_data
+
+    async def _mo_song_cong(call: ServiceCall) -> None:
+        await _coordinator(call).duplex.async_start()
+
+    async def _dong_song_cong(call: ServiceCall) -> None:
+        _coordinator(call).duplex.end("nguoi_dung_ket_thuc")
+
+    schema_phien = vol.Schema({vol.Required("entity_id"): cv.entity_id})
+    hass.services.async_register(DOMAIN, "start_duplex", _mo_song_cong, schema=schema_phien)
+    hass.services.async_register(DOMAIN, "stop_duplex", _dong_song_cong, schema=schema_phien)
     return True
 
 
+class _TheView(HomeAssistantView):
+    """Phục vụ một tệp thẻ và bắt trình duyệt luôn hỏi lại (ETag). Đường tĩnh mặc định không có
+    ``Cache-Control``, nên trình duyệt tự đoán và giữ bản thẻ cũ nhiều giờ sau khi cập nhật."""
+
+    requires_auth = False
+
+    def __init__(self, url: str, path: Path) -> None:
+        self.url = url
+        # Cùng tệp còn phục vụ ở ``/r1_speaker/b/<bất kỳ>/<tên>.js``: thẻ gộp nạp thẻ con bằng đoạn
+        # ``<bất kỳ>`` đổi mỗi lần mở trang, để proxy/CDN bỏ qua tham số ``?...`` cũng không giữ bản cũ.
+        self.extra_urls = [f"/{DOMAIN}/b/{{ban}}/{path.name}"]
+        self.name = f"{DOMAIN}:the:{path.stem}"
+        self._path = path
+
+    async def get(self, request: web.Request, ban: str | None = None) -> web.StreamResponse:
+        # Đường dẫn đổi mỗi lần: không lớp đệm nào được giữ (no-store); đường cố định: luôn hỏi lại.
+        kieu = "no-store" if ban is not None else "no-cache"
+        # Đọc thẳng tệp ``.js`` rồi trả về. KHÔNG dùng ``web.FileResponse``: nó tự chọn tệp ``.js.gz``
+        # đứng cạnh cho trình duyệt nhận gzip, nên một bản nén cũ còn sót che mọi bản cập nhật (22/10/2026:
+        # điện thoại và Cloudflare thấy thẻ cũ suốt ngày, còn curl không nén thì thấy bản mới).
+        noi_dung = await asyncio.get_running_loop().run_in_executor(None, self._path.read_bytes)
+        return web.Response(body=noi_dung, content_type="text/javascript", charset="utf-8",
+                            headers={"Cache-Control": kieu})
+
+
 async def _register_card(hass: HomeAssistant) -> None:
-    """Phục vụ hai thẻ (EQ, đàm thoại) và nạp chúng vào mọi bảng điều khiển (không cần thêm
-    tài nguyên Lovelace tay). Không có ``frontend`` (HA tối giản) thì chỉ phục vụ tệp."""
-    await hass.http.async_register_static_paths(
-        [StaticPathConfig(url, str(path), cache_headers=False) for url, path in _CARDS])
-    from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL, add_extra_js_url
-    for url, _path in _CARDS:
-        if DATA_EXTRA_MODULE_URL in hass.data:
-            add_extra_js_url(hass, url)
-        else:
-            _LOGGER.warning("frontend chưa sẵn sàng: thêm %s vào tài nguyên Lovelace bằng tay",
-                            url)
+    """Chỉ PHỤC VỤ các tệp thẻ. KHÔNG gắn chúng vào danh sách module phụ của giao diện
+    (``add_extra_js_url``): module phụ chạy rất sớm, trước khi giao diện HA cài xong bộ đăng ký phần
+    tử riêng, nên thẻ đăng ký ở bộ gốc mà HA không thấy → «Custom element not found» dù tệp đúng
+    (đo 22/10/2026: cùng tệp nạp sớm thì HA không thấy, nạp muộn thì thấy). Thẻ nạp qua TÀI NGUYÊN
+    Lovelace như mọi thẻ HACS: cần thêm ``/r1_speaker/r1-card.js`` (loại Mô-đun JavaScript); thẻ gộp
+    tự nạp ba thẻ con."""
+    for url, path in _CARDS:
+        hass.http.register_view(_TheView(url, path))
+
+
+#: Thực thể đã bỏ ở bản này (gộp hoặc thay): (nền tảng, khoá). Dọn khỏi sổ đăng ký để trang thiết bị
+#: không còn dòng «không có sẵn» bỏ lại. Nút Đàm thoại/Kết thúc và «Bật mic luôn» → công tắc «Đàm
+#: thoại»; công tắc «song song (cho phép)» và «nửa công» → MỘT công tắc «Mic loa song song»; hai
+#: cảm biến đèn nhạc → hai số điều khiển.
+_THUC_THE_DA_BO = (("button", "talk"), ("button", "end_talk"), ("switch", "always_on"),
+                   ("switch", "half_duplex"), ("switch", "duplex_enable"), ("select", "intercom_mode"),
+                   ("sensor", "music_light_luma"), ("sensor", "music_light_chroma"))
+
+
+def _don_thuc_the_cu(hass: HomeAssistant, entry: R1ConfigEntry) -> None:
+    registry = er.async_get(hass)
+    for domain, key in _THUC_THE_DA_BO:
+        entity_id = registry.async_get_entity_id(domain, DOMAIN, f"{entry.entry_id}_{key}")
+        if entity_id is not None:
+            registry.async_remove(entity_id)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
@@ -131,16 +193,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
     coordinator.mic_server = R1MicServer(
         coordinator.mic, listen_port, listen_key, mic_address(entry)[0])
     await coordinator.mic_server.start()
-    coordinator.playback = R1Playback(*play_address(entry))
+    coordinator.playback = R1Playback(*play_address(entry), via=coordinator.mic_server)
     coordinator.music = MusicKeeper(
         hass, lambda: media_player.dlna_entity_id(hass, speaker_host(entry)))
     coordinator.talk = R1Talk(hass, coordinator.mic, coordinator.music, modo)
     coordinator.intercom = R1Intercom(hass, coordinator.playback, coordinator.mic,
                                       TalkSettings.from_entry(entry))
-    entry.async_create_background_task(hass, coordinator.mic.run(), "r1_speaker mic")
+    # Đàm thoại SONG CÔNG (NV246): phiên riêng, dùng chung mic/playback/talk; Assist không đụng.
+    coordinator.duplex = R1Duplex(hass, coordinator.talk, coordinator.mic,
+                                  coordinator.playback, DuplexSettings.from_entry(entry))
+    # Có khoá đầu nhận: APK loa tự nối VÀO HA, nên KHÔNG chạy vòng nối ra (cổng 8765 cũ trên loa không
+    # còn ai nghe: cứ 2 giây một lượt nối hỏng và một dòng cảnh báo trong log).
+    if not listen_key:
+        entry.async_create_background_task(hass, coordinator.mic.run(), "r1_speaker mic")
     # Đèn: mặc định CHƯA có dịch vụ đèn trên loa (NullLights) — chỉ lưu cài đặt, không gửi gì.
     coordinator.lights = R1Lights(hass, entry)
     await coordinator.lights.async_load()
+    _don_thuc_the_cu(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     coordinator.lights.start()
     return True
@@ -152,6 +221,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
     if ok:
         await coordinator.lights.async_close()
         await coordinator.mic_server.async_close()
+        await coordinator.duplex.async_close()
         await coordinator.intercom.async_close()
         await coordinator.talk.async_close()
     return ok

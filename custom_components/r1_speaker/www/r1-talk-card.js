@@ -1,24 +1,25 @@
 /* r1-talk-card — thẻ Lovelace ĐÀM THOẠI cho loa Phicomm R1 (tích hợp r1_speaker).
  *
- * Có: nút Đàm thoại (tạm dừng nhạc, mở phiên Assist), nút Kết thúc, TRẠNG THÁI MIC (tắt / nghe /
- * gửi — luôn hiện, có chữ chứ không chỉ màu), công tắc tắt mic, nút Tạm dừng / Phát nhạc, và
- * thẻ EQ (r1-eq-card) nhúng bên dưới. Thẻ KHÔNG gọi loa: chỉ đọc trạng thái thực thể HA và gọi
- * dịch vụ HA (button.press, media_player.media_pause/media_play, switch.turn_on/off).
+ * Có: «Giữ để nói» (giữ nút = mở đàm thoại, thả = đóng), «Bật mic luôn» (mở và giữ mở), TRẠNG THÁI
+ * MIC (tắt / nghe / gửi — luôn hiện, có chữ chứ không chỉ màu), công tắc tắt mic, nút Tạm dừng /
+ * Phát nhạc, và thẻ EQ (r1-eq-card) nhúng bên dưới. Thẻ KHÔNG gọi loa: chỉ đọc trạng thái thực thể
+ * HA và gọi dịch vụ HA (r1_speaker.start_duplex/stop_duplex, switch.turn_on/off, media_player.*).
  *
  * Cấu hình tối thiểu:   type: custom:r1-talk-card
  * Nhiều loa:            device_id: <mã thiết bị>
  * Không nhúng thẻ EQ:   show_eq: false
- * Chỉ định tay:         entities: { talk: button.x, end_talk: button.y, mic_status: sensor.z,
+ * Chỉ định tay:         entities: { intercom: switch.x, mic_status: sensor.z,
  *                         wake: binary_sensor.w, speaker: media_player.v, mute: switch.u }
  */
 (function () {
   "use strict";
+  var BUILD = "2026-10-22.3";
 
   var PLATFORM = "r1_speaker";
   var STATUS = { tat: "off", nghe: "listening", gui: "sending" };
   var TEXT = {
     vi: {
-      title: "Loa R1 — Đàm thoại", talk: "Đàm thoại", end: "Kết thúc", mic: "Mic",
+      title: "Loa R1 — Đàm thoại", hold: "Giữ để nói", always: "Bật mic luôn", mic: "Mic",
       off: "Tắt", listening: "Đang nghe", sending: "Đang gửi", unknown: "Không rõ",
       off_tip: "Không có tiếng nào rời loa.",
       listening_tip: "Loa chờ từ đánh thức; chưa gửi tiếng nào về Home Assistant.",
@@ -31,7 +32,7 @@
       no_mic: "Mic chưa sẵn sàng — chưa mở được phiên",
     },
     en: {
-      title: "R1 speaker — Talk", talk: "Talk", end: "End", mic: "Mic",
+      title: "R1 speaker — Talk", hold: "Hold to talk", always: "Mic always on", mic: "Mic",
       off: "Off", listening: "Listening", sending: "Sending", unknown: "Unknown",
       off_tip: "No audio leaves the speaker.",
       listening_tip: "The speaker waits for the wake word; nothing is sent to Home Assistant yet.",
@@ -72,7 +73,7 @@
       }).sort()[0];
     };
     return {
-      talk: by("button", "talk"), end_talk: by("button", "end_talk"),
+      intercom: by("switch", "intercom_open"),
       mic_status: by("sensor", "mic_status"), wake: by("binary_sensor", "wake"),
       speaker: by("media_player", "speaker"), mute: by("switch", "mute"),
       device_id: mine.length ? reg[mine[0]].device_id : null,
@@ -95,16 +96,19 @@
       muted_audio: a.bo_tieng === true, speakerSide: a.phia_loa || null,
       refused: Number(a.so_lan_tu_choi || 0), lastRefusal: a.tu_choi_gan_nhat || null,
     };
-    var talkSt = stateOf(hass, ent.talk);
+    var ist = stateOf(hass, ent.intercom);
     var inSession = !!mic.session;
+    var intercom = { entity: ent.intercom || null, present: !!ent.intercom, available: isUp(ist),
+                     on: !!ist && ist.state === "on",
+                     giuMo: !!ist && !!ist.attributes && ist.attributes.giu_mo === true };
+    // «Giữ để nói» / «Bật mic luôn» bấm được khi công tắc đàm thoại sẵn sàng (mic đã nối, chưa tắt)
+    // và KHÔNG có phiên Assist chiếm chỗ; phiên đàm thoại của chính nó không tính là «bận».
+    var assistBusy = inSession && !intercom.on;
     var talk = {
-      entity: ent.talk || null, present: !!ent.talk, available: btnUp(talkSt),
-      // Không bấm được khi: nút không sẵn sàng (mic chưa nối / đã tắt) hoặc đang có phiên.
-      enabled: btnUp(talkSt) && !inSession,
-      reason: !btnUp(talkSt) ? "no_mic" : (inSession ? "busy" : null),
+      entity: intercom.entity, present: intercom.present, available: intercom.available,
+      enabled: intercom.available && !assistBusy,
+      reason: !intercom.available ? "no_mic" : (assistBusy ? "busy" : null),
     };
-    var endSt = stateOf(hass, ent.end_talk);
-    var end = { entity: ent.end_talk || null, present: !!ent.end_talk, visible: inSession && btnUp(endSt) };
     var sp = stateOf(hass, ent.speaker);
     var sa = (sp && sp.attributes) || {};
     var ms = sp ? sp.state : null;
@@ -114,6 +118,7 @@
       canPause: isUp(sp) && (ms === "playing" || ms === "buffering"),
       canPlay: isUp(sp) && ms === "paused",
     };
+    var always = { entity: intercom.entity, present: intercom.present, on: intercom.on && intercom.giuMo };
     var mst = stateOf(hass, ent.mute);
     var mute = { entity: ent.mute || null, present: !!ent.mute, available: isUp(mst),
                  on: isUp(mst) ? mst.state === "on" : null };
@@ -122,8 +127,8 @@
     var wake = { entity: ent.wake || null, present: !!ent.wake, on: !!wst && wst.state === "on",
                  pending: wa.phia_loa === "CHO_PHIA_LOA", mode: wa.che_do || mic.mode };
     return {
-      found: !!(ent.talk || ent.mic_status || ent.speaker), mic: mic, talk: talk, end: end,
-      music: music, mute: mute, wake: wake, deviceId: ent.device_id,
+      found: !!(ent.intercom || ent.mic_status || ent.speaker), mic: mic, talk: talk, intercom: intercom,
+      music: music, always: always, mute: mute, wake: wake, deviceId: ent.device_id,
       showEq: config.show_eq !== false,
     };
   }
@@ -174,7 +179,7 @@
       var t = TEXT[lang(this._hass)];
       // Dựng lại khi bộ thực thể (hoặc ngôn ngữ) đổi — kể cả lúc đầu chưa thấy thực thể nào rồi mới
       // có (HA khởi động / đăng ký thực thể đến muộn): không bao giờ cập nhật lên DOM chưa dựng.
-      var sig = JSON.stringify([m.found, m.mic.entity, m.talk.entity, m.end.entity, m.music.entity,
+      var sig = JSON.stringify([m.found, m.mic.entity, m.talk.entity, m.music.entity,
         m.mute.entity, m.wake.entity, m.showEq, lang(this._hass)]);
       if (sig !== this._sig) {
         this._sig = sig;
@@ -193,8 +198,7 @@
         '<span>' + esc(t.mic) + ': <b data-mic-text></b></span></div>' +
         '<div class="tip" data-mic-tip></div>' +
         '<div class="warn" data-refused style="display:none"></div>' +
-        '<div class="row"><button data-talk></button><button class="sec" data-end style="display:none">' +
-        esc(t.end) + "</button></div>" +
+        '<div class="row"><button data-hold>' + esc(t.hold) + '</button><button class="sec" data-always>' + esc(t.always) + "</button></div>" +
         '<div class="row"><label>' + esc(t.mute) + '</label><ha-switch data-mute></ha-switch></div>' +
         '<div class="note" data-pending style="display:none">' + esc(t.pending) + "</div>" +
         '<section><div class="row"><span>' + esc(t.music) + ': <span data-music-text></span></span>' +
@@ -208,13 +212,29 @@
       var on = function (sel, fn) { var el = root.querySelector(sel); if (el) el.addEventListener("click", fn); };
       // Mọi nút đọc mô hình MỚI NHẤT lúc bấm (thực thể có thể đổi sau lần dựng).
       var now = function () { return buildModel(self._hass, self._config); };
-      on("[data-talk]", function () {
+      // Giữ để nói (như camera): giữ nút = mở luồng song song, thả = đóng
+      var hold = root.querySelector("[data-hold]");
+      if (hold) {
+        var dang = false;
+        var ent = function () { var m = now(); return m.mic.entity || m.talk.entity; };
+        hold.addEventListener("pointerdown", function (ev) {
+          ev.preventDefault();
+          var m = now();
+          if (!m.talk.enabled || m.intercom.on) return;  // không sẵn sàng / đã mở (bật mic luôn hoặc người khác đang giữ)
+          dang = true; self._call("r1_speaker", "start_duplex", { entity_id: ent() });
+        });
+        var tha = function () {
+          if (!dang) return;
+          dang = false;
+          if (!now().always.on) self._call("r1_speaker", "stop_duplex", { entity_id: ent() });
+        };
+        hold.addEventListener("pointerup", tha);
+        hold.addEventListener("pointerleave", tha);
+        hold.addEventListener("pointercancel", tha);
+      }
+      on("[data-always]", function () {
         var m = now();
-        if (m.talk.enabled) self._call("button", "press", { entity_id: m.talk.entity });
-      });
-      on("[data-end]", function () {
-        var m = now();
-        if (m.end.visible) self._call("button", "press", { entity_id: m.end.entity });
+        if (m.talk.enabled) self._call("switch", m.always.on ? "turn_off" : "turn_on", { entity_id: m.always.entity });
       });
       on("[data-pause]", function () {
         var m = now();
@@ -249,11 +269,10 @@
       q("[data-mic]").dataset.status = m.mic.status;
       q("[data-mic-text]").textContent = t[m.mic.status];
       q("[data-mic-tip]").textContent = t[m.mic.status + "_tip"] || "";
-      var talk = q("[data-talk]");
-      talk.textContent = m.talk.reason === "busy" ? t.busy : t.talk;
-      talk.disabled = !m.talk.enabled;
-      talk.title = m.talk.reason ? t[m.talk.reason] : "";
-      q("[data-end]").style.display = m.end.visible ? "" : "none";
+      var hold = q("[data-hold]"), al = q("[data-always]");
+      hold.disabled = al.disabled = !m.talk.enabled;
+      hold.title = al.title = m.talk.reason ? t[m.talk.reason] : "";
+      al.textContent = t.always + (m.always.on ? " ✓" : "");
       var sw = q("[data-mute]");
       if (sw) { sw.disabled = !m.mute.available; sw.checked = m.mute.on === true; }
       q("[data-pending]").style.display = m.wake.pending && m.wake.mode === "speaker" ? "" : "none";
@@ -266,6 +285,13 @@
       q("[data-play]").disabled = !m.music.canPlay;
       if (this._eq) this._eq.hass = this._hass;
     }
+  }
+
+  // r1-card dựng thẻ từ lớp này (nạp bằng URL mới mỗi lần mở trang), không phụ thuộc bản cũ còn
+  // trong bộ nhớ đệm của trình duyệt dưới URL cố định.
+  if (typeof window !== "undefined") {
+    window.R1_THE = window.R1_THE || {};
+    window.R1_THE.talk = { lop: R1TalkCard, build: BUILD };
   }
 
   if (typeof customElements !== "undefined" && !customElements.get("r1-talk-card")) {

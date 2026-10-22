@@ -115,13 +115,34 @@ async def test_select_preset_hien_preset_dang_dung(hass, r1):
     assert _st(hass, "select.phicomm_r1_eq_preset").state == "Rock"
 
 
-async def test_chon_preset_bao_loi_va_khong_gui_lenh(hass, r1):
-    """Lệnh đặt preset CHƯA xác định → không gửi lệnh tự nghĩ lên loa."""
+async def test_chon_preset_ghi_dung_nam_dai_theo_bang_firmware(hass, r1):
+    """Loa không có lệnh đặt preset: chọn = ghi 5 dải bằng set_eq_bandlevel đã xác nhận."""
     await _them(hass, r1)
-    with pytest.raises(HomeAssistantError):
+    await hass.services.async_call("select", "select_option", {
+        "entity_id": "select.phicomm_r1_eq_preset", "option": "Rock"}, blocking=True)
+    await hass.async_block_till_done()
+    gui = r1.commands("set_eq_bandlevel")
+    assert [(m["band"], m["level"]) for m in gui] == [(0, 500), (1, 300), (2, -100), (3, 300), (4, 500)]
+    assert [m for m in r1.received if m["type"].startswith(("set_", "Set_"))] == gui   # không lệnh nào khác
+    st = _st(hass, "select.phicomm_r1_eq_preset")
+    assert st.state == "Rock"                       # suy từ 5 dải dù Current_Preset của loa vẫn -1
+    assert st.attributes["selectable"] is True and st.attributes["confirmed"] is True
+
+
+async def test_chon_preset_la_bao_loi_va_khong_gui_lenh(hass, r1):
+    await _them(hass, r1)
+    with pytest.raises(Exception):                  # ngoài danh sách tuỳ chọn: HA từ chối
         await hass.services.async_call("select", "select_option", {
-            "entity_id": "select.phicomm_r1_eq_preset", "option": "Rock"}, blocking=True)
+            "entity_id": "select.phicomm_r1_eq_preset", "option": "Khong co"}, blocking=True)
     assert [m for m in r1.received if m["type"].startswith(("set_", "Set_"))] == []
+
+
+def test_bang_preset_firmware_khop_loa_va_trong_gioi_han():
+    from custom_components.r1_speaker.const import EQ_PRESET_MB
+    assert list(EQ_PRESET_MB) == ["Normal", "Classical", "Dance", "Flat", "Folk",
+                                  "Heavy Metal", "Hip Hop", "Jazz", "Pop", "Rock"]   # đúng thứ tự Preset_list
+    assert all(len(v) == 5 and all(const.EQ_MIN <= x <= const.EQ_MAX and x % 100 == 0 for x in v)
+               for v in EQ_PRESET_MB.values())
 
 
 async def test_eq_hong_thi_select_va_switch_eq_unavailable(hass, r1):

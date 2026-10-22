@@ -18,8 +18,32 @@ một bản `LightsSink` thật. Giao diện: `den_port.py`; bộ điều khiể
 300–315 và 400–412 chuyển dần) nhưng `lights_test set` không áp dụng được ID hiệu ứng từ shell → hiệu
 ứng ở HA là **dữ liệu** (danh sách bước màu + thời gian), không phải ID của firmware.
 
-`get_info` cổng 8080 có `music_light_enable`, `music_light_luma`, `music_light_chroma` (đèn theo nhạc
-của firmware). HA chỉ ĐỌC chúng (thẻ hiện); **lệnh bật/đổi chưa xác định**.
+### Đèn theo nhạc của firmware — ĐIỀU KHIỂN ĐƯỢC (đã thử trên loa 22/10/2026)
+
+`get_info` cổng 8080 có `music_light_enable`, `music_light_luma`, `music_light_chroma`. Ghi chúng qua
+cổng 8080 không được; đường thật (đọc từ app AI box và app player của loa) là dịch vụ hệ thống
+**`msgcenter`** (`android.os.IMessageCenterService.sendMsg(nhóm, mã, giá trị)`), mà MỘT APP THƯỜNG gọi
+được bằng phản chiếu (không cần quyền shell):
+
+| nhóm | mã | giá trị | tác dụng |
+|---|---|---|---|
+| 4 | 64 | 0 / 1 | tắt / bật đèn nhạc (`music_light_enable`) |
+| 4 | 65 | 0–100 | độ sáng (`music_light_luma`) |
+| 4 | 66 | 1–100 | sắc độ (`music_light_chroma`) |
+| 4 | 67 | – | chế độ co giãn (chưa dùng) |
+
+Đã gửi từng mã rồi đọc lại bằng `get_info`: đổi đúng, đã trả về giá trị cũ. HA không tới `msgcenter`
+trực tiếp: HA gửi khung `{"type":"den_nhac","ma":65,"gia_tri":50}` xuống APK loa trên kết nối mic đã
+xác thực; APK kiểm chặt định dạng và khoảng giá trị rồi gọi `msgcenter` (`LenhDieuKhien.java`,
+`TrungTamTin.java`). Thực thể: `number.r1_do_sang_den_nhac`, `number.r1_sac_do_den_nhac`,
+`switch.r1_den_nhac` — chỉ dùng được khi APK đang nối về HA. Đây là đèn của FIRMWARE, khác với «hiệu ứng
+khi phát nhạc của HA» (chức năng `phat_nhac` ở dưới, chưa ra đèn).
+
+**Không** làm được qua đường này: `lights_test` từ app (uid app không mở được
+`/sys/class/leds/multi_leds0/led_color`, thoát 255). AI box điều khiển đèn viền/đáy bằng cách gửi
+nhóm `0x1000` + ID hiệu ứng có sẵn trong `/system/etc/lights_effects.conf` (500/501/502 đáy đỏ/xanh lá/
+xanh dương, 503 viền trắng, 504/505 tắt đáy/viền…) — chỉ chọn hiệu ứng có sẵn, không chỉnh mức sáng
+tuỳ ý; CHƯA thử.
 
 ## 2. Hợp đồng `LightsSink` (`den_port.py`)
 
@@ -128,7 +152,7 @@ như hai thẻ cũ; thêm vào bảng điều khiển: `type: custom:r1-settings
 
 * Mọi thứ liên quan đèn: không có đường từ HA tới `lights_test`. Cần một dịch vụ trên loa (chưa được duyệt)
   thoả `LightsSink`; trong lúc chờ, đèn KHÔNG sáng và thẻ nói rõ.
-* Hiệu ứng khi phát nhạc của HA cũng vậy; còn đèn nhạc của firmware thì chưa biết lệnh bật/đổi.
+* Hiệu ứng khi phát nhạc của HA cũng vậy. (Đèn nhạc của FIRMWARE thì đã điều khiển được, xem mục 1.)
 
 ## 7. Chưa đo
 

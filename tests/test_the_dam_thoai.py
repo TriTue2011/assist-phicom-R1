@@ -12,7 +12,7 @@ from homeassistant.helpers import entity_registry as er
 
 from custom_components.r1_speaker.const import CARD_URL, TALK_CARD_URL
 
-from .test_dam_thoai_ha import (MICST, TALK, _bam, _cho, _nuoi_mic, _san_sang, _them,  # noqa: F401
+from .test_dam_thoai_ha import (INTERCOM, MICST, _cho, _nuoi_mic, _san_sang, _them,  # noqa: F401
                                 _dung_nuoi, nhac)
 from .test_mic import _nhanh, pcm_server, pipeline  # noqa: F401
 from .memory_port import them_dmr_gia  # noqa: F401
@@ -34,7 +34,7 @@ def test_tep_the_ton_tai_va_dang_ky_dung_ten():
 async def test_hai_the_duoc_nap_va_phuc_vu(hass, r1, hass_client_no_auth):
     hass.data[DATA_EXTRA_MODULE_URL] = set()
     await _them(hass, r1)
-    assert {CARD_URL, TALK_CARD_URL} <= hass.data[DATA_EXTRA_MODULE_URL]
+    assert not {CARD_URL, TALK_CARD_URL} & hass.data[DATA_EXTRA_MODULE_URL]   # chỉ nạp qua tài nguyên Lovelace
     r = await (await hass_client_no_auth()).get(TALK_CARD_URL)
     assert r.status == 200 and "r1-talk-card" in await r.text()
 
@@ -70,7 +70,7 @@ async def test_mo_hinh_the_trang_thai_mic_luon_hien(hass, r1, pcm_server, pipeli
     m = _mo_hinh(_hass_gia(hass))
     assert m["found"] and m["mic"]["present"] and m["mic"]["entity"] == MICST
     assert m["mic"]["status"] == "off"                          # chưa có luồng
-    assert m["talk"]["entity"] == TALK and m["talk"]["enabled"] is False
+    assert m["talk"]["entity"] == INTERCOM and m["talk"]["enabled"] is False
     assert m["talk"]["reason"] == "no_mic"                      # nút không bấm được: nói rõ vì sao
     # Trạng thái lạ / không đọc được KHÔNG được hiện như «tắt».
     for st in ("unavailable", "unknown", "la-hoac"):
@@ -78,12 +78,16 @@ async def test_mo_hinh_the_trang_thai_mic_luon_hien(hass, r1, pcm_server, pipeli
         assert _mo_hinh(g)["mic"]["status"] == "unknown", st
     g = _hass_gia(hass, {MICST: ("nghe", {})})
     assert _mo_hinh(g)["mic"]["status"] == "listening"
-    g = _hass_gia(hass, {MICST: ("gui", {"phien": "button"}), TALK: ("unknown", {}),
-                         "button.r1_ket_thuc_dam_thoai": ("unknown", {})})
+    g = _hass_gia(hass, {MICST: ("gui", {"phien": "button"}), INTERCOM: ("off", {"giu_mo": False})})
     m = _mo_hinh(g)
     assert m["mic"]["status"] == "sending" and m["mic"]["session"] == "button"
-    assert m["talk"]["enabled"] is False and m["talk"]["reason"] == "busy"   # đang có phiên
-    assert m["end"]["visible"] is True
+    assert m["talk"]["enabled"] is False and m["talk"]["reason"] == "busy"   # phiên Assist đang chiếm chỗ
+    # Phiên là của chính đàm thoại (công tắc bật): không tính là bận; «Bật mic luôn» chỉ sáng khi giữ mở.
+    g = _hass_gia(hass, {MICST: ("gui", {"phien": "song_cong"}), INTERCOM: ("on", {"giu_mo": False})})
+    m = _mo_hinh(g)
+    assert m["talk"]["enabled"] is True and m["intercom"]["on"] is True and m["always"]["on"] is False
+    g = _hass_gia(hass, {MICST: ("gui", {"phien": "song_cong"}), INTERCOM: ("on", {"giu_mo": True})})
+    assert _mo_hinh(g)["always"]["on"] is True
 
 
 @need_node
@@ -93,15 +97,16 @@ async def test_mo_hinh_the_nut_dam_thoai_bam_duoc_va_nhac(hass, r1, pcm_server, 
     dmr.start_music("http://nhac.example/a.mp3")
     g = _hass_gia(hass, {"media_player.r1_loa": ("playing", {"media_title": "Bài <b>A</b>"})})
     m = _mo_hinh(g)
-    assert m["talk"]["enabled"] is True and m["talk"]["reason"] is None   # button «unknown» vẫn bấm được
+    assert m["talk"]["enabled"] is True and m["talk"]["reason"] is None   # công tắc tắt nhưng sẵn sàng
     assert m["mic"]["status"] == "sending"
     assert m["music"]["canPause"] is True and m["music"]["canPlay"] is False
     assert m["music"]["title"] == "Bài <b>A</b>"                # thô; thẻ escape khi hiển thị
-    await _bam(hass, TALK)
+    await e.runtime_data.talk.async_start("button")
+    await hass.async_block_till_done()
     m = _mo_hinh(_hass_gia(hass))
     assert m["music"]["canPause"] is False and m["music"]["canPlay"] is True   # nhạc đã tạm dừng
     assert m["mic"]["session"] == "button" and m["talk"]["enabled"] is False
-    assert m["end"]["visible"] is True and m["showEq"] is True
+    assert m["talk"]["reason"] == "busy" and m["showEq"] is True
     assert _mo_hinh(_hass_gia(hass), {"show_eq": False})["showEq"] is False
     assert _mo_hinh({"entities": {}, "states": {}})["found"] is False
 
@@ -122,25 +127,27 @@ const mk=()=>({entities:{...entities},states:{...states},language:"vi",callServi
 card.hass=mk();
 const truoc=card.shadowRoot.textContent.includes("Không tìm thấy");
 // 2) Thực thể đến muộn → thẻ dựng lại, không ném lỗi.
-add("button.r1_dam_thoai","talk","unknown"); add("button.r1_ket_thuc_dam_thoai","end_talk","unknown");
+add("switch.r1_dam_thoai","intercom_open","off",{giu_mo:false});
 add("sensor.r1_trang_thai_mic","mic_status","nghe",{phien:null,che_do_tu_danh_thuc:"speaker",phia_loa:"da_ket_noi",so_lan_tu_choi:0});
 add("media_player.r1_loa","speaker","playing",{media_title:"<img src=x onerror=alert(1)>"});
 add("switch.r1_tat_mic","mute","off");
 let loi=null; try{ card.hass=mk(); }catch(e){ loi=String(e); }
 const sr=card.shadowRoot, q=s=>sr.querySelector(s);
 const nghe={mic:q("[data-mic-text]").textContent, status:q("[data-mic]").dataset.status,
- talkDisabled:q("[data-talk]").disabled, pauseDisabled:q("[data-pause]").disabled,
- playDisabled:q("[data-play]").disabled, endShown:q("[data-end]").style.display!=="none"};
-q("[data-talk]").click(); q("[data-pause]").click();
+ holdDisabled:q("[data-hold]").disabled, alwaysDisabled:q("[data-always]").disabled,
+ pauseDisabled:q("[data-pause]").disabled, playDisabled:q("[data-play]").disabled,
+ noTalkButton:!q("[data-talk]") && !q("[data-end]")};
+q("[data-always]").click(); q("[data-pause]").click();             // bật mic luôn; tạm dừng nhạc
+q("[data-hold]").dispatchEvent(new Event("pointerdown")); q("[data-hold]").dispatchEvent(new Event("pointerup"));
 // 3) Đang có phiên, mic đang gửi.
 states["sensor.r1_trang_thai_mic"]={state:"gui",attributes:{phien:"button",so_lan_tu_choi:1,tu_choi_gan_nhat:"x"}};
 states["media_player.r1_loa"]={state:"paused",attributes:{}};
 card.hass=mk();
 const gui={mic:q("[data-mic-text]").textContent, status:q("[data-mic]").dataset.status,
- talkDisabled:q("[data-talk]").disabled, talkText:q("[data-talk]").textContent,
- endShown:q("[data-end]").style.display!=="none", refused:q("[data-refused]").style.display!=="none",
+ holdDisabled:q("[data-hold]").disabled, alwaysDisabled:q("[data-always]").disabled,
+ holdTitle:q("[data-hold]").title, refused:q("[data-refused]").style.display!=="none",
  pauseDisabled:q("[data-pause]").disabled, playDisabled:q("[data-play]").disabled};
-q("[data-talk]").click(); q("[data-end]").click(); q("[data-play]").click();
+q("[data-always]").click(); q("[data-hold]").dispatchEvent(new Event("pointerdown")); q("[data-play]").click();
 // 4) Trạng thái mic không đọc được: KHÔNG hiện như «Tắt».
 states["sensor.r1_trang_thai_mic"]={state:"unavailable",attributes:{}}; card.hass=mk();
 const lạ={mic:q("[data-mic-text]").textContent, status:q("[data-mic]").dataset.status};
@@ -163,16 +170,18 @@ def test_giao_dien_the_dam_thoai_trang_thai_mic_nut_va_thuc_the_den_muon(tmp_pat
     assert m, out.stderr[-500:]
     r = json.loads(html.unescape(m.group(1)))
     assert r["truoc"] is True and r["loi"] is None              # thực thể đến muộn không làm hỏng thẻ
-    assert r["nghe"] == {"mic": "Đang nghe", "status": "listening", "talkDisabled": False,
-                         "pauseDisabled": False, "playDisabled": True, "endShown": False}
+    assert r["nghe"] == {"mic": "Đang nghe", "status": "listening", "holdDisabled": False,
+                         "alwaysDisabled": False, "pauseDisabled": False, "playDisabled": True,
+                         "noTalkButton": True}                  # không còn nút «Đàm thoại» / «Kết thúc»
     assert r["gui"]["mic"] == "Đang gửi" and r["gui"]["status"] == "sending"
-    assert r["gui"]["talkDisabled"] is True and r["gui"]["talkText"] == "Đang có phiên"
-    assert r["gui"]["endShown"] and r["gui"]["refused"]
+    assert r["gui"]["holdDisabled"] is True and r["gui"]["alwaysDisabled"] is True
+    assert r["gui"]["holdTitle"] == "Đang có phiên" and r["gui"]["refused"]
     assert r["gui"]["pauseDisabled"] is True and r["gui"]["playDisabled"] is False
     assert r["la"] == {"mic": "Không rõ", "status": "unknown"}   # không đọc được ≠ «Tắt»
-    assert r["calls"] == [                                      # bấm nút khi đang rảnh / đang có phiên
-        ["button", "press", {"entity_id": "button.r1_dam_thoai"}],
+    assert r["calls"] == [                                      # bấm khi đang rảnh; khi có phiên Assist thì không gọi gì
+        ["switch", "turn_on", {"entity_id": "switch.r1_dam_thoai"}],
         ["media_player", "media_pause", {"entity_id": "media_player.r1_loa"}],
-        ["button", "press", {"entity_id": "button.r1_ket_thuc_dam_thoai"}],
+        ["r1_speaker", "start_duplex", {"entity_id": "sensor.r1_trang_thai_mic"}],   # giữ nút
+        ["r1_speaker", "stop_duplex", {"entity_id": "sensor.r1_trang_thai_mic"}],    # thả nút
         ["media_player", "media_play", {"entity_id": "media_player.r1_loa"}]]
     assert r["eq"] is True and r["xss"] is False                # nhúng thẻ EQ; tên bài không thành HTML

@@ -14,6 +14,10 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .client import R1Client, R1Error
 from .cong_vao import kiem_tra_ha_url, xoa_canh_bao_khoa
 from .const import (CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, CONF_AGC_TARGET_DB,
+                    CONF_DUPLEX_DUCK, CONF_DUPLEX_DUCK_DB, CONF_DUPLEX_HANGOVER,
+                    CONF_DUPLEX_MAX_S, CONF_DUPLEX_PREROLL, CONF_DUPLEX_VAD_THRESHOLD,
+                    DEFAULT_DUPLEX_DUCK, DEFAULT_DUPLEX_DUCK_DB, DEFAULT_DUPLEX_HANGOVER,
+                    DEFAULT_DUPLEX_MAX_S, DEFAULT_DUPLEX_PREROLL, DEFAULT_DUPLEX_VAD_THRESHOLD,
                     CONF_LIMITER_CEILING, CONF_LIMITER_ENABLE, CONF_NOISE_ENABLE,
                     CONF_NOISE_STRENGTH_DB, CONF_NOISE_VOICE_DB, DEFAULT_AGC_ENABLE,
                     DEFAULT_AGC_MAX_GAIN_DB, DEFAULT_AGC_SILENCE_DB, DEFAULT_AGC_TARGET_DB,
@@ -24,8 +28,10 @@ from .const import (CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, 
                     CONF_TALK_SILENCE, CONF_TALK_TAIL, CONF_TALK_THRESHOLD_DB, DEFAULT_HOST,
                     DEFAULT_MIC_LISTEN_PORT, DEFAULT_MIC_PORT, DEFAULT_PLAY_PORT, DEFAULT_PORT, DEFAULT_TALK_PREROLL,
                     DEFAULT_TALK_SILENCE, DEFAULT_TALK_TAIL, DEFAULT_TALK_THRESHOLD_DB, DOMAIN)
-from .settings import (TalkSettings, agc_settings, conf, limiter_settings, noise_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
+from .settings import (DuplexSettings, TalkSettings, agc_settings, conf, limiter_settings, noise_settings, wake_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
                        speaker_port, wake_mode)
+from .const import (CONF_WAKE_ENABLE, CONF_WAKE_SENSITIVITY, CONF_WAKE_WORD,
+                    DEFAULT_WAKE_ENABLE, DEFAULT_WAKE_SENSITIVITY, DEFAULT_WAKE_WORD)
 
 CONF_ROTATE_KEY = "rotate_intercom_key"
 
@@ -74,13 +80,19 @@ _GOC = {
     CONF_AGC_TARGET_DB: DEFAULT_AGC_TARGET_DB, CONF_AGC_MAX_GAIN_DB: DEFAULT_AGC_MAX_GAIN_DB,
     CONF_AGC_SILENCE_DB: DEFAULT_AGC_SILENCE_DB, CONF_LIMITER_ENABLE: DEFAULT_LIMITER_ENABLE,
     CONF_LIMITER_CEILING: DEFAULT_LIMITER_CEILING,
+    CONF_DUPLEX_VAD_THRESHOLD: DEFAULT_DUPLEX_VAD_THRESHOLD,
+    CONF_DUPLEX_PREROLL: DEFAULT_DUPLEX_PREROLL, CONF_DUPLEX_HANGOVER: DEFAULT_DUPLEX_HANGOVER,
+    CONF_DUPLEX_MAX_S: DEFAULT_DUPLEX_MAX_S, CONF_DUPLEX_DUCK: DEFAULT_DUPLEX_DUCK,
+    CONF_DUPLEX_DUCK_DB: DEFAULT_DUPLEX_DUCK_DB,
+    CONF_WAKE_ENABLE: DEFAULT_WAKE_ENABLE, CONF_WAKE_WORD: DEFAULT_WAKE_WORD,
+    CONF_WAKE_SENSITIVITY: DEFAULT_WAKE_SENSITIVITY,
 }
 
 
 _DSP_GOC = {k: _GOC[k] for k in (
     CONF_NOISE_ENABLE, CONF_NOISE_STRENGTH_DB, CONF_NOISE_VOICE_DB, CONF_AGC_ENABLE,
     CONF_AGC_TARGET_DB, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, CONF_LIMITER_ENABLE,
-    CONF_LIMITER_CEILING)}
+    CONF_LIMITER_CEILING, CONF_WAKE_ENABLE, CONF_WAKE_WORD, CONF_WAKE_SENSITIVITY)}
 
 
 def _overrides(entry: ConfigEntry, chosen: dict[str, Any]) -> dict[str, Any]:
@@ -107,6 +119,8 @@ class R1OptionsFlow(OptionsFlowWithReload):
       (``noise_suppress.py``; MẶC ĐỊNH TẮT, số CHƯA ĐO trên mic loa);
     * ``agc_*`` + ``limiter_*`` — AGC và bộ hạn đỉnh (``agc.py``; MẶC ĐỊNH TẮT, CHƯA ĐO). Cả
       năm khoá trên áp dụng từ lần nối mic kế (HA nạp lại mục khi lưu);
+    * ``duplex_*`` — đàm thoại SONG CÔNG (NV246): ngưỡng VAD, đệm trước/sau, hạn phiên,
+      cắt vọng tuỳ chọn (mặc định TẮT; mọi số CHƯA ĐO trên loa R1);
     * ``ha_url`` — địa chỉ HA mà loa / go2rtc gọi tới. KIỂM NGAY khi lưu: sai dạng, trỏ về
       127.0.0.1/localhost, hay HA không tự gọi được ``/api/r1_speaker/ping`` thì báo lỗi cụ thể
       và KHÔNG lưu gì (cả form);
@@ -156,14 +170,22 @@ class R1OptionsFlow(OptionsFlowWithReload):
                     CONF_TALK_TAIL: user_input[CONF_TALK_TAIL],
                     CONF_WAKE_MODE: user_input.get(CONF_WAKE_MODE, DEFAULT_WAKE_MODE),
                     **{k: user_input.get(k, d) for k, d in _DSP_GOC.items()},
+                    CONF_DUPLEX_VAD_THRESHOLD: user_input[CONF_DUPLEX_VAD_THRESHOLD],
+                    CONF_DUPLEX_PREROLL: user_input[CONF_DUPLEX_PREROLL],
+                    CONF_DUPLEX_HANGOVER: user_input[CONF_DUPLEX_HANGOVER],
+                    CONF_DUPLEX_MAX_S: user_input[CONF_DUPLEX_MAX_S],
+                    CONF_DUPLEX_DUCK: user_input.get(CONF_DUPLEX_DUCK, DEFAULT_DUPLEX_DUCK),
+                    CONF_DUPLEX_DUCK_DB: user_input[CONF_DUPLEX_DUCK_DB],
                     CONF_HA_URL: url.rstrip("/")}))
         v = user_input or {}
         talk = TalkSettings.from_entry(entry)
+        duplex = DuplexSettings.from_entry(entry)
         mic_host, mic_port = mic_address(entry)
         listen_port, listen_key = mic_listen(entry)
         play_host = str(conf(entry, CONF_PLAY_HOST, "") or "")
         port_range = vol.All(int, vol.Range(min=1, max=65535))
         noise, agc, lim = noise_settings(entry), agc_settings(entry), limiter_settings(entry)
+        wake = wake_settings(entry)
         dsp = {
             CONF_NOISE_ENABLE: (noise.enabled, bool),
             CONF_NOISE_STRENGTH_DB: (noise.strength_db, vol.All(
@@ -180,6 +202,10 @@ class R1OptionsFlow(OptionsFlowWithReload):
             CONF_LIMITER_ENABLE: (lim.enabled, bool),
             CONF_LIMITER_CEILING: (lim.ceiling, vol.All(
                 vol.Coerce(float), vol.Range(min=0.1, max=1.0))),
+            CONF_WAKE_ENABLE: (wake["bat"], bool),
+            CONF_WAKE_WORD: (wake["tu_khoa"], vol.All(str, vol.Length(max=40))),
+            CONF_WAKE_SENSITIVITY: (wake["do_nhay"], vol.All(
+                vol.Coerce(float), vol.Range(min=0, max=1))),
         }
         return self.async_show_form(step_id="init", errors=errors, data_schema=vol.Schema({
             vol.Required(CONF_HOST, default=v.get(CONF_HOST, speaker_host(entry))): str,
@@ -208,6 +234,21 @@ class R1OptionsFlow(OptionsFlowWithReload):
             vol.Required(CONF_WAKE_MODE, default=v.get(CONF_WAKE_MODE, wake_mode(entry))):
                 vol.In([WAKE_HA, WAKE_SPEAKER]),
             **{vol.Required(k, default=v.get(k, cur)): typ for k, (cur, typ) in dsp.items()},
+            vol.Required(CONF_DUPLEX_VAD_THRESHOLD,
+                         default=v.get(CONF_DUPLEX_VAD_THRESHOLD, duplex.vad_threshold)):
+                vol.All(vol.Coerce(float), vol.Range(min=0.05, max=0.95)),
+            vol.Required(CONF_DUPLEX_PREROLL,
+                         default=v.get(CONF_DUPLEX_PREROLL, duplex.preroll_s)):
+                vol.All(vol.Coerce(float), vol.Range(min=0, max=2)),
+            vol.Required(CONF_DUPLEX_HANGOVER,
+                         default=v.get(CONF_DUPLEX_HANGOVER, duplex.hangover_s)):
+                vol.All(vol.Coerce(float), vol.Range(min=0, max=5)),
+            vol.Required(CONF_DUPLEX_MAX_S, default=v.get(CONF_DUPLEX_MAX_S, duplex.max_s)):
+                vol.All(vol.Coerce(float), vol.Range(min=60, max=86400)),
+            vol.Required(CONF_DUPLEX_DUCK, default=v.get(CONF_DUPLEX_DUCK, duplex.duck)): bool,
+            vol.Required(CONF_DUPLEX_DUCK_DB,
+                         default=v.get(CONF_DUPLEX_DUCK_DB, duplex.duck_db)):
+                vol.All(vol.Coerce(float), vol.Range(min=-90, max=-5)),
             vol.Optional(CONF_HA_URL, description={
                 "suggested_value": v.get(CONF_HA_URL, ha_url(entry))}): str,
             vol.Optional(CONF_ROTATE_KEY, default=False): bool,

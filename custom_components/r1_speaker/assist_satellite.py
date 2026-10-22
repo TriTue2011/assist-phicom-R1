@@ -138,8 +138,8 @@ class R1Satellite(R1MicEntity, AssistSatelliteEntity):
 
     @callback
     def _khi_doi_trang_thai(self) -> None:
-        if not self.mic.available or self.mic.muted:
-            # luồng đứt/tắt: phiên đóng (nhạc phát lại), lượt đang chạy phải kết thúc
+        if not self.mic.available or self.mic.muted or not self.mic.assist_on:
+            # luồng đứt/tắt/Assist tắt: phiên đóng (nhạc phát lại), lượt đang chạy phải kết thúc
             self.talk.end(self.talk.session, "mic_tat_hoac_dut", cut=False)
             self._tiep = False
             self._cat_luot()
@@ -167,7 +167,7 @@ class R1Satellite(R1MicEntity, AssistSatelliteEntity):
 
     async def _chay(self) -> None:
         while True:
-            if not self.mic.available or self.mic.muted:
+            if not self.mic.available or self.mic.muted or not self.mic.assist_on:
                 await asyncio.sleep(RECHECK)
                 continue
             if self.talk.wake_on_speaker and not self._tiep and self.talk.session is None:

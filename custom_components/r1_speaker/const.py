@@ -28,6 +28,22 @@ STRENGTH_MIN, STRENGTH_MAX = 0, 1000
 GAIN_MIN, GAIN_MAX = 0, 1000
 #: Tên dải theo tài liệu dịch ngược (60Hz, 230Hz, 910Hz, 3.6kHz, 14kHz).
 EQ_BAND_NAMES = ("60 Hz", "230 Hz", "910 Hz", "3.6 kHz", "14 kHz")
+#: Preset EQ của firmware loa: mức mỗi dải (dB) cho 60/230/910/3600/14000 Hz, đọc thẳng từ bảng trong
+#: ``/system/lib/soundfx/libbundlewrapper.so`` của loa (22/10/2026; cả 9 preset khác Flat đều tìm thấy
+#: nguyên dãy này). Loa không có lệnh «đặt preset» nên chọn preset = ghi 5 dải; loa báo mức bằng mB
+#: (= dB × 100).
+EQ_PRESET_DB = {
+    "Normal": (3, 0, 0, 0, 3), "Classical": (5, 3, -2, 4, 4), "Dance": (6, 0, 2, 4, 1),
+    "Flat": (0, 0, 0, 0, 0), "Folk": (3, 0, 0, 2, -1), "Heavy Metal": (4, 1, 9, 3, 0),
+    "Hip Hop": (5, 3, 0, 1, 3), "Jazz": (4, 2, -2, 2, 5), "Pop": (-1, 2, 5, 1, -2),
+    "Rock": (5, 3, -1, 3, 5),
+}
+EQ_PRESET_MB = {name: tuple(db * 100 for db in levels) for name, levels in EQ_PRESET_DB.items()}
+#: Đèn theo nhạc CỦA FIRMWARE: APK loa gửi tin tới dịch vụ ``msgcenter`` (nhóm 4, player nhận qua
+#: ``PlayerVisualizerHelper.notifyMsg``). Mã 64 bật/tắt (0/1), 65 độ sáng luma (0–100), 66 sắc độ
+#: chroma (1–100). Đã thử trên loa 22/10/2026: gửi rồi đọc lại bằng ``get_info``.
+MUSIC_LIGHT_ENABLE, MUSIC_LIGHT_LUMA, MUSIC_LIGHT_CHROMA = 64, 65, 66
+MUSIC_LIGHT_RANGE = {MUSIC_LIGHT_ENABLE: (0, 1), MUSIC_LIGHT_LUMA: (0, 100), MUSIC_LIGHT_CHROMA: (1, 100)}
 
 #: Sau Set_DLNA_Open, chờ thực thể dlna_dmr của loa sẵn sàng tối đa ngần này giây.
 DLNA_READY_TIMEOUT = 15.0
@@ -46,6 +62,35 @@ CONF_MIC_LISTEN_KEY = "mic_listen_key"
 #: chưa có số đo nào chốt cổng này; 18765 là số chọn tạm, đổi được trong tuỳ chọn. Đầu nhận
 #: chỉ mở khi ĐÃ đặt khoá (``mic_listen_key``) và IP loa (``mic_host``) — xem mic_server.py.
 DEFAULT_MIC_LISTEN_PORT = 18765
+
+# ── Đàm thoại SONG CÔNG kích hoạt từ HA (NV246, song_cong.py) ─────────────────────
+CONF_DUPLEX_VAD_THRESHOLD = "duplex_vad_threshold"
+CONF_DUPLEX_PREROLL = "duplex_preroll_s"
+CONF_DUPLEX_HANGOVER = "duplex_hangover_s"
+CONF_DUPLEX_MAX_S = "duplex_max_s"
+CONF_DUPLEX_DUCK = "duplex_duck"
+CONF_DUPLEX_DUCK_DB = "duplex_duck_db"
+#: Ngưỡng xác suất tiếng người của microVAD (``pymicro_vad`` — cùng VAD Assist của HA dùng):
+#: khung 10 ms có xác suất >= ngưỡng thì coi là có tiếng người. 0.5 là điểm giữa thang xác
+#: suất; CHƯA ĐO trên mic của loa R1.
+DEFAULT_DUPLEX_VAD_THRESHOLD = 0.5
+#: Đệm TRƯỚC tiếng người (giây): giữ sẵn chừng này tiếng ngay trước câu để không cắt đầu câu.
+#: CHƯA ĐO trên loa R1; 0.3 mượn số preroll của bộ đàm nửa công.
+DEFAULT_DUPLEX_PREROLL = 0.3
+#: Đệm SAU tiếng người (giây): câu vừa dứt vẫn chuyển thêm chừng này để không cắt cuối câu.
+#: CHƯA ĐO trên loa R1.
+DEFAULT_DUPLEX_HANGOVER = 0.5
+#: Phiên song công tối đa (giây) = 30 phút theo đề xuất của chủ máy; CHƯA ĐO. Phiên KHÔNG có
+#: ngưỡng im lặng tự đóng: chỉ HA kết thúc, mất kết nối, hoặc quá hạn này phiên mới đóng.
+DEFAULT_DUPLEX_MAX_S = 1800.0
+#: Cắt vọng TUỲ CHỌN: khi HA đang phát xuống loa, khung mic nhỏ hơn ``duplex_duck_db`` (dBFS)
+#: bị bỏ (giảm hú/vọng). MẶC ĐỊNH TẮT — chủ máy chấp nhận vọng nhẹ để biết ai đang ở đó.
+#: Cả hai số CHƯA ĐO trên loa R1.
+DEFAULT_DUPLEX_DUCK = False
+DEFAULT_DUPLEX_DUCK_DB = -45.0
+
+#: Sự kiện phiên song công mở/đóng (kèm lý do đóng).
+EVENT_DUPLEX = f"{DOMAIN}_duplex"
 
 #: Luồng mic hợp đồng: PCM16 mono 16 kHz little-endian — đúng định dạng Assist đòi.
 MIC_RATE = 16000
@@ -179,3 +224,14 @@ LIGHT_ERROR_HOLD_S = 3.0
 #: Lệnh «thử đèn» của thẻ giữ chức năng được thử ngần này giây rồi trả về trạng thái thật.
 LIGHT_PREVIEW_S = 5.0
 LIGHT_PREVIEW_MAX_S = 30.0
+
+# ── Từ đánh thức (cài đặt; HA chưa có mic loa nên chưa nghe được; mặc định TẮT) ──────────
+CONF_WAKE_ENABLE = "wake_enable"
+CONF_WAKE_WORD = "wake_word"
+CONF_WAKE_SENSITIVITY = "wake_sensitivity"
+DEFAULT_WAKE_ENABLE = False
+DEFAULT_WAKE_WORD = ""           # CHƯA CHỌN từ khoá
+DEFAULT_WAKE_SENSITIVITY = 0.5   # CHƯA ĐO trên mic loa R1
+
+#: Thẻ gộp: một tài nguyên duy nhất, nạp cả ba thẻ con (EQ, đàm thoại, cài đặt).
+CARD_GOP_URL = "/r1_speaker/r1-card.js"

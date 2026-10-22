@@ -26,10 +26,15 @@ import contextlib
 import hmac
 import json
 import logging
+from collections.abc import Callable
 
+from .const import MUSIC_LIGHT_RANGE
 from .mic import R1Mic
 
 _LOGGER = logging.getLogger(__name__)
+
+#: Thời gian tối đa chờ một khúc PCM / khung điều khiển xuống APK được ghi xong.
+WRITE_TIMEOUT_S = 2.0
 
 #: Chờ khung hello tối đa ngần này giây kể từ lúc nối.
 HELLO_TIMEOUT = 10.0
@@ -67,6 +72,7 @@ class R1MicServer:
         self._speaker_ip = (speaker_ip or "").strip()
         self._server: asyncio.Server | None = None
         self._writer: asyncio.StreamWriter | None = None
+        self._on_state: list[Callable[[], None]] = []
 
     # ── Trạng thái ────────────────────────────────────────────────────────────
 
@@ -118,6 +124,39 @@ class R1MicServer:
         if self._writer is not None:
             self._writer.close()
 
+    def add_state_listener(self, cb: Callable[[], None]) -> Callable[[], None]:
+        """Báo mỗi khi loa nối vào / đứt khỏi đầu nhận (thực thể phụ thuộc kết nối cập nhật theo)."""
+        self._on_state.append(cb)
+        return lambda: self._on_state.remove(cb)
+
+    def _notify_state(self) -> None:
+        for cb in list(self._on_state):
+            try:
+                cb()
+            except Exception:  # noqa: BLE001 — người nghe hỏng không được giết vòng đọc
+                _LOGGER.exception("R1 mic server: state listener failed")
+
+    async def _gui_khung(self, payload: bytes) -> None:
+        writer = self._writer
+        if writer is None:
+            raise ConnectionError("loa chưa nối vào đầu nhận mic")
+        writer.write(_khung(payload))
+        await asyncio.wait_for(writer.drain(), WRITE_TIMEOUT_S)
+
+    async def send_pcm(self, pcm: bytes) -> None:
+        """Gửi một khúc PCM16 16 kHz mono xuống APK loa (cùng kết nối đang nhận mic)."""
+        await self._gui_khung(pcm)
+
+    async def set_music_light(self, ma: int, gia_tri: int) -> None:
+        """Đặt đèn theo nhạc của firmware qua APK loa (mã/giá trị xem ``const.MUSIC_LIGHT_*``).
+        APK chỉ nhận đúng định dạng khung này và kiểm khoảng giá trị lần nữa."""
+        khoang = MUSIC_LIGHT_RANGE.get(ma)
+        if khoang is None or isinstance(gia_tri, bool) or not khoang[0] <= gia_tri <= khoang[1]:
+            raise ValueError(f"đèn nhạc: mã {ma} / giá trị {gia_tri} ngoài khoảng cho phép")
+        # Thứ tự khoá và dạng tách gọn là hợp đồng với LenhDieuKhien.java (đọc bằng mẫu chặt).
+        await self._gui_khung(json.dumps(
+            {"type": "den_nhac", "ma": ma, "gia_tri": gia_tri}, separators=(",", ":")).encode())
+
     async def async_close(self) -> None:
         writer, self._writer = self._writer, None
         if writer is not None:
@@ -131,6 +170,7 @@ class R1MicServer:
         self._mic.set_inbound_closer(None)
         self._mic.note_listening(False)
         self._mic.note_inbound(False)
+        self._notify_state()
 
     # ── Một kết nối ───────────────────────────────────────────────────────────
 
@@ -160,6 +200,7 @@ class R1MicServer:
                 return
             self._writer = writer
             self._mic.note_inbound(True)
+            self._notify_state()
             _LOGGER.debug("R1 mic server: loa %s đã nối, bắt đầu nhận tiếng", ip)
             try:
                 du = b""                            # byte lẻ cuối khung, dồn sang khung sau
@@ -181,6 +222,7 @@ class R1MicServer:
                 if self._writer is writer:
                     self._writer = None
                 self._mic.note_inbound(False)
+                self._notify_state()
                 _LOGGER.debug("R1 mic server: phiên từ %s đã đóng", ip)
         except (TimeoutError, asyncio.IncompleteReadError):
             _LOGGER.debug("R1 mic server: kết nối từ %s đứt/chậm khung", ip)

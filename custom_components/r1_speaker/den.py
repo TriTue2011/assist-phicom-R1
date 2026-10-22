@@ -369,9 +369,10 @@ class R1Lights:
                               brightness: int | None = None) -> FunctionLight:
         """Hiệu ứng khi phát nhạc = hồ sơ chức năng ``phat_nhac`` (bật/tắt, hiệu ứng, sáng).
 
-        CHƯA biết lệnh bật/đổi «đèn theo nhạc» CỦA FIRMWARE (``music_light_enable/luma/chroma`` ở
-        get_info): phần này của HA chỉ chạy hiệu ứng khi có dịch vụ đèn trên loa, và chưa đo xem
-        nó có chồng lên đèn nhạc firmware hay không."""
+        KHÁC «đèn theo nhạc» CỦA FIRMWARE (``music_light_enable/luma/chroma`` ở get_info): cái đó điều
+        khiển bằng ``number.r1_do_sang_den_nhac`` / ``switch.r1_den_nhac`` (qua APK loa). Phần này
+        của HA chỉ chạy hiệu ứng khi có dịch vụ đèn trên loa, và chưa đo xem nó có chồng lên đèn nhạc
+        firmware hay không."""
         f = {k: v for k, v in (("enabled", enabled), ("effect", effect),
                                ("brightness", brightness)) if v is not None}
         return await self.async_set_function("phat_nhac", **f)
@@ -421,12 +422,12 @@ class R1Lights:
                           "vien": h.vien, "nguon": h.nguon} for h in HIEU_UNG.values()],
             "dich_vu_den": self.sink_state,
             "loi_dich_vu": self.last_error,
-            # Đèn theo nhạc CỦA FIRMWARE: chỉ ĐỌC được; lệnh bật/đổi chưa xác định.
+            # Đèn theo nhạc CỦA FIRMWARE: đọc ở đây; điều khiển bằng các thực thể ``r1_*_den_nhac`` (qua APK).
             "den_nhac_firmware": {
                 "bat": getattr(d, "music_light_enable", None),
                 "luma": getattr(d, "music_light_luma", None),
                 "chroma": getattr(d, "music_light_chroma", None),
-                "lenh_dieu_khien": "CHUA_XAC_DINH"},
+                "dieu_khien": "qua_apk_msgcenter"},
         }
 
 

@@ -19,6 +19,7 @@
  */
 (function () {
   "use strict";
+  var BUILD = "2026-10-22.3";
 
   var PLATFORM = "r1_speaker";
   var FUNCTIONS = ["cho", "nghe", "nghi", "phan_hoi", "dam_thoai", "phat_nhac", "loi", "tat_mic"];
@@ -36,7 +37,7 @@
       sink_lost: "Dịch vụ đèn trên loa không trả lời.", sink_ready: "Dịch vụ đèn: sẵn sàng",
       sink_err: "Lỗi gần nhất",
       fn: { cho: "Chờ / từ đánh thức", nghe: "Đang nghe", nghi: "Đang nghĩ", phan_hoi: "Đang trả lời",
-            dam_thoai: "Đàm thoại", phat_nhac: "Đang phát nhạc", loi: "Lỗi", tat_mic: "Tắt mic" },
+            dam_thoai: "Đàm thoại", phat_nhac: "Phát nhạc (hiệu ứng của HA)", loi: "Lỗi", tat_mic: "Tắt mic" },
       enabled: "Bật", rim: "Đèn viền (chỉ trắng)", color: "Màu đèn đáy", effect: "Hiệu ứng",
       brightness: "Độ sáng", preview: "Thử", active: "đang áp dụng", proposal: "mặc định đề xuất, chưa đo",
       no_effect: "Không (sáng cố định)", red_warn: "Đỏ chưa xác nhận trên đèn đáy",
@@ -62,7 +63,7 @@
       sink_lost: "The light service on the speaker is not answering.", sink_ready: "Light service: ready",
       sink_err: "Last error",
       fn: { cho: "Idle / wake word", nghe: "Listening", nghi: "Thinking", phan_hoi: "Responding",
-            dam_thoai: "Conversation", phat_nhac: "Music playing", loi: "Error", tat_mic: "Mic muted" },
+            dam_thoai: "Conversation", phat_nhac: "Music playing (HA effect)", loi: "Error", tat_mic: "Mic muted" },
       enabled: "On", rim: "Rim light (white only)", color: "Base colour", effect: "Effect",
       brightness: "Brightness", preview: "Try", active: "in effect", proposal: "suggested default, not measured",
       no_effect: "None (steady)", red_warn: "Red is unconfirmed on the base light",
@@ -142,6 +143,7 @@
     var music = fns.filter(function (f) { return f.key === "phat_nhac"; })[0] || null;
     return {
       found: !!(ent.settings || ent.volume || bands.length),
+      gop: config.gop === true,
       offline: !!ent.settings && !isUp(st),
       settings: { entity: ent.settings || null, present: !!ent.settings },
       audio: {
@@ -231,20 +233,22 @@
 
   function htmlAudio(m, t) {
     var A = m.audio, h = '<div data-panel="audio">';
-    h += '<div class="row"><label>' + esc(t.volume) + "</label>" +
+    if (!m.gop) h += '<div class="row"><label>' + esc(t.volume) + "</label>" +
       slider("data-vol", A.volume.value, A.volume.min, A.volume.max, A.volume.step, !A.volume.available) +
       '<span class="val">' + esc(A.volume.value === null ? "—" : A.volume.value) + "</span></div>";
-    h += "<section><b>" + esc(t.eq) + "</b>";
-    A.bands.forEach(function (b) {
-      h += '<div class="row"><label>' + esc(b.label) + "</label>" +
-        slider('data-eq="' + esc(b.entity) + '"', b.value, b.min, b.max, b.step, !b.available) +
-        '<span class="val">' + esc(b.value === null ? "—" : b.value) + "</span></div>";
-    });
-    h += "</section>";
+    if (!m.gop) {
+      h += "<section><b>" + esc(t.eq) + "</b>";
+      A.bands.forEach(function (b) {
+        h += '<div class="row"><label>' + esc(b.label) + "</label>" +
+          slider('data-eq="' + esc(b.entity) + '"', b.value, b.min, b.max, b.step, !b.available) +
+          '<span class="val">' + esc(b.value === null ? "—" : b.value) + "</span></div>";
+      });
+      h += "</section>";
+    }
     h += '<div class="row"><label>' + esc(t.mic_gain) + "</label>" +
       slider("data-mic-gain", A.micGain.value, A.micGain.min, A.micGain.max, A.micGain.step, !A.micGain.available) +
       '<span class="val">' + esc(A.micGain.value === null ? "—" : A.micGain.value) + "</span></div>";
-    h += '<div class="row"><label>' + esc(t.mute) + '</label><input type="checkbox" data-mute' +
+    if (!m.gop) h += '<div class="row"><label>' + esc(t.mute) + '</label><input type="checkbox" data-mute' +
       (A.mute.on ? " checked" : "") + (A.mute.available ? "" : " disabled") + "></div>";
     h += '<section class="ro"><div class="note">' + esc(t.read_only) + "</div>";
     h += '<div class="row"><span>' + esc(t.noise) + "</span><b>" + esc(A.noise ? onoff(A.noise, t) : "—") +
@@ -338,9 +342,9 @@
   function renderHtml(m, ui, t, lg) {
     lg = lg || "vi";
     if (!m.found) return '<ha-card><div class="warn">' + esc(t.none) + "</div></ha-card>";
-    var h = '<ha-card><div class="head"><h2>' + esc(t.title) + '</h2><button data-open aria-expanded="' +
+    var h = m.gop ? "<ha-card>" : '<ha-card><div class="head"><h2>' + esc(t.title) + '</h2><button data-open aria-expanded="' +
       (ui.open ? "true" : "false") + '">' + esc(ui.open ? t.close : t.open) + "</button></div>";
-    if (!ui.open) return h + "</ha-card>";
+    if (!m.gop && !ui.open) return h + "</ha-card>";
     h += '<div class="tabs" role="tablist">';
     TABS.forEach(function (k) {
       h += '<button class="tab' + (ui.tab === k ? " sel" : "") + '" role="tab" data-tab="' + k +
@@ -454,6 +458,13 @@
         el.addEventListener("click", function () { dispatch({ type: "preview", key: el.dataset.preview }); });
       });
     }
+  }
+
+  // r1-card dựng thẻ từ lớp này (nạp bằng URL mới mỗi lần mở trang), không phụ thuộc bản cũ còn
+  // trong bộ nhớ đệm của trình duyệt dưới URL cố định.
+  if (typeof window !== "undefined") {
+    window.R1_THE = window.R1_THE || {};
+    window.R1_THE.settings = { lop: R1SettingsCard, build: BUILD };
   }
 
   if (typeof customElements !== "undefined" && !customElements.get("r1-settings-card")) {

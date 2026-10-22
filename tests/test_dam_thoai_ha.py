@@ -22,9 +22,8 @@ from .memory_port import them_dmr_gia
 from .test_mic import (SAT, PcmServer, _bom, _cho, _nhanh, _state, _vet_tinh, pcm,  # noqa: F401
                        pcm_server, pipeline, samples)
 
-TALK, END, MICST, WAKE_BS, LOA = ("button.r1_dam_thoai", "button.r1_ket_thuc_dam_thoai",
-                                  "sensor.r1_trang_thai_mic", "binary_sensor.r1_tu_danh_thuc",
-                                  "media_player.r1_loa")
+INTERCOM, MICST, WAKE_BS, LOA = ("switch.r1_dam_thoai", "sensor.r1_trang_thai_mic",
+                                 "binary_sensor.r1_tu_danh_thuc", "media_player.r1_loa")
 MUSIC = "http://nhac.example/bai.mp3"
 TTS = "http://ha.example/api/tts_proxy/x.mp3"
 
@@ -99,9 +98,12 @@ def _talk(e):
     return e.runtime_data.talk
 
 
-async def _bam(hass, eid):
-    await asyncio.wait_for(
-        hass.services.async_call("button", "press", {"entity_id": eid}, blocking=True), 3)
+async def _ket_thuc(e):
+    """Người dùng đóng phiên Assist đang mở (trước đây là nút «Kết thúc»; nút đã bỏ, phiên còn kết
+    thúc khi pipeline xong hoặc khi tắt mic)."""
+    talk = _talk(e)
+    talk.end(talk.session, "nguoi_dung_ket_thuc")
+    await talk.async_settle()
 
 
 # ── Nút đàm thoại ─────────────────────────────────────────────────────────────────
@@ -114,7 +116,7 @@ async def test_nut_dam_thoai_tam_dung_nhac_mo_phien_ket_thuc_phat_lai(
     assert _state(hass, LOA) == "playing"                      # thẻ thấy nhạc qua r1_loa
     assert PipelineStage.WAKE_WORD in pipeline.turns            # đang chờ từ gọi của HA
 
-    await _bam(hass, TALK)
+    await _talk(e).async_start("button")
 
     assert _state(hass, dmr.entity_id) == "paused" and dmr.log == [("pause",)]
     assert _talk(e).session_kind == "button"
@@ -135,8 +137,8 @@ async def test_nut_ket_thuc_dong_phien_va_phat_lai_nhac(hass, r1, pcm_server, pi
     e = await _san_sang(hass, r1, pcm_server, pipeline)
     dmr = await nhac()
     dmr.start_music(MUSIC)
-    await _bam(hass, TALK)
-    await _bam(hass, END)
+    await _talk(e).async_start("button")
+    await _ket_thuc(e)
     assert _talk(e).session is None
     assert dmr.log == [("pause",), ("play",)]
     # Lượt từ gọi bị cắt lúc mở phiên rồi vòng nghe quay về chờ từ gọi: KHÔNG được còn lượt STT
@@ -152,19 +154,19 @@ async def test_phien_thu_hai_qua_nut_bi_tu_choi_co_thong_bao(hass, r1, pcm_serve
     e = await _san_sang(hass, r1, pcm_server, pipeline)
     dmr = await nhac()
     dmr.start_music(MUSIC)
-    await _bam(hass, TALK)
+    await _talk(e).async_start("button")
     with pytest.raises(HomeAssistantError, match="đang có phiên đàm thoại"):
-        await _bam(hass, TALK)                                  # từ chối NGAY, không treo
+        await _talk(e).async_start("button")                                  # từ chối NGAY, không treo
     st = hass.states.get(MICST)
     assert st.attributes["so_lan_tu_choi"] == 1 and "button" in st.attributes["tu_choi_gan_nhat"]
     assert dmr.log == [("pause",)]                              # lần hai không tạm dừng thêm
     assert _talk(e).session_kind == "button"
-    await _bam(hass, END)
+    await _ket_thuc(e)
 
 
-async def test_nut_khong_dung_duoc_khi_mic_chua_noi(hass, r1, pcm_server, pipeline):
+async def test_cong_tac_dam_thoai_khong_dung_duoc_khi_mic_chua_noi(hass, r1, pcm_server, pipeline):
     await _them(hass, r1, mic_host="127.0.0.1", mic_port=pcm_server.port)   # chưa có byte nào
-    assert _state(hass, TALK) == "unavailable"
+    assert _state(hass, INTERCOM) == "unavailable"
     assert _state(hass, MICST) == "tat"
 
 
@@ -241,7 +243,7 @@ async def test_tts_cua_assist_trong_phien_nhac_chi_ve_khi_phien_dong(
     e = await _san_sang(hass, r1, pcm_server, pipeline)
     dmr = await nhac()
     dmr.start_music(MUSIC)
-    await _bam(hass, TALK)
+    await _talk(e).async_start("button")
     sat = _vet_tinh(hass)
     await _cho(lambda: PipelineStage.STT in pipeline.turns, hass)   # TTS_END chỉ đến trong lượt chạy
     luong = mock.Mock(media_source_id="media-source://tts/-stream/tok1")
@@ -327,7 +329,7 @@ async def test_tu_danh_thuc_tren_loa_chi_nhan_luong_sau_trigger(
     r2 = await client.post(url, json={"word": "hey_r1"})
     assert r2.status == 409 and "từ chối" in (await r2.json())["loi"]
     # 5) Kết thúc phiên: luồng ĐÓNG, về «nghe».
-    await _bam(hass, END)
+    await _ket_thuc(e)
     await _cho(lambda: pcm_server.closed_by_client >= 1, hass)
     assert _state(hass, MICST) == "nghe"
     await _cho(lambda: pipeline.turns_ended >= 1, hass)
@@ -354,7 +356,7 @@ async def test_mic_tat_giua_phien_thi_dong_phien_va_phat_lai_nhac(
     e = await _san_sang(hass, r1, pcm_server, pipeline)
     dmr = await nhac()
     dmr.start_music(MUSIC)
-    await _bam(hass, TALK)
+    await _talk(e).async_start("button")
     await hass.services.async_call("switch", "turn_on", {"entity_id": "switch.r1_tat_mic"},
                                    blocking=True)
     assert _talk(e).session is None
@@ -372,7 +374,7 @@ async def test_mic_khong_noi_duoc_trong_phien_khong_treo(hass, r1, pipeline, nha
     dmr = await nhac()
     dmr.start_music(MUSIC)
     with mock.patch.object(const, "SESSION_MIC_WAIT_S", 0.3):
-        await _bam(hass, TALK)
+        await _talk(e).async_start("button")
         await _cho(lambda: _talk(e).session is None, hass)
     await _talk(e).async_settle()
     assert dmr.log == [("pause",), ("play",)]
@@ -559,9 +561,18 @@ async def test_bo_dam_bi_tu_choi_khi_dang_co_phien_assist(hass, r1, pcm_server, 
                                                           hass_client_no_auth):
     e = await _san_sang(hass, r1, pcm_server, pipeline, play_host="127.0.0.1", play_port=9)
     client = await hass_client_no_auth()
-    await _bam(hass, TALK)
+    await _talk(e).async_start("button")
     r = await client.post(f"/api/r1_speaker/intercom/{e.entry_id}?k={e.data['intercom_key']}",
                           data=b"x")
     assert r.status == 409 and "button" in await r.text()       # nói rõ ai đang giữ chỗ
-    await _bam(hass, END)
+    await _ket_thuc(e)
     assert e.runtime_data.talk.session is None
+
+
+
+async def test_cong_tac_dam_thoai_chua_co_kenh_phat_thi_bao_loi(hass, r1, pcm_server, pipeline):
+    e = await _san_sang(hass, r1, pcm_server, pipeline)
+    with pytest.raises(HomeAssistantError, match="kênh phát"):
+        await hass.services.async_call("switch", "turn_on", {"entity_id": INTERCOM}, blocking=True)
+    assert _state(hass, INTERCOM) == "off"
+    assert not e.runtime_data.duplex.luon and not e.runtime_data.duplex.active

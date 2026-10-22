@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -268,6 +269,19 @@ class R1Client:
 
     async def set_eq_bandlevel(self, band: int, level: int) -> None:
         await self.async_send("set_eq_bandlevel", {"band": band, "level": level})
+
+    async def set_eq_bands(self, levels: Sequence[int]) -> None:
+        """Ghi cả 5 dải trên MỘT kết nối (chọn preset). Cùng lệnh ``set_eq_bandlevel`` đã xác nhận."""
+        try:
+            async with asyncio.timeout(RESPONSE_TIMEOUT * 2):
+                ws = await self._open()
+                try:
+                    for band, level in enumerate(levels):
+                        await ws.send_str(build_message("set_eq_bandlevel", {"band": band, "level": level}))
+                finally:
+                    await ws.close()
+        except (aiohttp.ClientError, OSError, TimeoutError, ValueError) as exc:
+            raise R1Error(f"{self.url}: {exc!r}") from exc
 
     async def set_dlna_open(self, on: bool) -> None:
         await self.async_send("Set_DLNA_Open", {"open": on, "type_id": "ha"})

@@ -97,3 +97,19 @@ preview_light:
           min: 1
           max: 30
           mode: box
+start_duplex:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+          domain: media_player
+stop_duplex:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+          domain: media_player

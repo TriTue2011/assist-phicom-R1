@@ -22,7 +22,7 @@ from homeassistant.const import EntityCategory
 from .const import CONF_INTERCOM_KEY, DEFAULT_PORT
 from .coordinator import R1ConfigEntry
 from .entity import R1MicEntity
-from .settings import (agc_settings, conf, ha_url, limiter_settings, mic_address, noise_settings,
+from .settings import (wake_settings, agc_settings, conf, ha_url, limiter_settings, mic_address, noise_settings,
                        play_address, speaker_host, speaker_port, wake_mode)
 
 #: Đường tới trang tuỳ chọn của tích hợp trong giao diện HA (thẻ dẫn người dùng tới đó).
@@ -32,6 +32,7 @@ OPTIONS_PATH = "/config/integrations/integration/r1_speaker"
 def am_thanh(entry: R1ConfigEntry) -> dict:
     n, a, lim = noise_settings(entry), agc_settings(entry), limiter_settings(entry)
     return {
+        "tu_danh_thuc": wake_settings(entry),
         "khu_tap": {"bat": n.enabled, "do_giam_db": n.strength_db, "nguong_giong_db": n.voice_db},
         "agc": {"bat": a.enabled, "dich_db": a.target_db, "tang_toi_da_db": a.max_gain_db,
                 "im_lang_db": a.silence_db},

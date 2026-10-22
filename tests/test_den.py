@@ -565,4 +565,4 @@ async def test_thuoc_tinh_cho_the_ba_nhom_va_khong_lo_khoa(hass, r1):
     assert all(h["nguon"].startswith("https://") for h in al["hieu_ung"])
     assert all(v["mac_dinh"] for v in al["chuc_nang"].values())
     assert al["den_nhac_firmware"] == {"bat": True, "luma": 50, "chroma": 60,
-                                       "lenh_dieu_khien": "CHUA_XAC_DINH"}
+                                       "dieu_khien": "qua_apk_msgcenter"}

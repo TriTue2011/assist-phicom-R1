@@ -34,6 +34,12 @@
       },
       "mic_gain": {
         "name": "Tăng mic"
+      },
+      "music_light_luma": {
+        "name": "Độ sáng đèn nhạc"
+      },
+      "music_light_chroma": {
+        "name": "Sắc độ đèn nhạc"
       }
     },
     "switch": {
@@ -54,17 +60,23 @@
       },
       "mute": {
         "name": "Tắt mic"
+      },
+      "assist": {
+        "name": "Assist (bật/tắt)"
+      },
+      "intercom_open": {
+        "name": "Đàm thoại"
+      },
+      "music_light": {
+        "name": "Đèn theo nhạc"
+      },
+      "song_song": {
+        "name": "Mic loa song song"
       }
     },
     "sensor": {
       "device_state": {
         "name": "Trạng thái thiết bị"
-      },
-      "music_light_luma": {
-        "name": "Độ sáng đèn nhạc"
-      },
-      "music_light_chroma": {
-        "name": "Sắc độ đèn nhạc"
       },
       "mic_status": {
         "name": "Trạng thái mic",
@@ -101,14 +113,6 @@
       "wake": {
         "name": "Từ đánh thức"
       }
-    },
-    "button": {
-      "talk": {
-        "name": "Đàm thoại"
-      },
-      "end_talk": {
-        "name": "Kết thúc đàm thoại"
-      }
     }
   },
   "options": {
@@ -140,7 +144,16 @@
           "limiter_ceiling": "Hạn đỉnh: trần (tỉ lệ biên độ tối đa, 0,89 ≈ -1 dBFS)",
           "ha_url": "Địa chỉ HA mà loa gọi tới (trống = tự đoán)",
           "mic_listen_port": "Cổng nghe mic (APK loa nối vào HA)",
-          "mic_listen_key": "Khoá cổng nghe mic (trống = không mở cổng nghe)"
+          "mic_listen_key": "Khoá cổng nghe mic (trống = không mở cổng nghe)",
+          "duplex_vad_threshold": "Đàm thoại song công: ngưỡng tiếng người (VAD), xác suất 0-1",
+          "duplex_preroll_s": "Đàm thoại song công: giữ tiếng trước câu nói (giây)",
+          "duplex_hangover_s": "Đàm thoại song công: giữ tiếng sau câu nói (giây)",
+          "duplex_max_s": "Đàm thoại song công: thời gian tối đa của phiên (giây)",
+          "duplex_duck": "Đàm thoại song công: bỏ tiếng mic nhỏ khi HA đang phát (cắt vọng, mặc định tắt)",
+          "duplex_duck_db": "Đàm thoại song công: ngưỡng mức tiếng cắt vọng (dBFS)",
+          "wake_enable": "Từ đánh thức (chưa hoạt động, chờ loa)",
+          "wake_word": "Từ khoá đánh thức",
+          "wake_sensitivity": "Độ nhạy từ đánh thức (0–1, CHƯA ĐO)"
         }
       }
     },
@@ -215,7 +228,7 @@
     },
     "set_music_light": {
       "name": "Đặt đèn khi phát nhạc",
-      "description": "Hiệu ứng đèn lúc phát nhạc (chức năng «Đang phát nhạc»): bật/tắt, hiệu ứng, độ sáng. Đèn theo nhạc của firmware là việc khác và chưa biết lệnh điều khiển.",
+      "description": "Hiệu ứng đèn lúc phát nhạc (chức năng «Phát nhạc (hiệu ứng của HA)», KHÁC đèn nhạc của firmware ở các thực thể «Đèn theo nhạc»): bật/tắt, hiệu ứng, độ sáng. Đèn theo nhạc của firmware điều khiển bằng các thực thể «Đèn theo nhạc», «Độ sáng/Sắc độ đèn nhạc».",
       "fields": {
         "entity_id": {
           "name": "Loa",
@@ -262,7 +275,7 @@
         "nghi": "Đang nghĩ",
         "phan_hoi": "Đang trả lời",
         "dam_thoai": "Đàm thoại",
-        "phat_nhac": "Đang phát nhạc",
+        "phat_nhac": "Phát nhạc (hiệu ứng của HA)",
         "loi": "Lỗi",
         "tat_mic": "Tắt mic"
       }

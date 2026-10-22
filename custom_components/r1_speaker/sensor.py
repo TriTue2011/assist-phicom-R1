@@ -1,4 +1,4 @@
-"""Sensor: thông tin từ get_info (trạng thái thiết bị, thông số đèn nhạc)."""
+"""Sensor: trạng thái thiết bị (get_info), trạng thái mic, tóm tắt cài đặt."""
 
 from __future__ import annotations
 
@@ -14,11 +14,6 @@ from .entity import R1Entity, R1MicEntity, preregister
 
 SENSORS = (
     SensorEntityDescription(key="device_state", translation_key="device_state",
-                            entity_category=EntityCategory.DIAGNOSTIC),
-    SensorEntityDescription(key="music_light_luma", translation_key="music_light_luma",
-                            entity_category=EntityCategory.DIAGNOSTIC),
-    SensorEntityDescription(key="music_light_chroma",
-                            translation_key="music_light_chroma",
                             entity_category=EntityCategory.DIAGNOSTIC),
 )
 
@@ -70,8 +65,15 @@ class R1MicStatus(R1MicEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        return self._talk.as_attributes()
+        attrs = self._talk.as_attributes()
+        duplex = getattr(self._entry.runtime_data, "duplex", None)
+        if duplex is not None:
+            attrs.update(duplex.as_attributes())
+        return attrs
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         self.async_on_remove(self._talk.add_listener(self.async_write_ha_state))
+        duplex = getattr(self._entry.runtime_data, "duplex", None)
+        if duplex is not None:
+            self.async_on_remove(duplex.add_listener(self.async_write_ha_state))

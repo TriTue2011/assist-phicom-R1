@@ -34,9 +34,13 @@ class R1PlayError(Exception):
 
 
 class R1Playback:
-    def __init__(self, host: str, port: int) -> None:
+    def __init__(self, host: str, port: int, via=None) -> None:
         self.host = (host or "").strip()
         self.port = int(port or 0)
+        #: đầu nhận mic (R1MicServer) nếu phát xuống loa qua chính kết nối APK; None = kênh TCP riêng
+        self._via = via
+        if via is not None:
+            via.add_state_listener(self._notify_state)   # APK nối/đứt → «configured» đổi
         #: None = chưa thử lần nào; True/False = kết quả lần phát gần nhất.
         self.ok: bool | None = None
         self._warned = False
@@ -44,7 +48,9 @@ class R1Playback:
 
     @property
     def configured(self) -> bool:
-        return bool(self.host) and 0 < self.port < 65536
+        if self.host and 0 < self.port < 65536:
+            return True                     # kênh TCP riêng đã cấu hình
+        return self._via is not None and bool(self._via.receiving)
 
     def add_state_listener(self, cb: Callable[[], None]) -> Callable[[], None]:
         self._on_state.append(cb)
@@ -54,6 +60,9 @@ class R1Playback:
         if ok == self.ok:
             return
         self.ok = ok
+        self._notify_state()
+
+    def _notify_state(self) -> None:
         for cb in list(self._on_state):
             try:
                 cb()
@@ -64,6 +73,8 @@ class R1Playback:
         """Nối vào loa, ghi mọi khúc từ ``source`` rồi đóng. Trả số giây tiếng đã gửi."""
         if not self.configured:
             raise R1PlayError("chưa cấu hình kênh phát về loa (play_port)")
+        if not (self.host and 0 < self.port < 65536):
+            return await self._play_via(source)   # không có kênh riêng: phát qua kết nối APK
         sent = 0
         try:
             reader, writer = await asyncio.wait_for(
@@ -85,6 +96,19 @@ class R1Playback:
             writer.close()
             with contextlib.suppress(OSError, TimeoutError):
                 await asyncio.wait_for(writer.wait_closed(), CONNECT_TIMEOUT)
+        self._warned = False
+        self._set_ok(True)
+        return sent / (2 * PLAY_RATE)
+
+    async def _play_via(self, source: AsyncIterator[bytes]) -> float:
+        sent = 0
+        try:
+            async for chunk in source:
+                await self._via.send_pcm(chunk)
+                sent += len(chunk)
+        except (OSError, TimeoutError, ConnectionError) as exc:
+            self._lost(f"qua kết nối mic đứt: {exc!r}")
+            raise R1PlayError(f"kênh phát qua APK đứt: {exc!r}") from exc
         self._warned = False
         self._set_ok(True)
         return sent / (2 * PLAY_RATE)

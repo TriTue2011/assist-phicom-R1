@@ -15,6 +15,7 @@
  */
 (function () {
   "use strict";
+  var BUILD = "2026-10-22.3";
 
   var PLATFORM = "r1_speaker";
   var N_BANDS = 5;
@@ -353,6 +354,13 @@
       var r = root.querySelector('[data-v="range"]');
       if (r) r.textContent = m.bandMin !== null ? sign(m.bandMin) + " … " + sign(m.bandMax) + " " + t.unit : "—";
     }
+  }
+
+  // r1-card dựng thẻ từ lớp này (nạp bằng URL mới mỗi lần mở trang), không phụ thuộc bản cũ còn
+  // trong bộ nhớ đệm của trình duyệt dưới URL cố định.
+  if (typeof window !== "undefined") {
+    window.R1_THE = window.R1_THE || {};
+    window.R1_THE.eq = { lop: R1EqCard, build: BUILD };
   }
 
   if (typeof customElements !== "undefined" && !customElements.get("r1-eq-card")) {

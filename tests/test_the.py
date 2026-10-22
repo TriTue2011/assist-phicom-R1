@@ -32,7 +32,7 @@ def test_tep_the_ton_tai_va_dang_ky_dung_ten():
 async def test_the_duoc_nap_vao_giao_dien_va_phuc_vu(hass, r1, hass_client_no_auth):
     hass.data[DATA_EXTRA_MODULE_URL] = set()          # như khi component frontend đã chạy
     await _them(hass, r1)
-    assert CARD_URL in hass.data[DATA_EXTRA_MODULE_URL]    # tự nạp, khỏi thêm tài nguyên tay
+    assert CARD_URL not in hass.data[DATA_EXTRA_MODULE_URL]   # KHÔNG nạp sớm làm module phụ (HA không thấy phần tử)
     cl = await hass_client_no_auth()
     r = await cl.get(CARD_URL)
     assert r.status == 200
@@ -55,7 +55,7 @@ async def test_thuoc_tinh_thuc_the_cho_the(hass, r1):
                 "number.phicomm_r1_bass_strength", "number.phicomm_r1_loudness_gain"):
         assert hass.states.get(eid).attributes["confirmed"] is False, eid
     preset = hass.states.get("select.phicomm_r1_eq_preset")
-    assert preset.attributes["selectable"] is False        # chưa có lệnh đặt preset
+    assert preset.attributes["selectable"] is True         # chọn preset = ghi 5 dải đã xác nhận
     assert len(preset.attributes["options"]) == 10 and preset.state == "unknown"  # -1
 
 
@@ -98,9 +98,9 @@ async def test_mo_hinh_the_tu_trang_thai_that(hass, r1):
     # nhãn «chưa xác nhận»: chỉ băng EQ và bass_enable đã xác nhận
     assert all(b["confirmed"] for b in m["bands"]) and m["bass"]["confirmed"]
     assert not any(m[k]["confirmed"] for k in ("eq", "loudness", "bassStrength", "loudnessGain"))
-    # preset: chỉ hiển thị
+    # preset: chọn được (ghi 5 dải theo bảng firmware); 5 dải thử nghiệm không trùng preset nào
     assert m["preset"]["options"][:3] == ["Normal", "Classical", "Dance"]
-    assert m["preset"]["current"] is None and m["preset"]["selectable"] is False
+    assert m["preset"]["current"] is None and m["preset"]["selectable"] is True
 
 
 @need_node

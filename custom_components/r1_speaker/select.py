@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN
+from .const import DOMAIN, EQ_MAX, EQ_MIN, EQ_PRESET_MB
 from .coordinator import R1ConfigEntry, R1Coordinator
 from .entity import R1Entity, R1MicEntity, preregister
 
@@ -28,21 +28,19 @@ class R1PipelineSelect(R1MicEntity, AssistPipelineSelect):
 
 
 class R1EqPreset(R1Entity, SelectEntity):
-    """Preset EQ của loa: tên đọc từ ``eq.Preset_list``, ``eq.Current_Preset`` = -1 (đang
-    chỉnh tay, không preset nào) thì không chọn gì.
-
-    CHỈ ĐỌC được: lệnh đặt preset theo số KHÔNG có trong tài liệu dịch ngược (danh sách lệnh
-    cổng 8080 chỉ có set_eq_enable + set_eq_bandlevel; web của loa và R1-card tự áp preset
-    bằng cách ghi 5 dải), nên chưa gửi lệnh tự nghĩ lên loa. Chọn → báo lỗi rõ ràng."""
+    """Preset EQ của loa: tên đọc từ ``eq.Preset_list``. Loa KHÔNG có lệnh «đặt preset», nên chọn
+    preset = ghi 5 dải theo bảng của firmware (``const.EQ_PRESET_MB``) bằng ``set_eq_bandlevel``
+    đã xác nhận. ``eq.Current_Preset`` luôn là -1 sau khi ghi từng dải, nên trạng thái hiện tại
+    suy ra từ 5 dải: trùng một preset thì hiện tên, lệch thì không chọn gì (đang chỉnh tay)."""
 
     _attr_translation_key = "eq_preset"
     _attr_entity_category = EntityCategory.CONFIG
-    command = None   # chưa có lệnh đặt preset nào được xác định
+    command = "set_eq_bandlevel"
 
     @property
     def extra_state_attributes(self) -> dict:
-        # Thẻ Lovelace: chỉ cho chọn khi ``selectable`` là True (chưa có lệnh đã xác nhận).
-        return {"selectable": False, "confirmed": False}
+        # Thẻ Lovelace: ``selectable`` True vì chọn preset thực chất là ghi 5 dải đã xác nhận.
+        return {**(super().extra_state_attributes or {}), "selectable": True}
 
     def __init__(self, coordinator: R1Coordinator) -> None:
         super().__init__(coordinator, "eq_preset")
@@ -58,11 +56,20 @@ class R1EqPreset(R1Entity, SelectEntity):
     @property
     def current_option(self) -> str | None:
         d = self.coordinator.data
-        if d is None or d.eq_preset is None:
+        if d is None:
             return None
-        return next((name for num, name in (d.eq_presets or ()) if num == d.eq_preset), None)
+        if d.eq_preset is not None and d.eq_preset >= 0:
+            return next((name for num, name in (d.eq_presets or ()) if num == d.eq_preset), None)
+        return next((name for name, levels in EQ_PRESET_MB.items()
+                     if tuple(d.bands) == levels and name in self.options), None)
 
     async def async_select_option(self, option: str) -> None:
-        raise HomeAssistantError(
-            "Chưa đặt được preset EQ: lệnh đặt preset của loa chưa xác định "
-            "(chỉnh từng dải bằng thực thể EQ)")
+        levels = EQ_PRESET_MB.get(option)
+        if levels is None:
+            raise HomeAssistantError(f"Preset «{option}» chưa có bảng giá trị 5 dải")
+        d = self.coordinator.data
+        lo = d.eq_min if d is not None and d.eq_min is not None else EQ_MIN
+        hi = d.eq_max if d is not None and d.eq_max is not None else EQ_MAX
+        levels = tuple(min(max(v, lo), hi) for v in levels)
+        await self.coordinator.async_command(
+            lambda: self.coordinator.client.set_eq_bands(levels), bands=levels)

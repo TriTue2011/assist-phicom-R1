@@ -261,6 +261,10 @@ class MicView(HomeAssistantView):
         mic: R1Mic = coordinator.mic
         if not mic.available or mic.muted:
             return web.Response(status=503, text="microphone not available")
+        # Phiên song công (NV246) đang mở: phía điện thoại chỉ nghe TIẾNG NGƯỜI đã qua VAD
+        # của phiên đó, không nghe luồng mic thô. Không có phiên → hành vi cũ nguyên vẹn.
+        duplex = getattr(coordinator, "duplex", None)
+        loc_vad = duplex if duplex is not None and duplex.active else None
         hang: asyncio.Queue[bytes] = asyncio.Queue(maxsize=MIC_QUEUE_CHUNKS)
 
         def nhan(khuc: bytes) -> None:
@@ -271,9 +275,10 @@ class MicView(HomeAssistantView):
         resp = web.StreamResponse(headers={
             "Content-Type": f"audio/L16;rate={MIC_RATE};channels=1", "Cache-Control": "no-store"})
         await resp.prepare(request)
-        huy = mic.add_chunk_listener(nhan)
+        huy = (loc_vad.add_audio_listener(nhan) if loc_vad is not None
+               else mic.add_chunk_listener(nhan))
         try:
-            while mic.available and not mic.muted:
+            while mic.available and not mic.muted and (loc_vad is None or loc_vad.active):
                 try:
                     khuc = await asyncio.wait_for(hang.get(), _MIC_IM_SAU)
                 except TimeoutError:

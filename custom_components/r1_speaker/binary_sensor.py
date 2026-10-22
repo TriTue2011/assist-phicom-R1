@@ -19,9 +19,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
 
 
 class R1IntercomLink(R1MicEntity, BinarySensorEntity):
-    """Bật = lần phát về loa gần nhất thành công; tắt = lần gần nhất hỏng (loa không nhận);
-    chưa từng thử = trạng thái chưa biết. Unavailable = chưa cấu hình ``play_port`` (bộ đàm
-    tắt). Phía loa nhận PCM CHƯA có nên hiện chưa thể bật."""
+    """Kênh phát về loa của bộ đàm. Unavailable = chưa có kênh (APK loa chưa nối về HA và chưa cấu
+    hình ``play_port``). Có kênh thì: bật = lần phát gần nhất thành công; tắt = lần gần nhất hỏng;
+    chưa từng phát = chưa biết. Tự cập nhật khi APK loa nối hoặc đứt kết nối."""
 
     _attr_translation_key = "intercom"
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY

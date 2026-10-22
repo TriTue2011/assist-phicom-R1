@@ -34,6 +34,12 @@
       },
       "mic_gain": {
         "name": "Microphone gain"
+      },
+      "music_light_luma": {
+        "name": "Music light brightness"
+      },
+      "music_light_chroma": {
+        "name": "Music light chroma"
       }
     },
     "switch": {
@@ -54,17 +60,23 @@
       },
       "mute": {
         "name": "Mute microphone"
+      },
+      "assist": {
+        "name": "Assist (on/off)"
+      },
+      "intercom_open": {
+        "name": "Intercom"
+      },
+      "music_light": {
+        "name": "Music light"
+      },
+      "song_song": {
+        "name": "Parallel mic and speaker"
       }
     },
     "sensor": {
       "device_state": {
         "name": "Device state"
-      },
-      "music_light_luma": {
-        "name": "Music light luma"
-      },
-      "music_light_chroma": {
-        "name": "Music light chroma"
       },
       "mic_status": {
         "name": "Microphone status",
@@ -101,14 +113,6 @@
       "wake": {
         "name": "Wake word"
       }
-    },
-    "button": {
-      "talk": {
-        "name": "Talk"
-      },
-      "end_talk": {
-        "name": "End conversation"
-      }
     }
   },
   "options": {
@@ -140,7 +144,16 @@
           "limiter_ceiling": "Limiter: ceiling (fraction of full scale, 0.89 ≈ -1 dBFS)",
           "ha_url": "Home Assistant address the speaker calls (empty = guess)",
           "mic_listen_port": "Microphone listen port (speaker APK connects to HA)",
-          "mic_listen_key": "Microphone listen key (empty = listen port closed)"
+          "mic_listen_key": "Microphone listen key (empty = listen port closed)",
+          "duplex_vad_threshold": "Duplex call: voice (VAD) threshold, probability 0-1",
+          "duplex_preroll_s": "Duplex call: audio kept before speech (s)",
+          "duplex_hangover_s": "Duplex call: audio kept after speech (s)",
+          "duplex_max_s": "Duplex call: max session length (s)",
+          "duplex_duck": "Duplex call: drop quiet mic audio while HA is playing (echo cut, off by default)",
+          "duplex_duck_db": "Duplex call: echo-cut level threshold (dBFS)",
+          "wake_enable": "Wake word (device side, not active yet)",
+          "wake_word": "Wake word phrase",
+          "wake_sensitivity": "Wake word sensitivity (0-1, not measured)"
         }
       }
     },
@@ -215,7 +228,7 @@
     },
     "set_music_light": {
       "name": "Set music light",
-      "description": "Light effect while music plays (the 'Music playing' function): on/off, effect, brightness. The speaker firmware's own music light is separate and its command is unknown.",
+      "description": "Light effect while music plays (the 'Music playing (HA effect)' function, NOT the speaker firmware's music light — see the Music light entities): on/off, effect, brightness. The speaker firmware's own music light is controlled by the Music light entities.",
       "fields": {
         "entity_id": {
           "name": "Speaker",
@@ -262,7 +275,7 @@
         "nghi": "Thinking",
         "phan_hoi": "Responding",
         "dam_thoai": "Conversation",
-        "phat_nhac": "Music playing",
+        "phat_nhac": "Music playing (HA effect)",
         "loi": "Error",
         "tat_mic": "Microphone muted"
       }

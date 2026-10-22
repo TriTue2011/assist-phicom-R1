@@ -59,13 +59,13 @@ def _st(hass, eid):
 
 
 async def test_doc_get_info(hass, r1):
-    await _them(hass, r1)
+    e = await _them(hass, r1)
     assert _num(hass, "number.phicomm_r1_volume") == 7
     assert _st(hass, "switch.phicomm_r1_dlna").state == STATE_ON
     assert _st(hass, "switch.phicomm_r1_airplay").state == STATE_OFF
     assert _st(hass, "sensor.phicomm_r1_device_state").state == "1"
-    assert _st(hass, "sensor.phicomm_r1_music_light_luma").state == "50"
-    assert _st(hass, "sensor.phicomm_r1_music_light_chroma").state == "60"
+    d = e.runtime_data.data                       # đèn nhạc: đọc từ get_info, thực thể điều khiển ở test_den_nhac
+    assert (d.music_light_enable, d.music_light_luma, d.music_light_chroma) == (True, 50, 60)
     # EQ đọc từ get_eq_config
     assert _st(hass, "switch.phicomm_r1_bass_boost").state == STATE_OFF
     # Sửa ca cũ: loa giả giờ trả get_eq_config THẬT (tests/du_lieu_that.py) thay cho số tự

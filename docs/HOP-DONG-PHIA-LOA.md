@@ -124,7 +124,7 @@ STT, từ đánh thức kiểu `ha`) nằm ở HA.
 ## 4c. Từ đánh thức TRÊN LOA → HA (HTTP POST) — phía HA ĐÃ CÓ, phía loa CHƯA CÓ (CHỜ)
 
 Chế độ `wake_mode = speaker`: từ đánh thức chạy trên loa; HA **không nối luồng mic** và không
-nhận byte mic nào cho tới khi loa báo trigger (hoặc người bấm `button.r1_dam_thoai`).
+nhận byte mic nào cho tới khi loa báo trigger (hoặc người bật `switch.r1_dam_thoai`).
 
 - Địa chỉ: dịch vụ `r1_speaker.get_wake_endpoint` trả `POST <ha_url>/api/r1_speaker/wake/<entry>?k=<khoá>`.
 - Thân JSON tuỳ chọn: `{"event": "wake", "word": "<từ>"}` (mặc định `wake`) hoặc nhịp tim

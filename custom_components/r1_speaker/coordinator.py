@@ -19,6 +19,7 @@ from .intercom import R1Intercom
 from .mic import R1Mic
 from .mic_server import R1MicServer
 from .playback import R1Playback
+from .song_cong import R1Duplex
 
 if TYPE_CHECKING:
     from .den import R1Lights
@@ -34,6 +35,7 @@ class R1Coordinator(DataUpdateCoordinator[R1State]):
     mic_server: R1MicServer
     playback: R1Playback
     intercom: R1Intercom
+    duplex: R1Duplex
     music: MusicKeeper
     talk: R1Talk
     lights: "R1Lights"

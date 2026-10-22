@@ -38,9 +38,13 @@ def test_tep_the_ton_tai_dang_ky_dung_ten_va_khong_goi_loa():
 async def test_the_duoc_nap_vao_giao_dien_va_phuc_vu(hass, r1, hass_client_no_auth):
     hass.data[DATA_EXTRA_MODULE_URL] = set()
     await _them(hass, r1)
-    assert SETTINGS_CARD_URL in hass.data[DATA_EXTRA_MODULE_URL]
+    assert SETTINGS_CARD_URL not in hass.data[DATA_EXTRA_MODULE_URL]   # chỉ nạp qua tài nguyên Lovelace
     r = await (await hass_client_no_auth()).get(SETTINGS_CARD_URL)
     assert r.status == 200 and "r1-settings-card" in await r.text()
+    assert r.headers["Cache-Control"] == "no-cache"             # cập nhật thẻ có hiệu lực ngay
+    r2 = await (await hass_client_no_auth()).get(SETTINGS_CARD_URL.replace("/r1_speaker/", "/r1_speaker/b/12345/"))
+    assert r2.status == 200 and await r2.text() == await r.text()           # đường dẫn đổi mỗi lần mở trang
+    assert r2.headers["Cache-Control"] == "no-store"
 
 
 def _hass_gia(hass, ghi_de=None):
@@ -292,3 +296,26 @@ def test_giao_dien_the_cai_dat_an_hien_ba_nhom_va_goi_dich_vu(tmp_path):
         ["r1_speaker", "set_light_function", {"entity_id": sid, "function": "nghe", "rim": False}],
         ["r1_speaker", "set_music_light", {"entity_id": sid, "enabled": True}],
         ["r1_speaker", "preview_light", {"entity_id": sid, "function": "tat_mic"}]]
+
+
+async def test_the_khong_bao_gio_phuc_vu_tep_nen_gz_dung_canh(tmp_path):
+    """Một ``.js.gz`` cũ còn sót cạnh tệp thẻ từng che mọi bản cập nhật (điện thoại thấy thẻ cũ):
+    máy chủ phải luôn trả nội dung của chính tệp ``.js`` dù trình duyệt nhận gzip."""
+    import gzip
+
+    from aiohttp.test_utils import make_mocked_request
+
+    from custom_components.r1_speaker import _TheView
+    js = tmp_path / "r1-the.js"
+    js.write_text("console.log('MOI');", encoding="utf-8")
+    (tmp_path / "r1-the.js.gz").write_bytes(gzip.compress(b"console.log('CU');"))
+    view = _TheView("/r1_speaker/r1-the.js", js)
+    for ban in (None, "123"):
+        r = await view.get(make_mocked_request("GET", "/x", headers={"Accept-Encoding": "gzip, br"}), ban)
+        assert r.body == b"console.log('MOI');" and "Content-Encoding" not in r.headers
+        assert r.content_type == "text/javascript"
+
+
+def test_thu_muc_the_khong_co_tep_nen_bo_roi():
+    www = CARD.parent
+    assert not list(www.glob("*.gz")) and not list(www.glob("*.br")), "tệp nén cũ sẽ che bản cập nhật"

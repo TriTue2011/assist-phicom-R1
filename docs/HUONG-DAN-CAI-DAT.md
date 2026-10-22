@@ -60,8 +60,11 @@ chỉnh tay tự theo.
 
 ## 2. Thẻ Lovelace chỉnh EQ và thẻ đàm thoại
 
-Tích hợp tự phục vụ thẻ ở `/r1_speaker/r1-eq-card.js` và **tự nạp vào mọi bảng điều khiển**
-(không cần thêm tài nguyên). Tải lại trang trình duyệt sau khi khởi động lại HA (Ctrl+F5).
+Tích hợp phục vụ thẻ ở `/r1_speaker/r1-*.js` nhưng **không tự nạp**: phải thêm tài nguyên Lovelace
+(Cài đặt → Bảng điều khiển → ⋮ → Tài nguyên → Thêm, loại **Mô-đun JavaScript**). Chỉ cần
+`/r1_speaker/r1-card.js` (thẻ gộp, tự nạp ba thẻ con, dùng `type: custom:r1-card`); muốn dùng riêng
+từng thẻ thì thêm file tương ứng. Lý do không tự nạp: nạp sớm làm giao diện HA không thấy thẻ
+(«Custom element not found»). Sau khi cập nhật, tải lại trang (thẻ gộp luôn lấy mã mới).
 
 Thêm thẻ (chế độ YAML):
 
@@ -166,10 +169,17 @@ bị giữ nên lượt ấy hết giờ); TTS qua DLNA và bộ đàm PCM có t
 HA là máy chủ Assist: pipeline chọn ở `select.r1_tro_ly` lo STT / hiểu lệnh / TTS; loa chỉ là
 tai và miệng (`assist_satellite.r1` + `media_player.r1_loa`).
 
-- **`button.r1_dam_thoai`**: bấm → tạm dừng nhạc đang phát trên loa (DLNA/YouTube qua
+- **Phiên Assist** (từ đánh thức trên loa hoặc HA): tạm dừng nhạc đang phát trên loa (DLNA/YouTube qua
   `media_player.r1_loa`) và mở MỘT phiên Assist nghe thẳng (bỏ bước từ gọi). Phiên xong thì nhạc
   phát lại (nhạc đang phát đúng URI cũ → `media_play`; URI đã bị TTS thay → đặt lại đúng URI cũ và
-  tua về vị trí cũ). `button.r1_ket_thuc_dam_thoai` đóng phiên ngay; công tắc tắt mic cũng đóng phiên.
+  tua về vị trí cũ). Công tắc tắt mic đóng phiên ngay. (Nút «Đàm thoại» / «Kết thúc» đã bỏ.)
+- **`switch.r1_dam_thoai`** (đàm thoại song công, mic mở liên tục): bật = mở phiên và giữ mở («Bật mic
+  luôn»), tắt = đóng. Thuộc tính `giu_mo` cho biết phiên do công tắc giữ mở hay chỉ đang giữ nút. Thẻ
+  «Giữ để nói» mở/đóng phiên bằng dịch vụ `r1_speaker.start_duplex` / `stop_duplex`. Cần APK loa đang
+  nối về HA (đường phát xuống loa đi qua chính kết nối đó).
+- **`switch.r1_mic_loa_song_song`** («Mic loa song song»): bật = mic và loa SONG SONG (nghe và nói cùng
+  lúc, có khử vọng); tắt = NỬA CÔNG (luân phiên, bỏ mic khi loa đang phát). Chỉ chọn kiểu đàm thoại,
+  không liên quan tới cách thao tác mic («Giữ để nói» / «Bật mic luôn»). Nhớ qua lần khởi động HA.
 - **Một phiên một lúc**: bấm khi phiên khác (nút / từ đánh thức / bộ đàm) chưa đóng → bị TỪ CHỐI
   ngay kèm lời nêu nguồn và tuổi phiên đang mở (thuộc tính `tu_choi_gan_nhat`, sự kiện
   `r1_speaker_session_refused`). Phiên có đồng hồ canh: mic không nối được sau 5 giây hoặc quá 60 giây
@@ -247,6 +257,6 @@ Test thẻ trong Chrome không đầu: `tests/test_the_chrome.py` (tự bỏ qua
 | Thêm tích hợp báo «Không đọc được loa» | IP/cổng sai hoặc cổng 8080 bị chặn; thử cổng khác trong Tuỳ chọn. |
 | Thực thể EQ unavailable | Loa không trả `get_eq_config`; xem log `custom_components.r1_speaker`. Thẻ hiện «Loa không phản hồi». |
 | Kéo thanh EQ mà số không đổi | Lệnh bị loa bỏ qua (chỉ `set_eq_bandlevel` đã xác nhận); lần hỏi kế (10 giây) HA lấy lại số thật. |
-| Thẻ không xuất hiện | Ctrl+F5; hoặc thêm tài nguyên tay (mục 2). |
+| Thẻ báo «Custom element not found» | Chưa thêm tài nguyên `/r1_speaker/r1-card.js` (mục 2); sau khi thêm, tải lại trang. |
 | `assist_satellite.r1` unavailable | Chưa có/đứt luồng mic (mục 4), hoặc `switch.r1_tat_mic` đang bật là chủ động (idle, không phải lỗi). |
 | POST bộ đàm trả 503 | Chưa đặt cổng nhận tiếng phát. |

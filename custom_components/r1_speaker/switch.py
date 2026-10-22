@@ -1,4 +1,4 @@
-"""Công tắc: DLNA, AirPlay, EQ, Bass, Loudness."""
+"""Công tắc: DLNA, AirPlay, EQ, Bass, Loudness, tắt mic, Assist, đàm thoại, mic loa song song, đèn nhạc."""
 
 from __future__ import annotations
 
@@ -7,14 +7,15 @@ from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
-from homeassistant.const import STATE_ON, EntityCategory
+from homeassistant.const import STATE_OFF, STATE_ON, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .client import R1Client
+from .const import MUSIC_LIGHT_ENABLE
 from .coordinator import R1ConfigEntry, R1Coordinator
-from .entity import R1Entity, R1MicEntity, preregister
+from .entity import R1Entity, R1MicEntity, R1MusicLightEntity, preregister
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -45,7 +46,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
                             async_add_entities: AddConfigEntryEntitiesCallback) -> None:
     async_add_entities(R1Switch(entry.runtime_data, d) for d in SWITCHES)
     preregister(hass, entry, "switch", f"{entry.entry_id}_mute", "r1_tat_mic")
-    async_add_entities([R1MuteSwitch(entry)])
+    preregister(hass, entry, "switch", f"{entry.entry_id}_intercom_open", "r1_dam_thoai")
+    preregister(hass, entry, "switch", f"{entry.entry_id}_song_song", "r1_mic_loa_song_song")
+    preregister(hass, entry, "switch", f"{entry.entry_id}_music_light", "r1_den_nhac")
+    async_add_entities([R1MuteSwitch(entry), R1AssistSwitch(entry), R1IntercomSwitch(entry),
+                        R1ParallelSwitch(entry),
+                        R1MusicLightSwitch(entry.runtime_data)])
 
 
 class R1Switch(R1Entity, SwitchEntity):
@@ -99,3 +105,128 @@ class R1MuteSwitch(R1MicEntity, SwitchEntity, RestoreEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         self.mic.set_muted(False)
         self.async_write_ha_state()
+
+
+class R1AssistSwitch(R1MicEntity, SwitchEntity, RestoreEntity):
+    """Bật = Assist hoạt động (nghe từ đánh thức, trả lời). Tắt = vệ tinh không nghe.
+    Đàm thoại song công không bị ảnh hưởng. Nhớ trạng thái qua lần khởi động (mặc định bật)."""
+
+    _attr_translation_key = "assist"
+
+    def __init__(self, entry: R1ConfigEntry) -> None:
+        super().__init__(entry, "assist")
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        cu = await self.async_get_last_state()
+        self.mic.set_assist(cu is None or cu.state != STATE_OFF)
+
+    @property
+    def is_on(self) -> bool:
+        return self.mic.assist_on
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self.mic.set_assist(True)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self.mic.set_assist(False)
+        self.async_write_ha_state()
+
+
+class R1IntercomSwitch(R1MicEntity, SwitchEntity):
+    """Đàm thoại: bật = mở phiên song công và GIỮ mở (mic mở liên tục; nghe-nói cùng lúc hay luân
+    phiên theo «Chế độ đàm thoại»), tắt = đóng. «Giữ để nói» trên thẻ mở/đóng phiên bằng dịch vụ
+    ``start_duplex``/``stop_duplex`` nên không đặt ``giu_mo``. Không nhớ qua lần khởi động lại: HA
+    khởi động lại thì phiên đóng, mic không tự mở."""
+
+    _attr_translation_key = "intercom_open"
+
+    def __init__(self, entry: R1ConfigEntry) -> None:
+        super().__init__(entry, "intercom_open")
+
+    @property
+    def _duplex(self):
+        return self._entry.runtime_data.duplex
+
+    @property
+    def available(self) -> bool:
+        return self.mic.available           # mic chưa nối / chưa cấu hình thì không đàm thoại được
+
+    @property
+    def is_on(self) -> bool:
+        return self._duplex.active
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"giu_mo": self._duplex.luon}
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self._duplex.add_listener(self.async_write_ha_state))
+        self.async_on_remove(self.mic.add_state_listener(self.async_write_ha_state))
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        if not self._duplex.active:
+            await self._duplex.async_start()
+        self._duplex.luon = True
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self._duplex.end("nguoi_dung_ket_thuc")     # end() cũng xoá ``giu_mo``
+        self.async_write_ha_state()
+
+
+class R1ParallelSwitch(R1MicEntity, SwitchEntity, RestoreEntity):
+    """«Mic loa song song»: bật = mic và loa chạy SONG SONG (nghe và nói cùng lúc, có khử vọng);
+    tắt = NỬA CÔNG (mic và loa luân phiên, không tự nghe vọng). Chỉ chọn kiểu đàm thoại; «Giữ để nói»
+    và «Bật mic luôn» (công tắc «Đàm thoại») là cách thao tác mic, không liên quan. Nhớ qua lần khởi
+    động HA (mặc định bật)."""
+
+    _attr_translation_key = "song_song"
+
+    def __init__(self, entry: R1ConfigEntry) -> None:
+        super().__init__(entry, "song_song")
+
+    @property
+    def _duplex(self):
+        return self._entry.runtime_data.duplex
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        cu = await self.async_get_last_state()
+        self._duplex.half_duplex = cu is not None and cu.state == STATE_OFF
+
+    @property
+    def is_on(self) -> bool:
+        return not self._duplex.half_duplex
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self._duplex.half_duplex = False
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self._duplex.half_duplex = True
+        self.async_write_ha_state()
+
+
+class R1MusicLightSwitch(R1MusicLightEntity, SwitchEntity):
+    """Bật/tắt đèn theo nhạc CỦA FIRMWARE (đọc ``music_light_enable``, ghi qua APK loa)."""
+
+    _attr_translation_key = "music_light"
+
+    def __init__(self, coordinator: R1Coordinator) -> None:
+        super().__init__(coordinator, "music_light")
+
+    def _value(self):
+        return self.coordinator.data.music_light_enable
+
+    @property
+    def is_on(self) -> bool | None:
+        return self._value() if self.coordinator.data is not None else None
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._dat(MUSIC_LIGHT_ENABLE, 1, music_light_enable=True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._dat(MUSIC_LIGHT_ENABLE, 0, music_light_enable=False)

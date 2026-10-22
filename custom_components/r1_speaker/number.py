@@ -8,19 +8,24 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import (DEFAULT_MIC_GAIN_DB, EQ_BAND_NAMES, EQ_BANDS, EQ_MAX, EQ_MIN, GAIN_MAX, GAIN_MIN, MIC_GAIN_MAX,
-                    STRENGTH_MAX, STRENGTH_MIN, VOL_MAX, VOL_MIN)
+                    MUSIC_LIGHT_CHROMA, MUSIC_LIGHT_LUMA, MUSIC_LIGHT_RANGE, STRENGTH_MAX, STRENGTH_MIN, VOL_MAX,
+                    VOL_MIN)
 from .coordinator import R1ConfigEntry, R1Coordinator
-from .entity import R1Entity, R1MicEntity, preregister
+from .entity import R1Entity, R1MicEntity, R1MusicLightEntity, preregister
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
                             async_add_entities: AddConfigEntryEntitiesCallback) -> None:
     c = entry.runtime_data
+    preregister(hass, entry, "number", f"{entry.entry_id}_music_light_luma", "r1_do_sang_den_nhac")
+    preregister(hass, entry, "number", f"{entry.entry_id}_music_light_chroma", "r1_sac_do_den_nhac")
     async_add_entities([
         R1Volume(c),
         *(R1EqBand(c, i) for i in range(EQ_BANDS)),
         R1BassStrength(c),
         R1LoudnessGain(c),
+        R1MusicLightNumber(c, "music_light_luma", MUSIC_LIGHT_LUMA),
+        R1MusicLightNumber(c, "music_light_chroma", MUSIC_LIGHT_CHROMA),
     ])
     preregister(hass, entry, "number", f"{entry.entry_id}_mic_gain", "r1_tang_mic")
     async_add_entities([R1MicGain(entry)])
@@ -143,6 +148,30 @@ class R1LoudnessGain(R1Entity, NumberEntity):
         v = int(round(value))
         await self.coordinator.async_command(
             lambda: self.coordinator.client.set_loudness_gain(v), loudness_gain=v)
+
+
+class R1MusicLightNumber(R1MusicLightEntity, NumberEntity):
+    """Độ sáng (luma 0–100) / sắc độ (chroma 1–100) đèn theo nhạc của firmware."""
+
+    _attr_native_step = 1
+    _attr_mode = NumberMode.SLIDER
+
+    def __init__(self, coordinator: R1Coordinator, key: str, code: int) -> None:
+        super().__init__(coordinator, key)
+        self._key, self._code = key, code
+        self._attr_translation_key = key
+        self._attr_native_min_value, self._attr_native_max_value = MUSIC_LIGHT_RANGE[code]
+
+    def _value(self):
+        return getattr(self.coordinator.data, self._key)
+
+    @property
+    def native_value(self) -> float | None:
+        return self._value() if self.coordinator.data is not None else None
+
+    async def async_set_native_value(self, value: float) -> None:
+        v = int(round(value))
+        await self._dat(self._code, v, **{self._key: v})
 
 
 class R1MicGain(R1MicEntity, RestoreNumber):

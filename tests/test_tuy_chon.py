@@ -46,7 +46,12 @@ async def test_form_co_du_truong(hass, r1):
                     # chín khoá DSP mic (khử tạp, AGC, hạn đỉnh), thêm sau
                     "noise_suppress", "noise_strength_db", "noise_voice_db", "agc_enable",
                     "agc_target_db", "agc_max_gain_db", "agc_silence_db", "limiter_enable",
-                    "limiter_ceiling"}    # + hai khoá của đàm thoại
+                    "limiter_ceiling",
+                    # ba khoá từ đánh thức (cài đặt; chưa có dịch vụ đánh thức trên loa)
+                    "wake_enable", "wake_word", "wake_sensitivity",
+                    # sáu khoá đàm thoại song công NV246 (VAD, đệm, hạn phiên, cắt vọng)
+                    "duplex_vad_threshold", "duplex_preroll_s", "duplex_hangover_s",
+                    "duplex_max_s", "duplex_duck", "duplex_duck_db"}
     # giá trị gợi ý = hiện hành
     macdinh = {str(k): k.default() for k in res["data_schema"].schema
                if k.default is not vol.UNDEFINED}

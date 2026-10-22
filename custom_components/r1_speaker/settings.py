@@ -14,7 +14,13 @@ from homeassistant.config_entries import ConfigEntry
 
 from .agc import AgcSettings, LimiterSettings
 from .noise_suppress import NoiseSettings
+from .const import (CONF_WAKE_ENABLE, CONF_WAKE_SENSITIVITY, CONF_WAKE_WORD,
+                    DEFAULT_WAKE_ENABLE, DEFAULT_WAKE_SENSITIVITY, DEFAULT_WAKE_WORD)
 from .const import (CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, CONF_AGC_TARGET_DB,
+                    CONF_DUPLEX_DUCK, CONF_DUPLEX_DUCK_DB, CONF_DUPLEX_HANGOVER,
+                    CONF_DUPLEX_MAX_S, CONF_DUPLEX_PREROLL, CONF_DUPLEX_VAD_THRESHOLD,
+                    DEFAULT_DUPLEX_DUCK, DEFAULT_DUPLEX_DUCK_DB, DEFAULT_DUPLEX_HANGOVER,
+                    DEFAULT_DUPLEX_MAX_S, DEFAULT_DUPLEX_PREROLL, DEFAULT_DUPLEX_VAD_THRESHOLD,
                     CONF_LIMITER_CEILING, CONF_LIMITER_ENABLE, CONF_NOISE_ENABLE,
                     CONF_NOISE_STRENGTH_DB, CONF_NOISE_VOICE_DB, DEFAULT_AGC_ENABLE,
                     DEFAULT_AGC_MAX_GAIN_DB, DEFAULT_AGC_SILENCE_DB, DEFAULT_AGC_TARGET_DB,
@@ -111,3 +117,40 @@ def limiter_settings(entry: ConfigEntry) -> LimiterSettings:
     return LimiterSettings(
         enabled=bool(conf(entry, CONF_LIMITER_ENABLE, DEFAULT_LIMITER_ENABLE)),
         ceiling=float(conf(entry, CONF_LIMITER_CEILING, DEFAULT_LIMITER_CEILING)))
+
+
+@dataclass(frozen=True)
+class DuplexSettings:
+    """Tham số phiên đàm thoại SONG CÔNG (NV246). Mọi mặc định CHƯA ĐO trên loa R1
+    (xem const.py): ngưỡng VAD, đệm trước/sau, hạn phiên, cắt vọng tuỳ chọn."""
+
+    vad_threshold: float = DEFAULT_DUPLEX_VAD_THRESHOLD
+    preroll_s: float = DEFAULT_DUPLEX_PREROLL
+    hangover_s: float = DEFAULT_DUPLEX_HANGOVER
+    max_s: float = DEFAULT_DUPLEX_MAX_S
+    duck: bool = DEFAULT_DUPLEX_DUCK
+    duck_db: float = DEFAULT_DUPLEX_DUCK_DB
+
+    @classmethod
+    def from_entry(cls, entry: ConfigEntry) -> "DuplexSettings":
+        return cls(
+            vad_threshold=float(conf(entry, CONF_DUPLEX_VAD_THRESHOLD,
+                                     DEFAULT_DUPLEX_VAD_THRESHOLD)),
+            preroll_s=float(conf(entry, CONF_DUPLEX_PREROLL, DEFAULT_DUPLEX_PREROLL)),
+            hangover_s=float(conf(entry, CONF_DUPLEX_HANGOVER, DEFAULT_DUPLEX_HANGOVER)),
+            max_s=float(conf(entry, CONF_DUPLEX_MAX_S, DEFAULT_DUPLEX_MAX_S)),
+            duck=bool(conf(entry, CONF_DUPLEX_DUCK, DEFAULT_DUPLEX_DUCK)),
+            duck_db=float(conf(entry, CONF_DUPLEX_DUCK_DB, DEFAULT_DUPLEX_DUCK_DB)))
+
+
+def duplex_settings(entry: ConfigEntry) -> DuplexSettings:
+    return DuplexSettings.from_entry(entry)
+
+
+def wake_settings(entry: ConfigEntry) -> dict[str, Any]:
+    """Cài đặt từ đánh thức (đọc từ tuỳ chọn). Chỉ là cấu hình: loa chưa có dịch vụ đánh thức."""
+    return {
+        "bat": bool(conf(entry, CONF_WAKE_ENABLE, DEFAULT_WAKE_ENABLE)),
+        "tu_khoa": str(conf(entry, CONF_WAKE_WORD, DEFAULT_WAKE_WORD) or ""),
+        "do_nhay": float(conf(entry, CONF_WAKE_SENSITIVITY, DEFAULT_WAKE_SENSITIVITY)),
+    }

@@ -59,6 +59,7 @@ class R1Mic:
         self.agc = AgcSettings()
         self.limiter = LimiterSettings()
         self.muted = False
+        self.assist_on = True   # công tắc Assist: tắt thì vệ tinh không nghe/không trả lời
         #: Số bên đang xin luồng chạy (chỉ có nghĩa khi ``on_demand``).
         self._wants = 0
         #: Số bên đang giữ mic (bộ đàm đang phát ra loa…): > 0 thì BỎ khúc đọc được, không
@@ -243,6 +244,12 @@ class R1Mic:
         self.noise = noise or self.noise
         self.agc = agc or self.agc
         self.limiter = limiter or self.limiter
+
+    def set_assist(self, on: bool) -> None:
+        if on == self.assist_on:
+            return
+        self.assist_on = on
+        self._notify()
 
     def set_muted(self, muted: bool) -> None:
         if muted == self.muted:
