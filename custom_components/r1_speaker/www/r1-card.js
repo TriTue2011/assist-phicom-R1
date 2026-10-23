@@ -5,7 +5,7 @@
  * dưới tên riêng (r1-*-card-n): trình duyệt/ứng dụng HA/proxy giữ bản cũ của URL cố định hàng giờ (có
  * lớp đệm còn bỏ qua cả tham số ?...), nên dùng thẳng ``<r1-talk-card>`` thì sửa xong vẫn thấy bản cũ.
  * Nếu vẫn nhận bản cũ thì dùng tạm thẻ cũ và ghi rõ ở cuối thẻ. */
-const BUILD = "2026-10-22.12";
+const BUILD = "2026-10-22.13";
 
 const TABS = [
   { id: "talk", tag: "r1-talk-card-n", ten: "Đàm thoại", cfg: { show_eq: false } },
@@ -26,7 +26,9 @@ function nap() {
       TABS.forEach((x) => {
         const goc = window.R1_THE && window.R1_THE[x.id];
         if (goc) {                                   // bản mới nạp được
-          if (!customElements.get(x.tag)) customElements.define(x.tag, class extends goc.lop {});
+          // Tên DUY NHẤT mỗi lần nạp: bản cũ còn trong bộ nhớ của trang (ứng dụng HA giữ trang rất lâu) không che được bản mới.
+          x.tag = x.tag + "-" + t;
+          customElements.define(x.tag, class extends goc.lop {});
           x.tuoi = true;
         } else if (customElements.get("r1-" + x.id + "-card")) {
           x.tag = "r1-" + x.id + "-card";            // đường lui: thẻ cũ đã đăng ký sẵn
