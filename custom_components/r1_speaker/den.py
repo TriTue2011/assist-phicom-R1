@@ -434,9 +434,6 @@ class R1Lights:
                 await sink.stop_effect()          # KHÔNG bao giờ để hai nơi cùng ghi đèn
                 if not p.enabled:
                     await self._tat(sink)
-                elif getattr(sink, "firmware", False) and p.rim_kieu and sang > 0:
-                    # Kiểu viền chạy đuổi (ID 1–24): firmware chỉ chạy MỘT hiệu ứng, nên thay hiệu ứng đáy của chức năng này.
-                    await sink.ap_dung_ham(rim=True, color=mau_rgb(p.color), effect=f"vien_{p.rim_kieu}", sang=sang)
                 elif getattr(sink, "firmware", False) and p.effect in getattr(sink, "hieu_ung_goc", ()):
                     # Hiệu ứng GỐC của firmware (một ID): màu gần nhất trong bảng; sáng cố định / thở / nháy; viền trắng.
                     await sink.ap_dung_ham(rim=p.rim, color=mau_rgb(p.color), effect=p.effect, sang=sang)

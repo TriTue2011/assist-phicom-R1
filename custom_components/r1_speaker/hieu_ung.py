@@ -150,9 +150,7 @@ VIEN_ID = tuple(range(1, 25))
 
 
 HIEU_UNG: dict[str, HieuUng] = {h.id: h for h in (
-    *(HieuUng(f"vien_{n}", f"Viền chạy đuổi {n}", f"Rim chase {n}", f"Viền chạy đuổi, firmware ID {n} (tốc độ cố định của firmware).",
-              "firmware: lights_effects.conf", f"firmware ID {n} (lights_effects.conf)", "chạy vòng viền", True, _vien_n(n))
-      for n in VIEN_ID),
+
     HieuUng("cau_vong_fw", "Cầu vồng (firmware màu)", "Rainbow (firmware)", "Đổi lần lượt sáu màu đáy của firmware, mỗi màu một bước (tốc độ chỉnh bằng % như các hiệu ứng khác).",
             NGUON_WLED, "lights_effects.conf: đỏ 500, xanh lá 501, xanh dương 502, cam 252, tím 253, lục lam 255", "đổi màu theo nhịp", True, _cau_vong_fw),
     HieuUng("chay_duoi", "Chạy đuổi viền", "Ring chase", "Viền chạy vòng quanh (firmware, tốc độ cố định 0,2 s/bước).",

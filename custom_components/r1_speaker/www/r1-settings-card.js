@@ -19,7 +19,7 @@
  */
 (function () {
   "use strict";
-  var BUILD = "2026-10-22.15";
+  var BUILD = "2026-10-22.17";
 
   var PLATFORM = "r1_speaker";
   var FUNCTIONS = ["cho", "nghe", "nghi", "phan_hoi", "dam_thoai", "phat_nhac", "loi", "tat_mic"];
@@ -408,8 +408,7 @@
       (f.enabled ? " checked" : "") + "></div>" +
       '<div class="row"><label>' + esc(t.rim) + "</label><input type=\"checkbox\" " + d + '"rim"' +
       (f.rim ? " checked" : "") + "></div>" +
-      '<div class="row"><label>Kiểu viền</label><select ' + d + '"rim_kieu">' +
-      ['<option value="0">Không</option>'].concat(Array.from({ length: 24 }, function (_, i) {
+            ['<option value="0">Không</option>'].concat(Array.from({ length: 24 }, function (_, i) {
         return '<option value="' + (i + 1) + '"' + (f.rimKieu === i + 1 ? " selected" : "") + ">Chạy đuổi " + (i + 1) + "</option>";
       })).join("") + "</select></div>" +
       '<div class="row"><label>' + esc(t.color) + "</label>" + (L.fw && L.bangMau.length
@@ -519,7 +518,12 @@
       var html = "<style>" + CSS + "</style>" + renderHtml(this._model(), this._ui, TEXT[lg], lg);
       if (html === this._html) return;
       this._html = html;
+      // Giữ nhóm đang mở qua lần dựng lại (HA cập nhật trạng thái liên tục, dựng lại làm nhóm tự đóng).
+      var moNhom = Array.prototype.map.call(this.shadowRoot.querySelectorAll("details.grp"), function (d) { return d.open; });
       this.shadowRoot.innerHTML = html;
+      Array.prototype.forEach.call(this.shadowRoot.querySelectorAll("details.grp"), function (d, i) {
+        if (moNhom[i]) d.open = true;
+      });
       this._bind();
     }
 

@@ -97,9 +97,8 @@ async def test_mo_hinh_tu_trang_thai_that_ba_nhom(hass, r1):
     assert [f["key"] for f in li["functions"]] == [
         "cho", "nghe", "nghi", "phan_hoi", "dam_thoai", "phat_nhac", "loi", "tat_mic"]
     assert li["sink"] == {"state": "mat_ket_noi", "ready": False, "lost": True, "svc": False, "error": None}
-    # 24 chế độ viền (vien_1…vien_24) đứng trước các hiệu ứng khác trong danh mục
-    assert [x["id"] for x in li["effects"]] == [f"vien_{n}" for n in range(1, 25)] + [
-        "cau_vong_fw", "chay_duoi", "tho", "cau_vong", "nhap_nhay", "nhip_tim", "phao_hoa", "chop"]
+    assert [x["id"] for x in li["effects"]] == ["cau_vong_fw", "chay_duoi", "tho", "cau_vong", "nhap_nhay",
+                                                "nhip_tim", "phao_hoa", "chop"]
     assert li["music"]["key"] == "phat_nhac" and li["music"]["enabled"] is False
     assert li["firmware"] == {"on": True, "luma": 50, "chroma": 60}
     c = m["conn"]

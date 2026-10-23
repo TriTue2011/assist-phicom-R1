@@ -45,7 +45,7 @@ MAU: dict[str, MauFirmware] = {m.ten_en: m for m in (
 
 #: Hiệu ứng mà firmware tự chạy bằng MỘT ID (còn lại — cầu vồng, nhịp tim, pháo hoa, chớp — chạy bằng cách HA đổi
 #: liên tiếp giữa các màu của firmware, như app AI box gửi chuỗi ID kèm nghỉ ngắn; màu bị làm tròn về bảng ``MAU``).
-HIEU_UNG_GOC = ("none", "tho", "nhap_nhay", "chay_duoi", *(f"vien_{n}" for n in range(1, 25)))
+HIEU_UNG_GOC = ("none", "tho", "nhap_nhay", "chay_duoi")
 #: «Nháy» = ID 206 (đỏ, chu kỳ 0,5 giây — nhanh hơn «thở» 3,3 giây). Chỉ có màu đỏ; màu khác rơi về «thở».
 ID_NHAY_DO = 206
 #: Dưới ngưỡng này (kênh sáng nhất) coi là tắt đèn đáy.

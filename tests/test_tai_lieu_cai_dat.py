@@ -29,7 +29,7 @@ def test_du_tam_chuc_nang_den_va_moi_hieu_ung():
         assert f"`{k}`" in DOC, k
     for hu in ("thở", "cầu vồng", "nhấp nháy", "nhịp tim", "pháo hoa", "chớp"):
         assert hu in DOC
-    assert len(hieu_ung.HIEU_UNG) == 32    # 6 ban đầu + cầu vồng firmware + chạy đuổi viền + 24 chế độ viền
+    assert len(hieu_ung.HIEU_UNG) == 8     # 6 ban đầu + cầu vồng firmware + chạy đuổi viền
 
 
 def test_du_thuc_the_dich_vu_va_preset_eq():

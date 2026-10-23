@@ -115,9 +115,8 @@ async def test_run_steps_lap_den_khi_bi_huy():
 
 def test_danh_muc_5_den_6_hieu_ung_co_nguon():
     ids = set(hieu_ung.HIEU_UNG)
-    assert ids == {"tho", "cau_vong", "nhap_nhay", "nhip_tim", "phao_hoa", "chop", "chay_duoi", "cau_vong_fw",
-                   *(f"vien_{n}" for n in range(1, 25))}
-    assert 5 <= len(ids) <= 32
+    assert ids == {"tho", "cau_vong", "nhap_nhay", "nhip_tim", "phao_hoa", "chop", "chay_duoi", "cau_vong_fw"}
+    assert 5 <= len(ids) <= 8
     for h in hieu_ung.HIEU_UNG.values():
         assert (h.nguon.startswith("https://kno.wled.ge/") or h.nguon.startswith("firmware")) and h.wled and h.ten and h.ten_en
     # Hiệu ứng cần ghi từng LED (đuổi, quét, sóng) bị bỏ có chủ đích.
