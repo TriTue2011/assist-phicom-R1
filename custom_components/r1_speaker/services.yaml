@@ -137,3 +137,29 @@ stop_duplex:
         entity:
           integration: r1_speaker
           domain: media_player
+set_main_light:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+    bat:
+      selector:
+        boolean:
+    che_do:
+      selector:
+        select:
+          options: ["0", "1", "2", "4", "5", "6", "8", "9", "10", "11", "12", "13", "14", "15", "16"]
+    sang:
+      selector:
+        number:
+          min: 1
+          max: 200
+          mode: slider
+    toc_do:
+      selector:
+        number:
+          min: 1
+          max: 100
+          mode: slider

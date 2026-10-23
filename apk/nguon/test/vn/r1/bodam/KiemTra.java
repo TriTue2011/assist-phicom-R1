@@ -659,7 +659,8 @@ public class KiemTra {
                 public String guiHieuUng(int id) { daGui2.add("E" + id); return null; }
             };
             ok(LenhDieuKhien.loaiDen("{\"type\":\"den_hieu_ung\",\"id\":501}") == 4, "hieu ung: nhan dang khung");
-            int[] tot = {200, 201, 202, 203, 204, 206, 251, 252, 253, 254, 255, 500, 501, 502, 503, 504, 505, 510, 511, 512, 513, 514, 515};
+            int[] tot = {200, 201, 202, 203, 204, 206, 251, 252, 253, 254, 255, 500, 501, 502, 503, 504, 505, 510, 511, 512, 513, 514, 515,
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24};
             boolean heTot = true;
             for (int id : tot) {
                 if (LenhDieuKhien.xuLyDen("{\"type\":\"den_hieu_ung\",\"id\":" + id + "}", gia2) != null) heTot = false;

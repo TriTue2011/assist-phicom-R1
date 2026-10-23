@@ -65,6 +65,9 @@ class ApkLights:
 
     async def ap_dung_ham(self, *, rim: bool, color: RGB, effect: str, sang: float) -> None:
         """Áp MỘT chức năng đèn bằng hiệu ứng gốc: màu đáy (sáng cố định/thở/nháy) nếu có, không thì viền trắng."""
+        if effect == "chay_duoi":                       # viền chạy đuổi: một ID firmware, không đáy
+            await self._ap(fw.DAY_TAT, fw.id_chay_duoi(rim, sang), ep=True)
+            return
         await self._ap(fw.id_day(color, effect, sang), fw.id_vien(rim, sang), ep=True)
 
     async def tat(self) -> None:

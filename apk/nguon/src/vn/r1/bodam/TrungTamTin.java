@@ -47,7 +47,8 @@ public final class TrungTamTin {
     public static final int NHOM_HIEU_UNG = 0x1000;
     /** ID hieu ung cho phep (200-206 tho, 251-255 sang co dinh, 500-505 mau thu nha may + tat, 510-515 tho 4 giay). */
     private static final int[] HIEU_UNG_HOP_LE = {
-        200, 201, 202, 203, 204, 206, 251, 252, 253, 254, 255, 500, 501, 502, 503, 504, 505, 510, 511, 512, 513, 514, 515};
+        200, 201, 202, 203, 204, 206, 251, 252, 253, 254, 255, 500, 501, 502, 503, 504, 505, 510, 511, 512, 513, 514, 515,
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24};
 
     public static boolean laHieuUngHopLe(int id) {
         for (int x : HIEU_UNG_HOP_LE) if (x == id) return true;

@@ -18,7 +18,9 @@ RIM_BAT, RIM_TAT, DAY_TAT = 503, 505, 504
 
 #: Mọi ID mà APK chịu gửi (phải khớp ``TrungTamTin.HIEU_UNG_HOP_LE``).
 ID_HOP_LE = frozenset({200, 201, 202, 203, 204, 206, 251, 252, 253, 254, 255, 500, 501, 502, 503, 504, 505,
-                       510, 511, 512, 513, 514, 515})
+                       510, 511, 512, 513, 514, 515} | set(range(1, 25)))
+#: Chạy đuổi viền (firmware): mỗi ID 1–24 là một pha của vòng chạy; ID 1 chạy liền mạch, tốc độ 0,2 s/bước cố định.
+ID_CHAY_DUOI = 1
 
 
 @dataclass(frozen=True)
@@ -43,7 +45,7 @@ MAU: dict[str, MauFirmware] = {m.ten_en: m for m in (
 
 #: Hiệu ứng mà firmware tự chạy bằng MỘT ID (còn lại — cầu vồng, nhịp tim, pháo hoa, chớp — chạy bằng cách HA đổi
 #: liên tiếp giữa các màu của firmware, như app AI box gửi chuỗi ID kèm nghỉ ngắn; màu bị làm tròn về bảng ``MAU``).
-HIEU_UNG_GOC = ("none", "tho", "nhap_nhay")
+HIEU_UNG_GOC = ("none", "tho", "nhap_nhay", "chay_duoi")
 #: «Nháy» = ID 206 (đỏ, chu kỳ 0,5 giây — nhanh hơn «thở» 3,3 giây). Chỉ có màu đỏ; màu khác rơi về «thở».
 ID_NHAY_DO = 206
 #: Dưới ngưỡng này (kênh sáng nhất) coi là tắt đèn đáy.
@@ -69,6 +71,10 @@ def id_day(rgb: tuple[int, int, int], hieu_ung: str | bool, sang: float) -> int:
     if m.co_dinh is not None:
         return m.co_dinh
     return m.tho if m.tho is not None else DAY_TAT      # trắng không có «sáng cố định» đáy: thở trắng là gần nhất
+
+
+def id_chay_duoi(bat: bool, sang: float) -> int:
+    return ID_CHAY_DUOI if bat and sang > 0 else RIM_TAT
 
 
 def id_vien(bat: bool, sang: float) -> int:

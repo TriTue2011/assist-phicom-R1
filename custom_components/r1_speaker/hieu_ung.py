@@ -109,6 +109,22 @@ def _chop(c: Ctx) -> list[Step]:
     return [on, off, on, off, on, _b(c, 0.0, 0.8)]
 
 
+def _chay_duoi(c: Ctx) -> list[Step]:
+    # Viền chạy đuổi (firmware ID 1–24): trên phần mềm chỉ làm nhấp viền; đường firmware dùng ID chạy liền mạch.
+    if not c.use_rim:
+        return [_b(c, 0.0, 0.2)]
+    return [Step(base=None, rim=sang_vien(c.pct), seconds=0.2), Step(base=None, rim=0, seconds=0.2)]
+
+
+#: Sáu màu đáy của firmware (đỏ, cam, xanh lá, xanh dương, tím, lục lam) — cầu vồng đổi lần lượt các màu này.
+_CAU_VONG_FW = ((255, 0, 0), (255, 115, 0), (0, 255, 0), (0, 0, 255), (128, 0, 255), (0, 255, 255))
+
+
+def _cau_vong_fw(c: Ctx) -> list[Step]:
+    # Cầu vồng đổi lần lượt sáu màu của firmware (giống cách AI box đổi chuỗi ID), mỗi màu một bước.
+    return [Step(base=sang_rgb(m, c.pct), rim=sang_vien(c.pct) if c.use_rim else 0, seconds=0.5) for m in _CAU_VONG_FW]
+
+
 @dataclass(frozen=True)
 class HieuUng:
     id: str
@@ -123,6 +139,10 @@ class HieuUng:
 
 
 HIEU_UNG: dict[str, HieuUng] = {h.id: h for h in (
+    HieuUng("cau_vong_fw", "Cầu vồng (firmware màu)", "Rainbow (firmware)", "Đổi lần lượt sáu màu đáy của firmware, mỗi màu một bước (tốc độ chỉnh bằng % như các hiệu ứng khác).",
+            NGUON_WLED, "lights_effects.conf: đỏ 500, xanh lá 501, xanh dương 502, cam 252, tím 253, lục lam 255", "đổi màu theo nhịp", True, _cau_vong_fw),
+    HieuUng("chay_duoi", "Chạy đuổi viền", "Ring chase", "Viền chạy vòng quanh (firmware, tốc độ cố định 0,2 s/bước).",
+            "firmware: lights_effects.conf (ID 1–24)", "firmware ID 1–24 (lights_effects.conf)", "chạy vòng viền", True, _chay_duoi),
     HieuUng("tho", "Thở", "Breathe", "Đèn sáng dần rồi tối dần, chu kỳ 2 giây.", NGUON_WLED,
             "Breathe (2): fades between primary and secondary color", "sáng tối theo đáy", True, _tho),
     HieuUng("cau_vong", "Cầu vồng", "Rainbow", "Đèn đáy đi hết 12 sắc độ, 0,4 giây một sắc.",

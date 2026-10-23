@@ -115,10 +115,10 @@ async def test_run_steps_lap_den_khi_bi_huy():
 
 def test_danh_muc_5_den_6_hieu_ung_co_nguon():
     ids = set(hieu_ung.HIEU_UNG)
-    assert ids == {"tho", "cau_vong", "nhap_nhay", "nhip_tim", "phao_hoa", "chop"}
-    assert 5 <= len(ids) <= 6
+    assert ids == {"tho", "cau_vong", "nhap_nhay", "nhip_tim", "phao_hoa", "chop", "chay_duoi", "cau_vong_fw"}
+    assert 5 <= len(ids) <= 8
     for h in hieu_ung.HIEU_UNG.values():
-        assert h.nguon.startswith("https://kno.wled.ge/") and h.wled and h.ten and h.ten_en
+        assert (h.nguon.startswith("https://kno.wled.ge/") or h.nguon.startswith("firmware")) and h.wled and h.ten and h.ten_en
     # Hiệu ứng cần ghi từng LED (đuổi, quét, sóng) bị bỏ có chủ đích.
     assert not {"chase", "dui", "scan", "song"} & ids
 
@@ -565,7 +565,7 @@ async def test_thuoc_tinh_cho_the_ba_nhom_va_khong_lo_khoa(hass, r1):
     al = a["anh_sang"]
     assert list(al["chuc_nang"]) == list(FUNCTIONS) and al["thu_tu_uu_tien"] == list(UU_TIEN)
     assert [h["id"] for h in al["hieu_ung"]] == list(hieu_ung.HIEU_UNG)
-    assert all(h["nguon"].startswith("https://") for h in al["hieu_ung"])
+    assert all(h["nguon"].startswith(("https://", "firmware")) for h in al["hieu_ung"])
     assert all(v["mac_dinh"] for v in al["chuc_nang"].values())
     assert al["den_nhac_firmware"] == {"bat": True, "luma": 50, "chroma": 60,
                                        "dieu_khien": "qua_apk_msgcenter"}
