@@ -80,8 +80,6 @@ cấu hình. **Chưa kiểm:** tự bật mic sau khi loa khởi động lại (
 - **Mic tự bật khi loa khởi động** nếu app đã cấu hình (host + port + khoá), và luôn gửi về HA đã cấu hình khi đang chạy.
   HA từ chối kết nối khi bạn tắt mic (`switch.r1_tat_mic`), nhưng loa vẫn thử nối lại mỗi 2–30 giây (mỗi lần
   chỉ mở mic rất ngắn, tiếng bị bỏ ở phía HA).
-- Firmware gốc của loa (Android 5.1.1) cho `adb` qua mạng cổng 5555 **không đòi xác thực** (theo số đo trên loa của chủ dự án): bật ADB nghĩa
-  là bất kỳ máy nào trong LAN cũng có shell trên loa. Chỉ bật khi cần và tắt đi sau khi làm xong, đừng để loa lộ ra ngoài mạng.
 - Shell trên loa là `uid=2000` (không root, không `su`).
 
 Các bước:
