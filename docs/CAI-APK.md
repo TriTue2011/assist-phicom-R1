@@ -16,7 +16,7 @@ sha256sum apk/vn-r1-bodam.apk
 Giá trị phải là `7a8b94a0bad1bb600f3e461c6d2b0c909627ff355c5d46e9854e8b79ba090be1`.
 
 ## Các bước (chạy trên máy tính)
-Thay `<IP-loa>`, `<IP-HA>`, `<khoá>` bằng giá trị của bạn.
+Thay `<IP-loa>` bằng IP loa của bạn.
 
 1. Kết nối loa:
    ```
@@ -28,11 +28,7 @@ Thay `<IP-loa>`, `<IP-HA>`, `<khoá>` bằng giá trị của bạn.
    adb -s <IP-loa>:5555 shell /system/bin/pm install -r /data/local/tmp/vn-r1-bodam.apk
    ```
    Kết quả phải có dòng `Success`.
-3. Cấu hình lần đầu (chỉ nhận khi app chưa cấu hình), rồi bật mic:
-   ```
-   adb -s <IP-loa>:5555 shell /system/bin/am start -n vn.r1.bodam/.ManHinhChinh --es host <IP-HA> --ei port 18765 --es khoa <khoá>
-   adb -s <IP-loa>:5555 shell /system/bin/am start -n vn.r1.bodam/.ManHinhChinh --ez bat true
-   ```
+3. Cấu hình lần đầu và bật mic: làm qua tích hợp. Mở thẻ R1 → Cài đặt → Kết nối → «Hiện lệnh cài APK» (chỉ quản trị viên), copy lệnh thẻ hiển thị (đã điền sẵn IP HA, cổng và khoá) và chạy. Không tự gõ host hay khoá.
 4. Dọn file tạm:
    ```
    adb -s <IP-loa>:5555 shell rm /data/local/tmp/vn-r1-bodam.apk
@@ -44,7 +40,7 @@ Thay `<IP-loa>`, `<IP-HA>`, `<khoá>` bằng giá trị của bạn.
 - Thẻ R1 → Cài đặt có «Đèn RGB chính» và mục «Kiểu viền» đã gỡ.
 
 ## Đổi cấu hình về sau
-Chạy lại bước 3 với giá trị mới chỉ khi app chưa cấu hình. Nếu cần xoá cấu hình, dùng `pm clear vn.r1.bodam` rồi làm lại bước 3.
+Chạy lệnh do thẻ hiển thị chỉ khi app chưa cấu hình. Nếu cần xoá cấu hình, dùng `adb -s <IP-loa>:5555 shell /system/bin/pm clear vn.r1.bodam` rồi chạy lại lệnh đó.
 
 ## Sau khi xong
 Tắt cổng ADB qua mạng theo cách bạn đã bật, để loa không mở cổng 5555 trong mạng nhà.
