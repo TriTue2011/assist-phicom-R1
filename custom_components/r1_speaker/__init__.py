@@ -78,7 +78,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     den_chinh.dang_ky_dich_vu(hass)
     lenh_apk.dang_ky(hass)
     nang_cao.dang_ky_dich_vu(hass)
-    cai_ung_dung.dang_ky_dich_vu(hass)
+    ds_apk = await hass.async_add_executor_job(cai_ung_dung.doc_bo_cai)         # đọc tệp: ngoài vòng lặp sự kiện
+    cai_ung_dung.dang_ky_dich_vu(hass, [u.id for u in ds_apk])
 
     def _entry_va_goc(call: ServiceCall):
         entity_id = call.data["entity_id"]
@@ -253,7 +254,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
     def _cau_hinh_apk():
         cong, khoa = mic_listen(entry)
         return (lenh_apk._host_ha(hass, entry), cong, khoa) if khoa else None
-    coordinator.apps = BoCai(adb_dev, cau_hinh_bodam=_cau_hinh_apk)
+    coordinator.apps = BoCai(adb_dev, danh_sach=await hass.async_add_executor_job(cai_ung_dung.doc_bo_cai),
+                             cau_hinh_bodam=_cau_hinh_apk)
     coordinator.he_thong = HeThongLoa(hass, entry, adb_dev, sink)        # đèn ưu tiên số 1, đọc thông tin số 2
     coordinator.lights = R1Lights(hass, entry, sink=sink)
     sink.khi_roi = coordinator.lights.ap_dung_lai        # phiên đèn đứt (loa khởi động lại, ADB rớt) thì áp lại

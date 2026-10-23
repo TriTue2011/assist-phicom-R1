@@ -26,7 +26,7 @@ class FakeDev:
         self.pushed: list[tuple[str, int, str]] = []
         self.pm = pm
         self.khac_chu_ky = khac_chu_ky          # pm install -r (lần đầu) báo UPDATE_INCOMPATIBLE
-        self.cai_san = cai_san or {}            # goi -> (đường dẫn, md5, versionName)
+        self.cai_san = cai_san or {}            # goi -> (đường dẫn, md5, versionName[, bị ẩn])
         self.fail: str | None = None
         self.host, self.port, self.server, self.mode, self.duong = "127.0.0.1", 5555, "", "direct", None
 
@@ -37,9 +37,16 @@ class FakeDev:
         if cmd.startswith("P=$(pm path "):
             goi = re.match(r"P=\$\(pm path (\S+) ", cmd).group(1)
             if goi not in self.cai_san:
-                return "duong=\n"
-            duong, md5, ver = self.cai_san[goi]
-            return f"duong={duong}\n{md5}  {duong}\n    versionName={ver}\n"
+                return "duong=\n---dump\n"
+            duong, md5, ver, *them = self.cai_san[goi]
+            an = bool(them and them[0])
+            dump = (f"  Package [{goi}] (e068c0c):\n    codePath=/data/app/{goi}-1\n    versionName={ver}\n"
+                    f"    User 0:  installed=true hidden={'true' if an else 'false'} stopped=false notLaunched=false enabled=0\n"
+                    f"Hidden system packages:\n  Package [{goi}] (259fc5b):\n    codePath=/system/app/Goc\n"
+                    f"    versionName=BAN-GOC\n    User 0:  installed=true hidden=false stopped=false notLaunched=false enabled=0\n")
+            if an:                                                          # pm path rỗng với gói bị ẩn
+                return f"duong=\n---dump\n{dump}"
+            return f"duong={duong}\n{md5}  {duong}\n---dump\n{dump}"
         if cmd.startswith("pm install"):
             if self.khac_chu_ky and " -r " in cmd:
                 return "Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE]\n"
@@ -186,6 +193,39 @@ async def test_trang_thai_chua_cai_giong_ban_di_kem_va_khac_ban_di_kem():
     assert len(dev.cmds) == n
 
 
+#: Đầu ra THẬT của `dumpsys package com.phicomm.speaker.device | busybox grep -E ...` trên loa R1 (24/10/2026): gói hệ thống
+#: bị ẩn, có bản cập nhật trong /data đè lên bản gốc trong /system.
+DUMP_THAT_AN = """  Package [com.phicomm.speaker.device] (e068c0c):
+    codePath=/data/app/com.phicomm.speaker.device-1
+    versionName=V3.2.5.2-
+    User 0:  installed=true hidden=true stopped=false notLaunched=false enabled=0
+Hidden system packages:
+  Package [com.phicomm.speaker.device] (259fc5b):
+    codePath=/system/app/Unisound
+    versionName=V3.1.6.2-pandora_v3_rk_phicomm_hotfix
+    User 0:  installed=true hidden=false stopped=false notLaunched=false enabled=0
+"""
+
+
+def test_phan_tich_goi_doc_ban_dang_hieu_luc_va_co_an_tu_dau_ra_that():
+    assert cu.phan_tich_goi(DUMP_THAT_AN, "com.phicomm.speaker.device") == (
+        True, True, "V3.2.5.2-", "/data/app/com.phicomm.speaker.device-1")          # KHÔNG lấy V3.1.6.2 của bản gốc
+    thuong = DUMP_THAT_AN.replace("hidden=true", "hidden=false")
+    assert cu.phan_tich_goi(thuong, "com.phicomm.speaker.device")[:2] == (True, False)
+    assert cu.phan_tich_goi("", "com.phicomm.speaker.device") == (False, False, None, None)      # không có bản ghi: chưa cài
+    assert cu.phan_tich_goi(DUMP_THAT_AN, "vn.r1.bodam")[0] is False                              # bản ghi của gói khác không tính
+    go_giu_du_lieu = DUMP_THAT_AN.replace("installed=true hidden=true", "installed=false hidden=false", 1)
+    assert cu.phan_tich_goi(go_giu_du_lieu, "com.phicomm.speaker.device")[0] is False              # gỡ nhưng giữ dữ liệu
+
+
+async def test_goi_bi_an_van_la_da_cai_du_pm_path_rong():
+    ds = {u.id: u for u in doc_bo_cai()}
+    dev = FakeDev(cai_san={"com.phicomm.speaker.device": ("", "", "V3.2.5.2-", True)})
+    tt = await BoCai(dev).trang_thai(ds["unisound"], moi=True)
+    assert (tt.cai, tt.an, tt.phien_ban, tt.giong_di_kem) == (True, True, "V3.2.5.2-", None)
+    assert tt.duong_dan == "/data/app/com.phicomm.speaker.device-1"
+
+
 # ── Tích hợp HA: thực thể Cập nhật và dịch vụ ─────────────────────────
 
 @pytest.fixture
@@ -227,6 +267,17 @@ async def test_moi_ung_dung_co_mot_thuc_the_cap_nhat_va_cai_bang_nut(hass, ha_ca
     await async_update_entity(hass, pl)
     with pytest.raises(HomeAssistantError, match="INSTALL_FAILED_X"):
         await hass.services.async_call("update", "install", {"entity_id": pl}, blocking=True)
+
+
+async def test_thuc_the_goi_bi_an_khong_moi_cap_nhat_va_noi_ro_dang_an(hass, ha_cai):
+    e, bo, dev = ha_cai
+    dev.cai_san["com.phicomm.speaker.device"] = ("", "", "V3.2.5.2-", True)
+    uni = next(i for i in _ud_ids(hass) if "unisound" in i)
+    from homeassistant.helpers.entity_component import async_update_entity
+    await async_update_entity(hass, uni)
+    st = hass.states.get(uni)
+    assert st.attributes["installed_version"] == "V3.2.5.2- (đang ẩn)" and st.state == "off"      # không «Có bản cập nhật»
+    assert st.attributes["an"] is True and st.attributes["ban_di_kem"] == "25.3.1"
 
 
 async def test_dich_vu_install_apps_tra_ket_qua_tung_ung_dung(hass, ha_cai):

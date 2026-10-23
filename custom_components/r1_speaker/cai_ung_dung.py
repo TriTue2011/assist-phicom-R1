@@ -55,12 +55,34 @@ class UngDung:
 
 @dataclass(frozen=True)
 class TrangThai:
-    """Ứng dụng trên loa: ``cai`` đã cài chưa, ``phien_ban`` đang cài, ``giong_di_kem`` md5 trùng bản đi kèm."""
+    """Ứng dụng trên loa: ``cai`` đã cài chưa, ``phien_ban`` đang cài, ``giong_di_kem`` md5 trùng bản đi kèm,
+    ``an`` gói có trên loa nhưng đang bị ẩn (``pm hide``: ``pm path`` trả rỗng, ``pm list packages`` không liệt kê)."""
 
     cai: bool
     phien_ban: str | None = None
     giong_di_kem: bool | None = None
     duong_dan: str | None = None
+    an: bool = False
+
+
+_BAN_GHI_AN = "Hidden system packages:"
+
+
+def phan_tich_goi(out: str, goi: str) -> tuple[bool, bool, str | None, str | None]:
+    """Đọc đầu ra ``dumpsys package <goi>`` đã lọc: ``(có trên loa, bị ẩn, versionName, codePath)``.
+
+    Chỉ đọc bản ghi ĐANG HIỆU LỰC (trước mục «Hidden system packages:», là bản gốc trong /system mà bản cập nhật
+    đè lên): một gói hệ thống có bản cập nhật trong /data xuất hiện hai lần với phiên bản khác nhau. «Có trên loa» là
+    ``installed=true`` của người dùng 0, KHÔNG phụ thuộc ``pm path`` (rỗng với gói bị ẩn). Định dạng đo trên loa thật
+    (Android 5.1): ``User 0:  installed=true hidden=true stopped=false ...``."""
+    khoi = out.replace("\r", "").split(_BAN_GHI_AN, 1)[0]
+    if f"Package [{goi}]" not in khoi:
+        return False, False, None, None
+    m = re.search(r"^\s*User 0:.*?\binstalled=(true|false)\b.*?\bhidden=(true|false)\b", khoi, re.M)
+    co, an = (m.group(1) == "true", m.group(2) == "true") if m else (True, False)
+    ver = re.search(r"^\s*versionName=(.*?)\s*$", khoi, re.M)
+    duong = re.search(r"^\s*codePath=(\S+)", khoi, re.M)
+    return co, an, (ver.group(1) or None) if ver else None, duong.group(1) if duong else None
 
 
 @dataclass
@@ -126,24 +148,27 @@ class BoCai:
         c = self._nho.get(ud.id)
         if c and not moi and time.monotonic() - c[0] < CACHE_S:
             return c[1]
+        # ``pm path`` rỗng với gói bị ẩn nên KHÔNG dùng nó để kết luận «chưa cài»: bản ghi trong ``dumpsys package`` mới
+        # là nguồn sự thật (``phan_tich_goi``). Phần sau ``---dump`` chỉ giữ vài dòng cần đọc (loa không có ``head``).
         out = await self.dev.shell(
             f'P=$(pm path {ud.goi} 2>/dev/null); P=${{P#package:}}; echo "duong=$P"; '
-            f'[ -n "$P" ] && busybox md5sum "$P"; dumpsys package {ud.goi} | grep -m1 versionName; true')
-        duong = ma = ver = None
-        for dong in out.replace("\r", "").splitlines():
+            f'[ -n "$P" ] && busybox md5sum "$P"; echo "---dump"; dumpsys package {ud.goi} | '
+            f'busybox grep -E "Package \\[|codePath=|versionName=|User 0:|{_BAN_GHI_AN}"; true')
+        pm, _, dump = out.partition("---dump")
+        duong = ma = None
+        for dong in pm.replace("\r", "").splitlines():
             dong = dong.strip()
             if dong.startswith("duong="):
                 duong = dong[6:] or None
             elif re.match(r"^[0-9a-f]{32}\s", dong):
                 ma = dong[:32]
-            elif "versionName=" in dong:
-                ver = dong.split("versionName=", 1)[1].strip() or None
+        co, an, ver, code_path = phan_tich_goi(dump, ud.goi)
         giong = None
         if duong and ma:
             # md5 chỉ để so với `md5sum` có sẵn trên loa (nhận biết «cùng tệp»), không dùng cho bảo mật: tính toàn vẹn là sha256 ở ghep_va_kiem.
             giong = ma == hashlib.md5(await asyncio.get_running_loop().run_in_executor(
                 None, ghep_va_kiem, ud, self.thu_muc), usedforsecurity=False).hexdigest()
-        tt = TrangThai(cai=bool(duong), phien_ban=ver, giong_di_kem=giong, duong_dan=duong)
+        tt = TrangThai(cai=bool(duong) or co, phien_ban=ver, giong_di_kem=giong, duong_dan=duong or code_path, an=an)
         self._nho[ud.id] = (time.monotonic(), tt)
         return tt
 
@@ -223,7 +248,8 @@ class BoCai:
 
 # ── Phần gắn với HA: dịch vụ ``install_apps`` ─────────────────────────────
 
-def dang_ky_dich_vu(hass) -> None:  # noqa: ANN001 - tránh import HA ở đầu tệp lõi
+def dang_ky_dich_vu(hass, ma_ung_dung: list[str]) -> None:  # noqa: ANN001 - tránh import HA ở đầu tệp lõi
+    """``ma_ung_dung``: mã các ứng dụng hợp lệ, đọc từ ``bo-cai.json`` ngoài vòng lặp sự kiện (đọc tệp là việc chặn)."""
     import voluptuous as vol
     from homeassistant.core import ServiceCall, SupportsResponse
     from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
@@ -251,6 +277,6 @@ def dang_ky_dich_vu(hass) -> None:  # noqa: ANN001 - tránh import HA ở đầu
     hass.services.async_register(DOMAIN, "install_apps", _cai, supports_response=SupportsResponse.OPTIONAL,
                                  schema=vol.Schema({
                                      vol.Required("entity_id"): cv.entity_id,
-                                     vol.Optional("apps"): [vol.In([u.id for u in doc_bo_cai()])],
+                                     vol.Optional("apps"): [vol.In(ma_ung_dung)],
                                      vol.Optional("force"): cv.boolean,
                                      vol.Optional("configure"): cv.boolean}))

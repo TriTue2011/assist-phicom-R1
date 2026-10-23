@@ -58,5 +58,5 @@ Thực thể `button.r1_khoi_dong_lai` («Khởi động lại loa») gửi lệ
 | Thực thể «Ứng dụng: …» báo không khả dụng (`ADB: …`) | xem `docs/DEN-LED.md` mục 2 và 10: adbd của loa chỉ nhận **một** kết nối, client ADB khác có thể đang giữ loa |
 | `Cài thất bại: INSTALL_FAILED_UPDATE_INCOMPATIBLE` | loa đang có bản ký khác; dùng `force: true` nếu chấp nhận mất cấu hình ứng dụng đó |
 | `sha256 … không khớp` | tệp APK trong tích hợp hỏng hoặc thiếu phần: cài lại tích hợp từ HACS |
-| Thực thể Unisound báo «chưa cài» dù loa có ứng dụng này | gói đang bị **ẩn** (`pm hide`): `pm path` trả rỗng, nên bộ dò coi là chưa cài (lỗi đã biết) | đừng bấm «Cập nhật»; kiểm bằng `dumpsys package com.phicomm.speaker.device` (dòng `hidden=true`) |
+| Thực thể hiện «(đang ẩn)» | gói có trên loa nhưng bị ẩn (`pm hide`): `pm path` rỗng, tích hợp đọc `dumpsys package` (dòng `hidden=true`) | bình thường, không mời cập nhật; muốn cài đè vẫn gọi `install_apps` |
 | Mic về HA bị tranh sau khi cài `unisound` | `adb shell pm uninstall com.phicomm.speaker.device` (hoặc ngắt ứng dụng đó), rồi khởi động lại loa |

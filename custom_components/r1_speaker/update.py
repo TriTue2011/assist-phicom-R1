@@ -57,6 +57,9 @@ class R1AppUpdate(UpdateEntity):
 
     @property
     def latest_version(self) -> str:
+        tt = self._tt
+        if tt is not None and tt.cai and tt.an:
+            return self.installed_version or self._ud.phien_ban      # gói bị ẩn: không mời «cập nhật» (xem installed_version)
         return self._ud.phien_ban
 
     @property
@@ -66,6 +69,8 @@ class R1AppUpdate(UpdateEntity):
             return None
         if not tt.cai:
             return CHUA_CAI
+        if tt.an:
+            return f"{tt.phien_ban or '?'} (đang ẩn)"          # có trên loa nhưng bị `pm hide`: coi là đã cài, không so với bản đi kèm
         if tt.giong_di_kem:
             return self._ud.phien_ban                       # trùng từng byte với bản đi kèm
         ver = tt.phien_ban or "?"
@@ -77,7 +82,8 @@ class R1AppUpdate(UpdateEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {"goi": self._ud.goi, "duong_dan": getattr(self._tt, "duong_dan", None), "loi": self._loi}
+        return {"goi": self._ud.goi, "duong_dan": getattr(self._tt, "duong_dan", None), "an": getattr(self._tt, "an", None),
+                "ban_di_kem": self._ud.phien_ban, "loi": self._loi}
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()

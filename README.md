@@ -111,8 +111,8 @@ Tích hợp mang theo các ứng dụng cần cho loa và **tự cài qua ADB** 
 
 Chi tiết và gỡ rối: **[docs/CAI-UNG-DUNG.md](docs/CAI-UNG-DUNG.md)**. Cài APK `vn.r1.bodam` **bằng tay** (cách cũ, khi không dùng bộ cài): `adb install`, xem [docs/CAI-APK.md](docs/CAI-APK.md).
 **Đã kiểm trên loa thật:** cài đè APK mic 1.2, tự chạy sau khởi động lại loa, tự nối lại HA. **Chưa kiểm trên loa thật:** bấm «Cài đặt» cho `unisound` từ HA, toàn bộ trình tự trên loa mới tinh.
-**Đã biết còn sai:** trên loa của chủ kho, `com.phicomm.speaker.device` **đã có** (ứng dụng hệ thống `/system/app/Unisound` V3.1.6.2, kèm bản cập nhật V3.2.5.2 trong `/data`, đang bị **ẩn**). Bộ dò của tích hợp chỉ hỏi `pm path`
-nên với gói bị ẩn thực thể «Ứng dụng: Thiết bị và giọng nói» hiển thị «chưa cài» và «Có bản cập nhật». **Đừng bấm «Cập nhật» cho thực thể này** khi gói đã có; số phiên bản `25.3.1` trong `bo-cai.json` cũng chưa được đối chiếu với tệp.
+**Gói bị ẩn:** trên loa của chủ kho, `com.phicomm.speaker.device` **đã có** (ứng dụng hệ thống `/system/app/Unisound` V3.1.6.2, kèm bản cập nhật V3.2.5.2 trong `/data`, đang bị **ẩn**; `pm path` trả rỗng với gói ẩn).
+Bộ dò đọc bản ghi `dumpsys package` nên thực thể «Ứng dụng: Thiết bị và giọng nói» hiện **«V3.2.5.2- (đang ẩn)»** và **không mời cập nhật**. Số phiên bản `25.3.1` trong `bo-cai.json` chưa được đối chiếu với tệp.
 Tệp `autodlna.apk` đi kèm trùng từng byte với `base.apk` của trình phát đang chạy trên loa của chủ kho, nên thực thể trình phát hiện đúng «Mới nhất».
 
 ## 7. Thông tin hệ thống của loa
