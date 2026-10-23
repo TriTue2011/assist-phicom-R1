@@ -9,12 +9,6 @@ APK `apk/vn-r1-bodam.apk` là ứng dụng trên loa giữ đường mic, đèn 
 - Cổng ADB qua mạng (5555) của loa đang mở. Cách bật tuỳ bạn đã làm trước đây: `<cách bật ADB qua mạng của bạn>`.
 - Khoá nghe mic của loa (lấy trong HA: thẻ R1 → Cài đặt → Kết nối → «Hiện lệnh cài APK», chỉ quản trị viên).
 
-## Kiểm tra file APK
-```
-sha256sum apk/vn-r1-bodam.apk
-```
-Giá trị phải là `7a8b94a0bad1bb600f3e461c6d2b0c909627ff355c5d46e9854e8b79ba090be1`.
-
 ## Các bước (chạy trên máy tính)
 Thay `<IP-loa>` bằng IP loa của bạn.
 
@@ -44,3 +38,7 @@ Chạy lệnh do thẻ hiển thị chỉ khi app chưa cấu hình. Nếu cần
 
 ## Sau khi xong
 Tắt cổng ADB qua mạng theo cách bạn đã bật, để loa không mở cổng 5555 trong mạng nhà.
+
+## Dành cho người phát hành (người dùng không cần làm)
+Mỗi lần dựng APK mới: chạy `cd apk && sha256sum vn-r1-bodam.apk > vn-r1-bodam.apk.sha256` và kiểm `sha256sum -c vn-r1-bodam.apk.sha256`
+trước khi đẩy. Mã hiện tại: `7a8b94a0bad1bb600f3e461c6d2b0c909627ff355c5d46e9854e8b79ba090be1`. File `.sha256` chỉ để kiểm, không phải file cài.

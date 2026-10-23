@@ -65,11 +65,7 @@ Kho này gồm hai phần chạy cùng nhau để biến loa **Phicomm R1** thà
 
 APK: `apk/vn-r1-bodam.apk` (gói `vn.r1.bodam`, versionName 1.1, minSdk/targetSdk 22, ký bằng khoá debug),
 dựng từ mã nguồn trong `apk/nguon/` (xem `apk/nguon/README-BUILD.md`). Đây là **bản phát hành**: không có
-receiver kiểm thử. Kiểm sha256 trước khi cài:
-
-```bash
-cd apk && sha256sum -c vn-r1-bodam.apk.sha256
-```
+receiver kiểm thử.
 
 **Đã chạy trên loa thật (22/10/2026):** mic về HA, tự nối lại khi HA khởi động lại, phát tiếng từ HA xuống loa
 qua cùng kết nối, đèn theo nhạc của firmware (độ sáng/sắc độ/bật tắt), lệnh đổi cấu hình giả bị bỏ qua khi đã
