@@ -33,6 +33,9 @@ Thay `<IP-loa>` bằng IP loa của bạn.
 - Trong HA: cảm biến «Trạng thái mic» chuyển sang đang nghe, và «Dịch vụ đèn» là «sẵn sàng».
 - Thẻ R1 → Cài đặt có «Đèn RGB chính» và mục «Kiểu viền» đã gỡ.
 
+## Tự chạy lại
+APK tự chạy khi loa khởi động, khi khởi động nhanh, và ngay sau khi bạn cài đè bản mới, với điều kiện **đã cấu hình** (đã chạy lệnh «Hiện lệnh cài APK» ít nhất một lần). Lệnh đó cũng là lần mở app đầu tiên: Android không gửi tín hiệu khởi động cho app mới cài mà chưa ai mở lần nào, nên chỉ cài APK mà không chạy lệnh cấu hình thì APK sẽ không tự chạy và không nối về HA. Cấu hình được lưu trên loa nên mất điện cũng không phải làm lại.
+
 ## Đổi cấu hình về sau
 Chạy lệnh do thẻ hiển thị chỉ khi app chưa cấu hình. Nếu cần xoá cấu hình, dùng `adb -s <IP-loa>:5555 shell /system/bin/pm clear vn.r1.bodam` rồi chạy lại lệnh đó.
 

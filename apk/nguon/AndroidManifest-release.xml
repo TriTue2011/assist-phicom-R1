@@ -2,8 +2,8 @@
 <!-- NV247 — BIEN THE PHAT HANH: khong co receiver kiem thu. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="vn.r1.bodam"
-    android:versionCode="2"
-    android:versionName="1.1">
+    android:versionCode="3"
+    android:versionName="1.2">
 
     <uses-sdk android:minSdkVersion="22" android:targetSdkVersion="22" />
 
@@ -27,6 +27,8 @@
         <receiver android:name=".KhoiDongReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
         <!-- NV247: nhan nut giua khi app khong tien canh. Mac dinh TAT,

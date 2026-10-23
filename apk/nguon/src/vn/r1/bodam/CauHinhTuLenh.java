@@ -39,6 +39,18 @@ public final class CauHinhTuLenh {
                 || khoaHienTai == null || khoaHienTai.isEmpty();
     }
 
+    /**
+     * Tin hieu he thong cho phep APK TU CHAY LAI dich vu mic (khi da cau hinh):
+     * khoi dong loa, khoi dong nhanh (mot so firmware chi gui tin hieu nay), va sau khi APK bi cai de
+     * (cai de lam tien trinh bi dung; khong co tin hieu nay dich vu chet cho toi lan khoi dong lai sau).
+     * So khop CHINH XAC (phan biet hoa thuong) de tin hieu la khong kich hoat tu bat.
+     */
+    public static boolean hanhDongTuBat(String hanhDong) {
+        return "android.intent.action.BOOT_COMPLETED".equals(hanhDong)
+                || "android.intent.action.QUICKBOOT_POWERON".equals(hanhDong)
+                || "android.intent.action.MY_PACKAGE_REPLACED".equals(hanhDong);
+    }
+
     /** Du cau hinh de tu bat mic: host va port hop le. Khoa co the CHUA co: APK se tu xin khoa tu HA (Ghep). */
     public static boolean nenTuBat(String host, int port, String khoa) {
         return host != null && !host.trim().isEmpty() && port >= 1 && port <= 65535;

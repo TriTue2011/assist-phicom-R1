@@ -777,6 +777,16 @@ public class KiemTra {
                     && !CauHinhTuLenh.nenTuBat("h", 70000, "khoa") && CauHinhTuLenh.nenTuBat("h", 18765, "")
                     && !CauHinhTuLenh.nenTuBat(null, 1, "k") && CauHinhTuLenh.nenTuBat("h", 1, null),
                     "tu-bat: thieu host/port hop le/khoa -> KHONG tu bat mic");
+            ok(CauHinhTuLenh.hanhDongTuBat("android.intent.action.BOOT_COMPLETED")
+                    && CauHinhTuLenh.hanhDongTuBat("android.intent.action.QUICKBOOT_POWERON")
+                    && CauHinhTuLenh.hanhDongTuBat("android.intent.action.MY_PACKAGE_REPLACED"),
+                    "tu-bat: 3 tin hieu (khoi dong, khoi dong nhanh, cai de APK) deu cho phep tu bat");
+            ok(!CauHinhTuLenh.hanhDongTuBat(null) && !CauHinhTuLenh.hanhDongTuBat("")
+                    && !CauHinhTuLenh.hanhDongTuBat("vn.r1.bodam.TAT") && !CauHinhTuLenh.hanhDongTuBat("vn.r1.bodam.BAT")
+                    && !CauHinhTuLenh.hanhDongTuBat("android.intent.action.USER_PRESENT")
+                    && !CauHinhTuLenh.hanhDongTuBat("android.intent.action.BOOT_COMPLETED.gia")
+                    && !CauHinhTuLenh.hanhDongTuBat("android.intent.action.boot_completed"),
+                    "tu-bat: tin hieu la, rong, null, lenh tat/bat noi bo, sai chu hoa/thuong -> KHONG tu bat");
         }
     }
 }
