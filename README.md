@@ -86,28 +86,13 @@ cấu hình. **Chưa kiểm:** tự bật mic sau khi loa khởi động lại (
 
 Các bước:
 
-```bash
-# 1) Bật ADB trên loa (theo cách bạn đã dùng cho loa của mình), rồi nối:
-adb connect <IP-loa>:5555           # ví dụ 192.0.2.10:5555
+Cài APK và cấu hình mic: làm qua tích hợp (thẻ Cài đặt → Kết nối → «Hiện lệnh cài APK», chỉ quản trị viên).
 
-# 2) Đưa APK lên loa và cài. Lệnh `pm` trần bị chặn trên loa: BẮT BUỘC dùng đường dẫn đầy đủ /system/bin/pm
-adb push apk/vn-r1-bodam.apk /data/local/tmp/
-adb shell /system/bin/pm install -r /data/local/tmp/vn-r1-bodam.apk
 
-# 3) Cấu hình LẦN ĐẦU (chỉ nhận khi app chưa cấu hình), rồi bật mic:
-adb shell /system/bin/am start -n vn.r1.bodam/.ManHinhChinh --es host <IP-HA> --ei port 18765 --es khoa <khoá>
-adb shell /system/bin/am start -n vn.r1.bodam/.ManHinhChinh --ez bat true
-```
-
-Khoá lấy từ tuỳ chọn `mic_listen_key` của tích hợp. Muốn đổi cấu hình về sau: `adb shell /system/bin/pm clear
-vn.r1.bodam` rồi làm lại bước 3 (app đã cấu hình thì bỏ qua lệnh đổi, để app khác trên loa không chuyển được
+Muốn đổi cấu hình về sau: xoá dữ liệu app (qua thẻ Cài đặt) rồi cấu hình lại; app đã cấu hình thì bỏ qua lệnh đổi, (app đã cấu hình thì bỏ qua lệnh đổi, để app khác trên loa không chuyển được
 đích đến của tiếng mic).
 
-Tuỳ chọn, **chỉ khi chủ loa quyết định** — ẩn gói gốc của hãng cho khỏi tranh mic/nút:
-
-```bash
-adb shell /system/bin/pm hide com.phicomm.speaker.device
-```
+Tuỳ chọn, **chỉ khi chủ loa quyết định** — ẩn gói gốc của hãng cho khỏi tranh mic/nút: (không còn lệnh; làm qua quản trị viên).
 
 - Đây là **ẩn**, không xoá: gói gốc vẫn nằm trong hệ thống, làm ngược lại được.
 - Lệnh này **chưa được kiểm trong dự án này**; nếu shell không đủ quyền thì lệnh sẽ báo lỗi và không đổi gì.
@@ -115,8 +100,6 @@ adb shell /system/bin/pm hide com.phicomm.speaker.device
 **Gỡ / hoàn tác:**
 
 ```bash
-adb shell /system/bin/pm uninstall vn.r1.bodam
-adb shell /system/bin/pm unhide com.phicomm.speaker.device     # nếu đã ẩn gói gốc
 ```
 
 **Cấu hình APK** (host HA, cổng, khoá): APK có **một màn hình cài đặt** (`ManHinhChinh`) với các ô *Host HA*, *Port*, *Khoá*, khuếch đại dB,
@@ -131,26 +114,18 @@ các ô này mà không cần màn hình** (xem mục 11). Đây là lỗ hổng
   được tính là một nhấn đơn. Mã phím khác 195 không làm gì. Logic này đã kiểm bằng test Java thuần (đồng hồ giả), **chưa kiểm trên loa thật**.
 - **Giới hạn quan trọng:** APK hiện chỉ nhận phím qua `Activity.dispatchKeyEvent` của màn hình chính, nghĩa là **chỉ khi app đang ở tiền cảnh**.
   Chưa có cách nhận nút giữa khi app chạy nền.
-- **Nếu nút của bạn ra mã khác:** (a) đo lại — `adb shell getevent -l /dev/input/event0` rồi nhấn nút, mã hiện dạng hex (ví dụ `00c3` = 195; lệnh chuẩn của Android, chưa chạy trong dự án này), hoặc bật *chế độ kiểm
   phím* trong app (ghi logcat tag `NV243Phim` và hiện mã trên màn hình); (b) điền mã thập phân vào ô *Keycode nút giữa*. Đặt `-1` = tắt xử lý nút.
 
 ## 5. Đèn
 
-Loa có hai nhóm đèn, điều khiển bằng lệnh `/system/bin/lights_test set <mặt nạ> <6 số hex RRGGBB>` **chạy trên loa** (qua `adb shell`):
+Loa có hai nhóm đèn, điều khiển bằng lệnh `/system/bin/lights_test set <mặt nạ> <6 số hex RRGGBB>` **chạy trên loa**:
 
 | Đèn | Mặt nạ | Màu | Đã kiểm |
 |---|---|---|---|
 | **Viền** | `7fffff8000` | **chỉ trắng**: bật `ffffff`, tắt `000000`, mờ `404040` | chủ máy xác nhận bằng mắt |
 | **Đáy** | `7fff` | RGB | **xanh lá `00ff00` và xanh dương `0000ff` đã xác nhận**; **đỏ `ff0000` chưa chắc** |
 
-Lệnh thử (ví dụ):
 
-```bash
-adb shell /system/bin/lights_test set 7fffff8000 ffffff   # viền sáng
-adb shell /system/bin/lights_test set 7fffff8000 000000   # viền tắt
-adb shell /system/bin/lights_test set 7fff 00ff00         # đáy xanh lá
-adb shell /system/bin/lights_test set 7fff 0000ff         # đáy xanh dương
-```
 
 **Đèn chạy bằng hiệu ứng CÓ SẴN của firmware, như app AI box.** HA gửi khung `den_hieu_ung` xuống APK `vn.r1.bodam`, APK gọi
 `msgcenter.sendMsg(0x1000, ID, 0)`; không cần máy chủ quyền shell hay máy ngoài (cần APK mới). Chỉ có tập màu của firmware (đỏ,
@@ -169,7 +144,6 @@ bằng mắt**; mọi giá trị mặc định của bảng chức năng đều 
 4. Trạng thái nhìn ở `sensor.r1_trang_thai_mic`: `tat` / `nghe` (cổng mở, chưa có tiếng) / `gui` (đang nhận tiếng).
 5. `switch.r1_tat_mic` bật: HA **đóng kết nối** của loa và từ chối nối lại cho tới khi tắt công tắc (có test).
 
-Kiểm thử không cần nút giữa (chỉ bản NV245 kiểm thử): `adb shell /system/bin/am broadcast -a vn.r1.bodam.KIEM_MIC --ez bat true` (bật) và `--ez bat false` (tắt).
 
 ## 7. Trạng thái: đã kiểm trên loa thật và chỉ kiểm bằng mock
 
