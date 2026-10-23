@@ -4,7 +4,7 @@ Kho này biến loa **Phicomm R1** thành một thiết bị đầy đủ của 
 
 1. **Tích hợp HA `r1_speaker`** (`custom_components/r1_speaker/`): EQ, âm lượng, DLNA/AirPlay; phát tiếng của HA (TTS, nhạc) ra loa; vệ tinh Assist với từ đánh thức;
    bộ đàm; **đèn LED** (13 hiệu ứng, mỗi hiệu ứng có thông số riêng, mục Thử riêng); **cài ứng dụng lên loa qua ADB** (kể cả loa mới tinh); nút khởi động lại loa;
-   cảm biến CPU/RAM/bộ nhớ/WiFi của loa; thẻ Lovelace `r1-card` (đàm thoại, EQ, cài đặt).
+   cảm biến CPU/RAM/bộ nhớ/WiFi của loa; thẻ Lovelace `r1-card` (đàm thoại, EQ, cài đặt); icon riêng (`brand/`; HA có hỗ trợ thư mục này tự nạp, đã thấy trong 2026.10.3, bản cũ hơn chưa kiểm).
 2. **APK `vn.r1.bodam`** (`apk/`): ứng dụng Android nhỏ trên loa, lấy tiếng mic gửi về HA **chỉ khi người dùng bật**; nút giữa bật/tắt mic.
 
 > **Đọc trước khi làm theo.** Đây là dự án thử nghiệm. Phần lớn mã được kiểm bằng loa giả trên máy phát triển; các điểm đã kiểm trên **loa thật** và điểm **chưa kiểm** được ghi rõ ở từng mục và ở
@@ -110,7 +110,10 @@ Tích hợp mang theo các ứng dụng cần cho loa và **tự cài qua ADB** 
 * **Nút Khởi động lại loa** (`button.r1_khoi_dong_lai`) gửi lệnh `reboot` qua ADB.
 
 Chi tiết và gỡ rối: **[docs/CAI-UNG-DUNG.md](docs/CAI-UNG-DUNG.md)**. Cài APK `vn.r1.bodam` **bằng tay** (cách cũ, khi không dùng bộ cài): `adb install`, xem [docs/CAI-APK.md](docs/CAI-APK.md).
-**Đã kiểm trên loa thật:** cài đè APK mic 1.2, tự chạy sau khởi động lại loa, tự nối lại HA. **Chưa kiểm trên loa thật:** cài `unisound` (loa của chủ kho chưa cài gói này), toàn bộ trình tự trên loa mới tinh.
+**Đã kiểm trên loa thật:** cài đè APK mic 1.2, tự chạy sau khởi động lại loa, tự nối lại HA. **Chưa kiểm trên loa thật:** bấm «Cài đặt» cho `unisound` từ HA, toàn bộ trình tự trên loa mới tinh.
+**Đã biết còn sai:** trên loa của chủ kho, `com.phicomm.speaker.device` **đã có** (ứng dụng hệ thống `/system/app/Unisound` V3.1.6.2, kèm bản cập nhật V3.2.5.2 trong `/data`, đang bị **ẩn**). Bộ dò của tích hợp chỉ hỏi `pm path`
+nên với gói bị ẩn thực thể «Ứng dụng: Thiết bị và giọng nói» hiển thị «chưa cài» và «Có bản cập nhật». **Đừng bấm «Cập nhật» cho thực thể này** khi gói đã có; số phiên bản `25.3.1` trong `bo-cai.json` cũng chưa được đối chiếu với tệp.
+Tệp `autodlna.apk` đi kèm trùng từng byte với `base.apk` của trình phát đang chạy trên loa của chủ kho, nên thực thể trình phát hiện đúng «Mới nhất».
 
 ## 7. Thông tin hệ thống của loa
 
