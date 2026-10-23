@@ -19,7 +19,7 @@
  */
 (function () {
   "use strict";
-  var BUILD = "2026-10-22.17";
+  var BUILD = "2026-10-22.18";
 
   var PLATFORM = "r1_speaker";
   var FUNCTIONS = ["cho", "nghe", "nghi", "phan_hoi", "dam_thoai", "phat_nhac", "loi", "tat_mic"];
@@ -170,7 +170,7 @@
     var fns = FUNCTIONS.filter(function (k) { return chuc[k]; }).map(function (k) {
       var p = chuc[k];
       return { key: k, enabled: p.enabled === true, rim: p.rim === true, color: String(p.color || "#000000"),
-               effect: p.effect || "none", brightness: num(p.brightness, 0), tocDo: num(p.toc_do, 100), rimKieu: num(p.rim_kieu, 0), isDefault: p.mac_dinh === true,
+               effect: p.effect || "none", brightness: num(p.brightness, 0), tocDo: num(p.toc_do, 100), isDefault: p.mac_dinh === true,
                active: al.dang_ap_dung === k };
     });
     var fw = al.den_nhac_firmware || {};
@@ -235,7 +235,7 @@
     if (!sid) return null;
     var coerce = function (field, v) {
       if (field === "enabled" || field === "rim" || field === "bat") return v === true || v === "true" || v === "on";
-      if (field === "brightness" || field === "toc_do" || field === "sang" || field === "che_do" || field === "rim_kieu") return Math.round(Number(v));
+      if (field === "brightness" || field === "toc_do" || field === "sang" || field === "che_do") return Math.round(Number(v));
       return String(v);
     };
     if (a.type === "fn" && FUNCTIONS.indexOf(a.key) >= 0) {
@@ -408,9 +408,6 @@
       (f.enabled ? " checked" : "") + "></div>" +
       '<div class="row"><label>' + esc(t.rim) + "</label><input type=\"checkbox\" " + d + '"rim"' +
       (f.rim ? " checked" : "") + "></div>" +
-            ['<option value="0">Không</option>'].concat(Array.from({ length: 24 }, function (_, i) {
-        return '<option value="' + (i + 1) + '"' + (f.rimKieu === i + 1 ? " selected" : "") + ">Chạy đuổi " + (i + 1) + "</option>";
-      })).join("") + "</select></div>" +
       '<div class="row"><label>' + esc(t.color) + "</label>" + (L.fw && L.bangMau.length
         ? mauSelect(d + '"color"', f.color, L, lg)
         : '<input type="color" ' + d + '"color" value="' + esc(hexOk(f.color)) + '">') + "</div>" +

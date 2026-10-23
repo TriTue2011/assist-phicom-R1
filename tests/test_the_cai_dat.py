@@ -372,3 +372,13 @@ async def test_cai_dat_chi_tiet_chinh_duoc_o_the_va_thanh_lenh_dich_vu(hass, r1)
     # mục đã chỉnh khác mặc định được đánh dấu *
     g["states"][sid]["attributes"]["am_thanh"]["nang_cao"][1]["v"] = 0.8
     assert " *" in _html(_mo_hinh(g), {"open": True, "tab": "audio"})
+
+
+def test_the_cai_dat_khong_con_sot_lai_ma_kieu_vien():
+    """Gỡ ô «Kiểu viền» từng để sót các <option> trần và </select> mồ côi (hiện danh sách «Không / Chạy đuổi 1…» ngoài mọi ô chọn)."""
+    js = CARD.read_text(encoding="utf-8")
+    for cam in ("Chạy đuổi ", "rimKieu", "rim_kieu", "Array.from({ length: 24 }"):
+        assert cam not in js, cam
+    # mọi </select> phải có <select> mở tương ứng trong cùng tệp
+    assert js.count("<select") + js.count("'<select") >= 0
+    assert js.count("</select>") <= js.count("<select"), "có </select> mồ côi"
