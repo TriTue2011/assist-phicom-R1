@@ -237,36 +237,49 @@ class AdbDevice:
             raise AdbError((await asyncio.wait_for(r.readexactly(n), TIMEOUT_S)).decode("utf-8", "replace"))
         raise AdbError(f"adb-server trả lời lạ: {resp!r}")
 
-    async def _server_connect(self) -> None:
+    async def _server_lenh(self, lenh: str) -> str:
+        """Lệnh ``host:`` của adb-server (connect/disconnect): trả thông điệp; thông điệp báo lỗi thì ``AdbError``."""
         sh, sp = _split_hostport(self.server, 5037)
         r, w = await asyncio.wait_for(asyncio.open_connection(sh, sp), TIMEOUT_S)
         try:
-            await self._svc(r, w, f"host:connect:{self.serial}")
-            with contextlib.suppress(Exception):          # thông điệp "connected to ..." / "already connected"
+            await self._svc(r, w, lenh)
+            msg = ""
+            with contextlib.suppress(Exception):
                 n = int(await asyncio.wait_for(r.readexactly(4), TIMEOUT_S), 16)
                 msg = (await asyncio.wait_for(r.readexactly(n), TIMEOUT_S)).decode("utf-8", "replace")
-                if "cannot" in msg or "failed" in msg or "unable" in msg:
-                    raise AdbError(msg)
+            if any(x in msg for x in ("cannot", "failed", "unable")):
+                raise AdbError(msg)
+            return msg
         finally:
             w.close()
 
-    async def _open_server(self, service: str) -> AdbStream:
+    async def _server_connect(self) -> None:
+        await self._server_lenh(f"host:connect:{self.serial}")
+
+    async def _server_ngat_noi_lai(self) -> None:
+        """Server giữ kết nối HỎNG tới loa (``device offline``/``not found``) thì nó chiếm luôn chỗ duy nhất của adbd:
+        ngắt rồi nối lại để lấy kết nối mới."""
+        with contextlib.suppress(Exception):
+            await self._server_lenh(f"host:disconnect:{self.serial}")
+        await self._server_connect()
+
+    async def _mo_qua_server(self, service: str) -> AdbStream:
         sh, sp = _split_hostport(self.server, 5037)
-        for lan in (1, 2):
-            r, w = await asyncio.wait_for(asyncio.open_connection(sh, sp), TIMEOUT_S)
-            try:
-                await self._svc(r, w, f"host:transport:{self.serial}")
-                await self._svc(r, w, service)
-                return _RawStream(r, w)
-            except AdbError:
-                w.close()
-                if lan == 2:
-                    raise
-                await self._server_connect()              # loa chưa nối vào server: nối rồi thử lại một lần
-            except BaseException:
-                w.close()
-                raise
-        raise AdbError("không mở được luồng qua adb-server")   # pragma: no cover
+        r, w = await asyncio.wait_for(asyncio.open_connection(sh, sp), TIMEOUT_S)
+        try:
+            await self._svc(r, w, f"host:transport:{self.serial}")
+            await self._svc(r, w, service)
+            return _RawStream(r, w)
+        except BaseException:
+            w.close()
+            raise
+
+    async def _open_server(self, service: str) -> AdbStream:
+        try:
+            return await self._mo_qua_server(service)
+        except AdbError:
+            await self._server_ngat_noi_lai()                # loa chưa nối / đang offline: nối lại rồi thử đúng một lần nữa
+            return await self._mo_qua_server(service)
 
     # ── nối thẳng ────────────────────────────────────────────
 

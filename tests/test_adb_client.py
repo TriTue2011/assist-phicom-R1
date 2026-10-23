@@ -21,6 +21,8 @@ class FakeServer:
 
     def __init__(self, *, da_noi: bool = True):
         self.da_noi = da_noi
+        self.offline = False            # server giữ kết nối HỎNG tới loa: transport báo «device offline» tới khi ngắt rồi nối lại
+        self.nhat_ky: list[str] = []
         self.lenh: list[str] = []
         self.tep: dict[str, bytes] = {}
         self.chay = lambda cmd: f"ra:{cmd}".encode()
@@ -30,14 +32,20 @@ class FakeServer:
             while True:
                 n = int(await r.readexactly(4), 16)
                 req = (await r.readexactly(n)).decode()
+                self.nhat_ky.append(req)
+                if req.startswith("host:disconnect:"):
+                    self.da_noi = False
+                    w.write(b"OKAY" + b"%04x" % 12 + b"disconnected")
+                    await w.drain()
+                    return
                 if req.startswith("host:connect:"):
-                    self.da_noi = True
+                    self.da_noi, self.offline = True, False
                     w.write(b"OKAY" + b"%04x" % 12 + b"connected to")
                     await w.drain()
                     return
                 if req.startswith("host:transport:"):
-                    if not self.da_noi:
-                        msg = b"device not found"
+                    if not self.da_noi or self.offline:
+                        msg = b"device offline" if self.offline else b"device not found"
                         w.write(b"FAIL" + b"%04x" % len(msg) + msg)
                         await w.drain()
                         return
@@ -266,3 +274,13 @@ async def test_adbd_dang_ban_voi_client_khac_thi_bao_ro(may):
             await _loa(p2, None, "direct").shell("z")
     finally:
         await giu.close()
+
+
+async def test_server_giu_ket_noi_hong_thi_ngat_va_noi_lai_roi_chay_duoc(may):
+    """Tình huống thật: adb-server báo «device offline» (giữ kết nối hỏng, chiếm chỗ duy nhất của adbd)."""
+    fs, p1, fa, p2 = may
+    fs.offline = True
+    d = _loa(p2, p1, "auto")
+    assert await d.shell("echo hi") == "ra:echo hi"
+    assert d.duong == "server" and not fs.offline
+    assert [x.split(":")[1] for x in fs.nhat_ky if x.startswith("host:") and "transport" not in x] == ["disconnect", "connect"]
