@@ -68,6 +68,9 @@ class ApkLights:
         if effect == "chay_duoi":                       # viền chạy đuổi: một ID firmware, không đáy
             await self._ap(fw.DAY_TAT, fw.id_chay_duoi(rim, sang), ep=True)
             return
+        if effect.startswith("vien_"):                 # 24 chế độ viền: đúng ID firmware của chế độ
+            await self._ap(fw.DAY_TAT, fw.id_vien_fw(effect, rim, sang), ep=True)
+            return
         await self._ap(fw.id_day(color, effect, sang), fw.id_vien(rim, sang), ep=True)
 
     async def tat(self) -> None:

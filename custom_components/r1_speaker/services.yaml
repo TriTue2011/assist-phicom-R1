@@ -67,6 +67,12 @@ set_light_function:
         select:
           translation_key: light_effect
           options: [none, tho, cau_vong, nhap_nhay, nhip_tim, phao_hoa, chop]
+    rim_kieu:
+      selector:
+        number:
+          min: 0
+          max: 24
+          mode: slider
     brightness:
       selector:
         number:

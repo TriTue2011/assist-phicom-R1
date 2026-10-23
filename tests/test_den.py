@@ -115,8 +115,9 @@ async def test_run_steps_lap_den_khi_bi_huy():
 
 def test_danh_muc_5_den_6_hieu_ung_co_nguon():
     ids = set(hieu_ung.HIEU_UNG)
-    assert ids == {"tho", "cau_vong", "nhap_nhay", "nhip_tim", "phao_hoa", "chop", "chay_duoi", "cau_vong_fw"}
-    assert 5 <= len(ids) <= 8
+    assert ids == {"tho", "cau_vong", "nhap_nhay", "nhip_tim", "phao_hoa", "chop", "chay_duoi", "cau_vong_fw",
+                   *(f"vien_{n}" for n in range(1, 25))}
+    assert 5 <= len(ids) <= 32
     for h in hieu_ung.HIEU_UNG.values():
         assert (h.nguon.startswith("https://kno.wled.ge/") or h.nguon.startswith("firmware")) and h.wled and h.ten and h.ten_en
     # Hiệu ứng cần ghi từng LED (đuổi, quét, sóng) bị bỏ có chủ đích.
@@ -473,7 +474,7 @@ async def test_cai_dat_duoc_luu_va_nap_lai(hass, r1, hass_storage):
         "rim": False, "color": "#00ff00", "effect": "nhip_tim", "brightness": 30}}}   # chỉ phần KHÁC mặc định
     assert hass.states.get(CAI_DAT).attributes["anh_sang"]["chuc_nang"]["nghe"] == {
         "enabled": True, "rim": False, "color": "#00ff00", "effect": "nhip_tim", "brightness": 30, "toc_do": 100,
-        "mac_dinh": False}
+        "rim_kieu": 0, "mac_dinh": False}
     assert await hass.config_entries.async_reload(e.entry_id)
     await hass.async_block_till_done()
     p = e.runtime_data.lights.profiles["nghe"]

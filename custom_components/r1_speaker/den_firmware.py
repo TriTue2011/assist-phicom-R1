@@ -45,7 +45,7 @@ MAU: dict[str, MauFirmware] = {m.ten_en: m for m in (
 
 #: Hiệu ứng mà firmware tự chạy bằng MỘT ID (còn lại — cầu vồng, nhịp tim, pháo hoa, chớp — chạy bằng cách HA đổi
 #: liên tiếp giữa các màu của firmware, như app AI box gửi chuỗi ID kèm nghỉ ngắn; màu bị làm tròn về bảng ``MAU``).
-HIEU_UNG_GOC = ("none", "tho", "nhap_nhay", "chay_duoi")
+HIEU_UNG_GOC = ("none", "tho", "nhap_nhay", "chay_duoi", *(f"vien_{n}" for n in range(1, 25)))
 #: «Nháy» = ID 206 (đỏ, chu kỳ 0,5 giây — nhanh hơn «thở» 3,3 giây). Chỉ có màu đỏ; màu khác rơi về «thở».
 ID_NHAY_DO = 206
 #: Dưới ngưỡng này (kênh sáng nhất) coi là tắt đèn đáy.
@@ -71,6 +71,13 @@ def id_day(rgb: tuple[int, int, int], hieu_ung: str | bool, sang: float) -> int:
     if m.co_dinh is not None:
         return m.co_dinh
     return m.tho if m.tho is not None else DAY_TAT      # trắng không có «sáng cố định» đáy: thở trắng là gần nhất
+
+
+def id_vien_fw(hieu_ung: str, bat: bool, sang: float) -> int:
+    """ID firmware cho chế độ viền ``vien_n`` (n = ID); tắt khi không bật hoặc độ sáng 0."""
+    if not bat or sang <= 0 or not hieu_ung.startswith("vien_"):
+        return RIM_TAT
+    return int(hieu_ung.split("_", 1)[1])
 
 
 def id_chay_duoi(bat: bool, sang: float) -> int:

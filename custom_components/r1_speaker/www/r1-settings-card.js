@@ -19,7 +19,7 @@
  */
 (function () {
   "use strict";
-  var BUILD = "2026-10-22.11";
+  var BUILD = "2026-10-22.15";
 
   var PLATFORM = "r1_speaker";
   var FUNCTIONS = ["cho", "nghe", "nghi", "phan_hoi", "dam_thoai", "phat_nhac", "loi", "tat_mic"];
@@ -170,7 +170,7 @@
     var fns = FUNCTIONS.filter(function (k) { return chuc[k]; }).map(function (k) {
       var p = chuc[k];
       return { key: k, enabled: p.enabled === true, rim: p.rim === true, color: String(p.color || "#000000"),
-               effect: p.effect || "none", brightness: num(p.brightness, 0), tocDo: num(p.toc_do, 100), isDefault: p.mac_dinh === true,
+               effect: p.effect || "none", brightness: num(p.brightness, 0), tocDo: num(p.toc_do, 100), rimKieu: num(p.rim_kieu, 0), isDefault: p.mac_dinh === true,
                active: al.dang_ap_dung === k };
     });
     var fw = al.den_nhac_firmware || {};
@@ -234,8 +234,8 @@
     }
     if (!sid) return null;
     var coerce = function (field, v) {
-      if (field === "enabled" || field === "rim") return v === true || v === "true" || v === "on";
-      if (field === "brightness" || field === "toc_do") return Math.round(Number(v));
+      if (field === "enabled" || field === "rim" || field === "bat") return v === true || v === "true" || v === "on";
+      if (field === "brightness" || field === "toc_do" || field === "sang" || field === "che_do" || field === "rim_kieu") return Math.round(Number(v));
       return String(v);
     };
     if (a.type === "fn" && FUNCTIONS.indexOf(a.key) >= 0) {
@@ -248,6 +248,11 @@
       var val = kieuBat ? (a.value === true || a.value === "true" || a.value === "on") : Number(a.value);
       if (!kieuBat && !isFinite(val)) return null;
       return ["r1_speaker", "set_advanced_option", { entity_id: sid, key: a.key, value: val }];
+    }
+    if (a.type === "main") {                       // đèn chính RGB: mode/độ sáng/tốc độ qua cổng 8080 của loa
+      var mn = { entity_id: sid };
+      mn[a.field] = coerce(a.field, a.value);
+      return ["r1_speaker", "set_main_light", mn];
     }
     if (a.type === "music") {
       var m = { entity_id: sid };
@@ -362,9 +367,23 @@
       if (f.key === "phat_nhac") return;      // hiện riêng ở mục «hiệu ứng khi phát nhạc»
       h += htmlFunction(f, L, t, lg);
     });
+    // Đèn CHÍNH (RGB): mode 0–16 của firmware (cổng 8080, dịch vụ set_main_light). Mode 1 = cầu vồng đã test.
+    var CHE_DO_CHINH = [[0, "Mặc định"], [1, "Cầu vồng (xoay vòng)"], [3, "Đơn sắc"], [2, "Mode 2"], [4, "Mode 4"], [5, "Mode 5"],
+      [6, "Mode 6"], [8, "Mode 8"], [9, "Mode 9"], [10, "Mode 10"], [11, "Mode 11"], [12, "Mode 12"], [13, "Mode 13"],
+      [14, "Mode 14"], [15, "Mode 15"], [16, "Mode 16"]];
+    h += '<section data-main><details class="grp"><summary><b>Đèn RGB chính (firmware)</b></summary>' +
+      '<div class="row"><label>Chế độ</label><select data-main-field="che_do">' +
+      CHE_DO_CHINH.map(function (c) { return '<option value="' + c[0] + '">' + esc(c[1]) + "</option>"; }).join("") +
+      "</select></div>" +
+      '<div class="row"><label>Bật</label><input type="checkbox" data-main-field="bat"></div>' +
+      '<div class="row"><label>Độ sáng</label>' + slider('data-main-field="sang"', 100, 1, 200, 1, false) +
+      '<span class="val">100</span></div>' +
+      '<div class="row"><label>Tốc độ (firmware)</label>' + slider('data-main-field="toc_do"', 50, 1, 100, 1, false) +
+      '<span class="val">50</span></div>' +
+      '<div class="note">Đèn RGB chính theo mode của firmware (lệnh qua cổng 8080): chỉ mode 1 là cầu vồng đã kiểm; các mode khác chưa đặt tên, xem trên loa.</div></details></section>';
     var mu = L.music;
     if (mu) {
-      h += '<section data-music><b>' + esc(t.music) + "</b>" +
+      h += '<section data-music><details class="grp"><summary><b>' + esc(t.music) + "</b></summary>" +
         '<div class="row"><label>' + esc(t.enabled) + '</label><input type="checkbox" data-music-field="enabled"' +
         (mu.enabled ? " checked" : "") + "></div>" +
         '<div class="row"><label>' + esc(t.effect) + "</label>" +
@@ -376,24 +395,23 @@
         '<div class="note" data-fw>' + esc(t.fw) + ": " + esc(t.fw_on) + "=" +
         esc(L.firmware.on === null ? t.unknown : (L.firmware.on ? t.on : t.off)) + ", " + esc(t.fw_luma) + "=" +
         esc(L.firmware.luma === null ? t.unknown : L.firmware.luma) + ", " + esc(t.fw_chroma) + "=" +
-        esc(L.firmware.chroma === null ? t.unknown : L.firmware.chroma) + "</div></section>";
+        esc(L.firmware.chroma === null ? t.unknown : L.firmware.chroma) + "</div></details></section>";
     }
-    h += "<section><b>" + esc(t.catalog) + "</b>";
-    L.effects.forEach(function (e) {
-      h += '<div class="note">' + esc(lg === "vi" ? e.name : e.nameEn) + " — " + esc(t.source) + ": " +
-        esc(e.source) + "</div>";
-    });
-    return h + "</section></div>";
+    return h + "</div>";                     // danh mục hiệu ứng + nguồn đã bỏ khỏi thẻ (theo yêu cầu)
   }
 
   function htmlFunction(f, L, t, lg) {
     var key = esc(f.key), d = 'data-fn="' + key + '" data-field=';
     return '<section class="fn' + (f.active ? " active" : "") + '" data-fn-block="' + key + '">' +
-      "<b>" + esc(t.fn[f.key] || f.key) + "</b>" + (f.active ? ' <span class="tag">' + esc(t.active) + "</span>" : "") +
+      '<details class="grp"><summary><b>' + esc(t.fn[f.key] || f.key) + "</b>" + (f.active ? ' <span class="tag">' + esc(t.active) + "</span>" : "") + "</summary>" +
       '<div class="row"><label>' + esc(t.enabled) + "</label><input type=\"checkbox\" " + d + '"enabled"' +
       (f.enabled ? " checked" : "") + "></div>" +
       '<div class="row"><label>' + esc(t.rim) + "</label><input type=\"checkbox\" " + d + '"rim"' +
       (f.rim ? " checked" : "") + "></div>" +
+      '<div class="row"><label>Kiểu viền</label><select ' + d + '"rim_kieu">' +
+      ['<option value="0">Không</option>'].concat(Array.from({ length: 24 }, function (_, i) {
+        return '<option value="' + (i + 1) + '"' + (f.rimKieu === i + 1 ? " selected" : "") + ">Chạy đuổi " + (i + 1) + "</option>";
+      })).join("") + "</select></div>" +
       '<div class="row"><label>' + esc(t.color) + "</label>" + (L.fw && L.bangMau.length
         ? mauSelect(d + '"color"', f.color, L, lg)
         : '<input type="color" ' + d + '"color" value="' + esc(hexOk(f.color)) + '">') + "</div>" +
@@ -409,7 +427,7 @@
           '<span class="val">' + esc(f.tocDo) + "%</span></div>"
         : "") +
       (f.isDefault ? '<div class="note">' + esc(t.proposal) + "</div>" : "") +
-      '<button class="sec" data-preview="' + key + '">' + esc(t.preview) + "</button></section>";
+      '<button class="sec" data-preview="' + key + '">' + esc(t.preview) + "</button></details></section>";
   }
 
   function htmlConn(m, t) {
@@ -559,6 +577,11 @@
         el.addEventListener("change", function () {
           dispatch({ type: "fn", key: el.dataset.fn, field: el.dataset.field,
                      value: el.type === "checkbox" ? el.checked : el.value });
+        });
+      });
+      all("[data-main-field]", function (el) {
+        el.addEventListener("change", function () {
+          dispatch({ type: "main", field: el.dataset.mainField, value: el.type === "checkbox" ? el.checked : el.value });
         });
       });
       all("[data-music-field]", function (el) {

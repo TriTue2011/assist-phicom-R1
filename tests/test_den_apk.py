@@ -126,7 +126,7 @@ async def test_sink_chi_san_sang_khi_loa_noi_va_apk_bao_firmware(hass, r1):
     e, port = await _them_co_dau_nhan(hass, r1)
     sink = e.runtime_data.lights.sink
     assert isinstance(sink, ApkLights) and sink.firmware and not sink.available and sink.ly_do == "mat_ket_noi"
-    assert sink.hieu_ung_ho_tro is None and sink.hieu_ung_goc == ("none", "tho", "nhap_nhay", "chay_duoi")
+    assert sink.hieu_ung_ho_tro is None and sink.hieu_ung_goc == fw.HIEU_UNG_GOC
     reader, writer = await _noi_apk(e, port)
     assert not sink.available and sink.ly_do == "CHO_DICH_VU_DEN"
     await _bao(writer, True)
@@ -200,7 +200,7 @@ async def test_hieu_ung_phan_mem_chay_bang_chuoi_id_firmware_va_hieu_ung_goc_dun
     assert thay2 == [502]                                      # sáng cố định xanh dương (một ID), rồi YÊN (hết chuỗi)
     a = hass.states.get(CAI_DAT).attributes["anh_sang"]
     assert a["den_firmware"] is True and a["hieu_ung_ho_tro"] is None
-    assert a["hieu_ung_goc"] == ["none", "tho", "nhap_nhay", "chay_duoi"]
+    assert a["hieu_ung_goc"] == list(fw.HIEU_UNG_GOC)
     assert {m["ten_en"] for m in a["bang_mau_firmware"]} == set(fw.MAU)
     writer.close()
 

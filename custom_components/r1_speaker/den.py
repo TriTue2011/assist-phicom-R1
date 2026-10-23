@@ -88,6 +88,7 @@ class FunctionLight:
     color: str         # màu đèn đáy "#rrggbb"
     effect: str        # ``none`` hoặc id trong ``HIEU_UNG``
     brightness: int    # 0–100
+    rim_kieu: int = 0  # kiểu viền chạy đuổi firmware: 0 = không, 1–24 = ID viền (thay hiệu ứng đáy khi bật)
     toc_do: int = 100  # % tốc độ hiệu ứng đổi màu (25–400, 100 = như đề xuất); hiệu ứng gốc của firmware có chu kỳ cố định
 
     @classmethod
@@ -103,6 +104,8 @@ class FunctionLight:
             effect=d["effect"] if d.get("effect") in (KHONG, *HIEU_UNG) else base.effect,
             brightness=bright if isinstance(bright, int) and not isinstance(bright, bool)
             and 0 <= bright <= 100 else base.brightness,
+            rim_kieu=(d["rim_kieu"] if isinstance(d.get("rim_kieu"), int) and not isinstance(d.get("rim_kieu"), bool)
+                      and 0 <= d["rim_kieu"] <= 24 else base.rim_kieu),
             toc_do=(d["toc_do"] if isinstance(d.get("toc_do"), int) and not isinstance(d.get("toc_do"), bool)
                     and TOC_DO_MIN <= d["toc_do"] <= TOC_DO_MAX else base.toc_do))
 
@@ -367,6 +370,10 @@ class R1Lights:
             b = new["brightness"]
             if isinstance(b, bool) or not isinstance(b, int) or not 0 <= b <= 100:
                 raise ServiceValidationError("độ sáng phải là số nguyên 0–100")
+        if "rim_kieu" in new:
+            v = new["rim_kieu"]
+            if isinstance(v, bool) or not isinstance(v, int) or not 0 <= v <= 24:
+                raise ServiceValidationError("kiểu viền phải là 0 (không) hoặc 1–24")
         if "toc_do" in new:
             v = new["toc_do"]
             if isinstance(v, bool) or not isinstance(v, int) or not TOC_DO_MIN <= v <= TOC_DO_MAX:
@@ -427,6 +434,9 @@ class R1Lights:
                 await sink.stop_effect()          # KHÔNG bao giờ để hai nơi cùng ghi đèn
                 if not p.enabled:
                     await self._tat(sink)
+                elif getattr(sink, "firmware", False) and p.rim_kieu and sang > 0:
+                    # Kiểu viền chạy đuổi (ID 1–24): firmware chỉ chạy MỘT hiệu ứng, nên thay hiệu ứng đáy của chức năng này.
+                    await sink.ap_dung_ham(rim=True, color=mau_rgb(p.color), effect=f"vien_{p.rim_kieu}", sang=sang)
                 elif getattr(sink, "firmware", False) and p.effect in getattr(sink, "hieu_ung_goc", ()):
                     # Hiệu ứng GỐC của firmware (một ID): màu gần nhất trong bảng; sáng cố định / thở / nháy; viền trắng.
                     await sink.ap_dung_ham(rim=p.rim, color=mau_rgb(p.color), effect=p.effect, sang=sang)
@@ -505,6 +515,7 @@ SET_FUNCTION_SCHEMA = vol.Schema({
     vol.Optional("effect"): vol.In(_EFFECTS),
     vol.Optional("brightness"): _BRIGHT,
     vol.Optional("toc_do"): _TOC_DO,
+    vol.Optional("rim_kieu"): vol.All(vol.Coerce(int), vol.Range(min=0, max=24)),
 })
 SET_MUSIC_SCHEMA = vol.Schema({
     vol.Required("entity_id"): cv.entity_id,
