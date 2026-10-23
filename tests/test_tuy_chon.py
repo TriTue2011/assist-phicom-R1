@@ -54,7 +54,7 @@ async def test_form_co_du_truong(hass, r1):
     res = await hass.config_entries.options.async_init(e.entry_id)
     khoa = {str(k) for k in res["data_schema"].schema}
     # Form chính chỉ còn thứ người dùng biết; khoá/cổng nghe mic tự cấp, mục chết đã gỡ khỏi form.
-    assert khoa == {"host", "port", "ha_url", "rotate_intercom_key", "ghep_lai_apk", "nang_cao"}
+    assert khoa == {"host", "port", "ha_url", "adb_server", "adb_mode", "rotate_intercom_key", "ghep_lai_apk", "nang_cao"}
     macdinh = {str(k): k.default() for k in res["data_schema"].schema
                if k.default is not vol.UNDEFINED}
     assert macdinh["host"] == "127.0.0.1" and macdinh["port"] == r1.port
@@ -188,3 +188,22 @@ async def test_nhieu_loa_moi_loa_mot_cong_va_mot_khoa(hass, r1):
         assert e1.runtime_data.mic_server is not e2.runtime_data.mic_server
     finally:
         await r2.stop()
+
+
+async def test_tuy_chon_adb_luu_chi_khi_khac_goc_va_sink_dung_dung_dia_chi(hass, r1):
+    """Hai ô ADB: giá trị gốc (auto, 127.0.0.1:5037) không lưu; đổi thì lưu và sink đèn nhận đúng địa chỉ/chế độ."""
+    e = await _them(hass, r1)
+    assert e.runtime_data.lights.sink.dev.mode == "auto" and e.runtime_data.lights.sink.dev.server == "127.0.0.1:5037"
+    res = await hass.config_entries.options.async_init(e.entry_id)
+    res = await hass.config_entries.options.async_configure(res["flow_id"], {
+        "host": "127.0.0.1", "port": r1.port, "adb_server": "192.0.2.10:5037", "adb_mode": "direct"})
+    assert res["type"].value == "create_entry"
+    await hass.async_block_till_done()
+    assert e.options["adb_server"] == "192.0.2.10:5037" and e.options["adb_mode"] == "direct"
+    dev = e.runtime_data.lights.sink.dev
+    assert dev.server == "192.0.2.10:5037" and dev.mode == "direct" and dev.port == 5555
+    res = await hass.config_entries.options.async_init(e.entry_id)
+    res = await hass.config_entries.options.async_configure(res["flow_id"], {
+        "host": "127.0.0.1", "port": r1.port, "adb_server": "127.0.0.1:5037", "adb_mode": "auto"})
+    await hass.async_block_till_done()
+    assert "adb_server" not in e.options and "adb_mode" not in e.options        # về giá trị gốc: không lưu

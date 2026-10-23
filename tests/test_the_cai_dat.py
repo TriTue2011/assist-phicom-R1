@@ -80,7 +80,8 @@ def _html(model, ui, lang="vi"):
     return _node("c.renderHtml(i.m,i.ui,c.TEXT[i.l],i.l)", m=model, ui=ui, l=lang)
 
 
-CAI_DAT_AN = {"open": False, "tab": "audio"}
+THU0 = {"zone": "day", "effect": None, "params": {}, "secs": 8}
+CAI_DAT_AN = {"open": False, "tab": "audio", "thu": THU0}
 
 
 @need_node
@@ -96,10 +97,13 @@ async def test_mo_hinh_tu_trang_thai_that_ba_nhom(hass, r1):
     li = m["light"]
     assert [f["key"] for f in li["functions"]] == [
         "cho", "nghe", "nghi", "phan_hoi", "dam_thoai", "phat_nhac", "loi", "tat_mic"]
-    assert li["sink"] == {"state": "mat_ket_noi", "ready": False, "lost": True, "svc": False, "error": None}
-    assert [x["id"] for x in li["effects"]] == ["cau_vong_fw", "chay_duoi", "tho", "cau_vong", "nhap_nhay",
-                                                "nhip_tim", "phao_hoa", "chop"]
-    assert li["music"]["key"] == "phat_nhac" and li["music"]["enabled"] is False
+    assert li["sink"] == {"state": "CHO_PHIA_LOA", "ready": False, "error": None, "path": None, "mode": "auto"}
+    assert [x["id"] for x in li["catalog"]["day"]] == ["co_dinh", "tho", "nhap_nhay", "nhip_tim", "chop", "phao_hoa",
+                                                       "cau_vong", "cau_vong_fw", "cau_vong_xoay", "sao_choi"]
+    assert [x["id"] for x in li["catalog"]["vien"]] == ["sang", "chay_duoi", "tho"]
+    nghe = next(f for f in li["functions"] if f["key"] == "nghe")
+    assert nghe["day"] == {"effect": "co_dinh", "params": {"mau": "#0000ff", "do_sang": 60}}
+    assert nghe["vien"] == {"effect": "sang", "params": {"do_sang": 60}} and li["thu"] == {}
     assert li["firmware"] == {"on": True, "luma": 50, "chroma": 60}
     c = m["conn"]
     assert (c["host"], c["port"], c["haUrl"], c["keySet"]) == ("127.0.0.1", r1.port,
@@ -116,7 +120,7 @@ async def test_muc_cai_dat_an_mac_dinh_va_chi_hien_khi_bam(hass, r1):
     dong = _html(m, ui)
     assert 'data-open' in dong and 'aria-expanded="false"' in dong
     for dau in ("data-panel", "data-tab", "data-vol", "data-eq", 'type="range"', "data-fn=",
-                "data-apk-state", "data-music"):
+                "data-apk-state", "data-thu"):
         assert dau not in dong, dau                               # không có gì của bảng cài đặt
     ui = _node("c.reduceUi(i.ui,{type:'toggle'})", ui=ui)         # bấm nút mở
     assert ui["open"] is True
@@ -124,7 +128,7 @@ async def test_muc_cai_dat_an_mac_dinh_va_chi_hien_khi_bam(hass, r1):
     assert 'aria-expanded="true"' in mo and 'data-panel="audio"' in mo
     assert [t for t in ("audio", "light", "conn") if f'data-tab="{t}"' in mo] == ["audio", "light", "conn"]
     assert mo.count("data-eq=") == 5 and "data-vol" in mo and "data-mic-gain" in mo and "data-mute" in mo
-    assert _node("c.reduceUi(i.ui,{type:'toggle'})", ui=ui) == {"open": False, "tab": "audio"}   # bấm lần nữa: ẩn
+    assert _node("c.reduceUi(i.ui,{type:'toggle'})", ui=ui) == CAI_DAT_AN   # bấm lần nữa: ẩn
     # chọn nhóm: chỉ hiện nhóm đó; tab lạ bị bỏ qua
     anh = _html(m, _node("c.reduceUi(i.ui,{type:'tab',tab:'light'})", ui=ui))
     assert 'data-panel="light"' in anh and 'data-panel="audio"' not in anh
@@ -134,36 +138,107 @@ async def test_muc_cai_dat_an_mac_dinh_va_chi_hien_khi_bam(hass, r1):
 
 
 @need_node
-async def test_nhom_anh_sang_hien_du_chuc_nang_hieu_ung_nhac_va_noi_ro_chua_co_dich_vu(hass, r1):
+async def test_nhom_anh_sang_co_muc_thu_rieng_va_form_hai_vung_cho_moi_chuc_nang(hass, r1):
     await _them(hass, r1)
     m = _mo_hinh(_hass_gia(hass))
-    h = _html(m, {"open": True, "tab": "light"})
-    for fn in ("cho", "nghe", "nghi", "phan_hoi", "dam_thoai", "loi", "tat_mic"):
+    ui = {"open": True, "tab": "light", "thu": THU0}
+    h = _html(m, ui)
+    assert "data-thu-zone" in h and "data-thu-effect" in h and "data-thu-run" in h and "data-thu-stop" in h
+    assert h.index("data-thu") < h.index("data-fn-block")                   # mục Thử nằm RIÊNG, đứng trước cài đặt
+    for fn in ("cho", "nghe", "nghi", "phan_hoi", "dam_thoai", "phat_nhac", "loi", "tat_mic"):
         assert f'data-fn-block="{fn}"' in h, fn
-        for field in ("enabled", "rim", "color", "effect", "brightness"):
-            assert f'data-fn="{fn}" data-field="{field}"' in h, (fn, field)
-        assert f'data-preview="{fn}"' in h
-    assert 'data-fn-block="phat_nhac"' not in h and "data-music" in h   # nhạc có mục riêng
-    for field in ("enabled", "effect", "brightness"):
-        assert f'data-music-field="{field}"' in h
-    assert "không trả lời" in h and 'class="sink warn"' in h          # nói thật: loa chưa nối (mat_ket_noi)
-    assert "kno.wled.ge" not in h                                     # danh mục hiệu ứng + nguồn đã bỏ khỏi thẻ
-    # Đèn firmware (mặc định): màu chọn trong bảng của firmware, có lời nhắn về làm tròn màu và độ sáng
-    assert 'data-fn="cho" data-field="color"' in h and "<select data-fn=\"cho\" data-field=\"color\">" in h
-    assert "Màu làm tròn về bảng màu của firmware" in h
-    for ten in ("Đỏ", "Xanh lá", "Xanh dương", "Cam", "Tím", "Lục lam", "Trắng"):
-        assert f">{ten}</option>" in h, ten
-    assert "mặc định đề xuất, chưa đo" in h
-    assert "Đèn theo nhạc của firmware" in h and "luma=50" in h       # đèn nhạc firmware: số đo; chỉnh ở thực thể
-    # loa nối nhưng APK chưa báo đèn firmware (APK bản cũ): nói rõ và chỉ cách xử lý
+        assert f'data-fn="{fn}" data-field="enabled"' in h
+        for zone in ("day", "vien"):
+            assert f'data-fn="{fn}" data-zone="{zone}" data-fn-effect' in h, (fn, zone)
+    # BỎ: nút Thử trong từng cài đặt, 24 chế độ viền, mục nhạc riêng, ô màu/độ sáng phẳng cũ
+    for bo in ("data-preview", "rim_kieu", "Chạy đuổi 1", "data-music", 'data-field="color"', 'data-field="brightness"'):
+        assert bo not in h, bo
+    assert 'class="sink warn"' in h and "Chưa có đường ADB" in h and "Đường ADB: chưa dùng" in h
+    assert "Đèn theo nhạc của firmware" in h and "luma=50" in h
+    for cap in (("Thử", "Dừng thử"), ):
+        assert all(c in h for c in cap)
+    # đèn sẵn sàng qua adb-server: hết cảnh báo, nói rõ đường
     g = _hass_gia(hass)
-    g["states"][SID]["attributes"]["anh_sang"]["dich_vu_den"] = "CHO_DICH_VU_DEN"
-    h2 = _html(_mo_hinh(g), {"open": True, "tab": "light"})
-    assert "APK mới nhất" in h2 and "den_loa.sh" not in h2 and 'class="sink warn"' in h2
-    # đèn sẵn sàng thì không còn cảnh báo
+    a = g["states"][SID]["attributes"]["anh_sang"]
+    a["dich_vu_den"], a["duong_adb"] = "san_sang", "server"
+    h2 = _html(_mo_hinh(g), ui)
+    assert 'class="sink ok"' in h2 and "Đường ADB: qua adb-server" in h2
+    a["duong_adb"] = "direct"
+    assert "nối thẳng loa" in _html(_mo_hinh(g), ui)
+    a["dich_vu_den"], a["loi_dich_vu"] = "loi_adb", "ADB: adbd bận"
+    h3 = _html(_mo_hinh(g), ui)
+    assert 'class="sink warn"' in h3 and "adbd bận" in h3
+
+
+@need_node
+async def test_moi_hieu_ung_hien_dung_thong_so_cua_no_so_luong_khac_nhau(hass, r1):
+    """Form dựng từ danh mục: số ô khác nhau theo hiệu ứng; ô «màu» của sao chổi chỉ hiện khi chọn đơn sắc."""
+    await _them(hass, r1)
+    m = _mo_hinh(_hass_gia(hass))
+    cat = m["light"]["catalog"]
+
+    def so_o(zone, eid, params):
+        mm = json.loads(json.dumps(m))
+        f = next(x for x in mm["light"]["functions"] if x["key"] == "loi")
+        mm["light"]["functions"] = [f]
+        f["day"], f["vien"] = {"effect": "tat", "params": {}}, {"effect": "tat", "params": {}}
+        f[zone] = {"effect": eid, "params": params}
+        h = _html(mm, {"open": True, "tab": "light", "thu": THU0})
+        khoi = re.search(r'<section class="fn.*?</section>', h, re.S).group(0)
+        return len(re.findall(r"data-fn-param", khoi)), khoi
+
+    dem = {}
+    for zone in ("day", "vien"):
+        for e in cat[zone]:
+            mac_dinh = {p["key"]: p["default"] for p in e["params"] if "chi_khi" not in p}
+            n, khoi = so_o(zone, e["id"], mac_dinh)
+            dem[(zone, e["id"])] = n
+            assert n == len(mac_dinh), (zone, e["id"])                      # đúng số thông số, không hơn không kém
+            for p in e["params"]:
+                if "chi_khi" not in p:
+                    assert f'data-param="{p["key"]}"' in khoi
+    assert len(set(dem.values())) >= 4 and dem[("vien", "sang")] == 1       # số thông số khác nhau; viền sáng chỉ có độ sáng
+    assert all('data-param="mau"' not in so_o("vien", e["id"], {})[1] for e in cat["vien"])      # viền chỉ trắng: không có màu
+    sc = next(e for e in cat["day"] if e["id"] == "sao_choi")
+    ps = {p["key"]: p["default"] for p in sc["params"] if "chi_khi" not in p}
+    assert 'data-param="mau"' not in so_o("day", "sao_choi", ps)[1]
+    n_don, khoi = so_o("day", "sao_choi", {**ps, "kieu_mau": "don_sac", "mau": "#00ffff"})
+    assert 'data-param="mau"' in khoi and n_don == len(ps) + 1
+    for hid in ("cau_vong", "cau_vong_fw", "cau_vong_xoay", "phao_hoa"):                  # cầu vồng, pháo hoa: không bắt chọn màu
+        assert 'data-param="mau"' not in so_o("day", hid, {})[1], hid
+
+
+@need_node
+async def test_muc_thu_rieng_trang_thai_chi_trong_the_va_chi_nut_thu_moi_goi_dich_vu(hass, r1):
+    await _them(hass, r1)
+    m = _mo_hinh(_hass_gia(hass))
+    ui = _node("c.initialUi()")
+    e = _node("c.thuEffective(i.m.light,i.ui)", m=m, ui=ui)
+    assert (e["zone"], e["effect"]) == ("day", "co_dinh") and e["params"] == {"mau": "#00ff00", "do_sang": 100}
+    ui = _node("c.reduceUi(i.ui,{type:'thu_effect',effect:'sao_choi'})", ui=ui)
+    ui = _node("c.reduceUi(i.ui,{type:'thu_param',key:'kieu_mau',value:'don_sac'})", ui=ui)
+    ui = _node("c.reduceUi(i.ui,{type:'thu_param',key:'toc_do',value:250})", ui=ui)
+    e = _node("c.thuEffective(i.m.light,i.ui)", m=m, ui=ui)
+    assert e["effect"] == "sao_choi" and e["params"]["toc_do"] == 250 and e["params"]["mau"] == "#00ffff"
+    ui2 = _node("c.reduceUi(i.ui,{type:'thu_param',key:'kieu_mau',value:'nhieu_mau'})", ui=ui)
+    assert "mau" not in _node("c.thuEffective(i.m.light,i.ui)", m=m, ui=ui2)["params"]
+    # đổi vùng: về hiệu ứng đầu của vùng đó và thông số mặc định; đổi hiệu ứng: thông số về mặc định
+    ui3 = _node("c.reduceUi(i.ui,{type:'thu_zone',zone:'vien'})", ui=ui)
+    e3 = _node("c.thuEffective(i.m.light,i.ui)", m=m, ui=ui3)
+    assert (e3["zone"], e3["effect"]) == ("vien", "sang") and e3["params"] == {"do_sang": 100}
+    assert _node("c.reduceUi(i.ui,{type:'thu_zone',zone:'bay'})", ui=ui) == ui
+    assert _node("c.reduceUi(i.ui,{type:'thu_effect',effect:'tho'})", ui=ui)["thu"]["params"] == {}
+    # mục Thử hiện đúng form của hiệu ứng đang chọn, không gọi gì cho tới khi bấm Thử
+    h = _html(m, {"open": True, "tab": "light", "thu": ui["thu"]})
+    assert h.count("data-thu-param") == 6 and '<option value="sao_choi" selected>' in h
+    sid = m["settings"]["entity"]
+    call = _node("c.makeCall(i.m,i.a)", m=m, a={"type": "thu_run", "zone": e["zone"], "effect": e["effect"], "params": e["params"], "secs": e["secs"]})
+    assert call == ["r1_speaker", "preview_light", {"entity_id": sid, "zone": "day", "effect": "sao_choi",
+                                                    "params": e["params"], "seconds": 8}]
+    # đang thử: thẻ báo
     g = _hass_gia(hass)
-    g["states"][SID]["attributes"]["anh_sang"]["dich_vu_den"] = "san_sang"
-    assert 'class="sink ok"' in _html(_mo_hinh(g), {"open": True, "tab": "light"})
+    g["states"][SID]["attributes"]["anh_sang"]["thu"] = {"day": {"effect": "tho", "params": {}}}
+    assert "Đang thử" in _html(_mo_hinh(g), {"open": True, "tab": "light", "thu": THU0})
 
 
 @need_node
@@ -193,20 +268,29 @@ async def test_hanh_dong_thanh_lenh_goi_dich_vu_ha_khong_goi_loa(hass, r1):
         "entity_id": "number.r1_tang_mic", "value": 15}]
     assert call(type="mute", on=True) == ["switch", "turn_on", {"entity_id": "switch.r1_tat_mic"}]
     assert call(type="mute", on=False)[1] == "turn_off"
-    assert call(type="fn", key="nghe", field="color", value="#00FF00") == [
-        "r1_speaker", "set_light_function", {"entity_id": SID, "function": "nghe", "color": "#00FF00"}]
-    assert call(type="fn", key="loi", field="brightness", value="35")[2]["brightness"] == 35
-    assert call(type="fn", key="loi", field="rim", value=False)[2]["rim"] is False
-    assert call(type="fn", key="loi", field="enabled", value=True)[2]["enabled"] is True
-    assert call(type="music", field="effect", value="tho") == [
-        "r1_speaker", "set_music_light", {"entity_id": SID, "effect": "tho"}]
-    assert call(type="preview", key="tat_mic") == [
-        "r1_speaker", "preview_light", {"entity_id": SID, "function": "tat_mic"}]
-    assert call(type="fn", key="khong_co", field="rim", value=True) is None   # chức năng lạ: không gọi
+    assert call(type="fn", key="loi", field="enabled", value=True) == [
+        "r1_speaker", "set_light_function", {"entity_id": SID, "function": "loi", "enabled": True}]
+    assert call(type="fn_effect", key="nghe", zone="day", effect="sao_choi") == [
+        "r1_speaker", "set_light_function", {"entity_id": SID, "function": "nghe", "day": {"effect": "sao_choi"}}]
+    assert call(type="fn_effect", key="nghe", zone="vien", effect="tat")[2]["vien"] == {"effect": "tat"}
+    assert call(type="fn_param", key="loi", zone="day", param="toc_do", kind="range", value="150") == [
+        "r1_speaker", "set_light_function", {"entity_id": SID, "function": "loi", "day": {"params": {"toc_do": 150}}}]
+    assert call(type="fn_param", key="loi", zone="vien", param="chieu", kind="select", value="nguoc")[2]["vien"] == {
+        "params": {"chieu": "nguoc"}}
+    assert call(type="fn_param", key="loi", zone="day", param="mau", kind="color", value="#00FF00")[2]["day"] == {
+        "params": {"mau": "#00FF00"}}
+    assert call(type="thu_run", zone="vien", effect="chay_duoi", params={"dai_duoi": 6}, secs=12) == [
+        "r1_speaker", "preview_light", {"entity_id": SID, "zone": "vien", "effect": "chay_duoi",
+                                        "params": {"dai_duoi": 6}, "seconds": 12}]
+    assert call(type="thu_run", zone="day", effect="tho", params={}, secs=999)[2]["seconds"] == 30    # kẹp 1–30
+    assert call(type="thu_stop") == ["r1_speaker", "stop_preview_light", {"entity_id": SID}]
+    assert call(type="thu_run", zone="day", effect=None, params={}, secs=8) is None
+    assert call(type="fn_param", key="khong_co", zone="day", param="mau", kind="color", value="#fff") is None
+    assert call(type="music", field="effect", value="tho") is None and call(type="preview", key="nghe") is None  # đã bỏ
     assert call(type="bay") is None
     # không thấy sensor cài đặt → không gửi lệnh đèn nào
     sans = _node("c.makeCall(i.m,i.a)", m={**m, "settings": {"entity": None, "present": False}},
-                 a={"type": "preview", "key": "nghe"})
+                 a={"type": "thu_stop"})
     assert sans is None
 
 
@@ -216,11 +300,11 @@ async def test_the_escape_du_lieu_ngoai_va_chiu_thuc_the_mat_thuoc_tinh(hass, r1
     g = _hass_gia(hass)
     bay = '<img src=x onerror=alert(1)>'
     at = g["states"][SID]["attributes"]
-    at["anh_sang"]["hieu_ung"][0]["ten"] = bay
-    at["anh_sang"]["hieu_ung"][0]["nguon"] = bay
+    at["anh_sang"]["danh_muc"]["day"][0]["vi"] = bay
+    at["anh_sang"]["danh_muc"]["day"][0]["params"][0]["vi"] = bay
     at["anh_sang"]["loi_dich_vu"] = bay
     at["ket_noi"]["host"] = bay
-    at["anh_sang"]["chuc_nang"]["nghe"]["color"] = '"><script>alert(1)</script>'
+    at["anh_sang"]["chuc_nang"]["nghe"]["day"]["params"]["mau"] = '"><script>alert(1)</script>'
     m = _mo_hinh(g)
     for tab in ("audio", "light", "conn"):
         h = _html(m, {"open": True, "tab": tab})
@@ -245,11 +329,17 @@ PAGE = """<!doctype html><meta charset="utf-8"><body><div id="out">CHUA CHAY</di
 <script src="file://@CARD@"></script>
 <script>
 const FN=["cho","nghe","nghi","phan_hoi","dam_thoai","phat_nhac","loi","tat_mic"];
-const prof={}; FN.forEach(k=>prof[k]={enabled:k!=="cho",rim:k==="nghe",color:"#0000ff",effect:"none",brightness:60,mac_dinh:true});
+const prof={}; FN.forEach(k=>prof[k]={enabled:k!=="cho",day:{effect:"co_dinh",params:{mau:"#0000ff",do_sang:60}},
+ vien:{effect:"sang",params:{do_sang:60}},mac_dinh:true});
 const entities={}, states={}, calls=[];
 function add(id,tk,state,attrs){entities[id]={platform:"r1_speaker",translation_key:tk,device_id:"d1"};states[id]={state,attributes:attrs||{}};}
-add("sensor.r1_cai_dat","settings","cho",{anh_sang:{chuc_nang:prof,dang_ap_dung:"nghe",dich_vu_den:"CHO_PHIA_LOA",loi_dich_vu:null,
- hieu_ung:[{id:"tho",ten:"Thở",ten_en:"Breathe",nguon:"U1",vien:""}],den_nhac_firmware:{bat:true,luma:50,chroma:60}},
+const rg=(k,vi,d,mn,mx,st,u)=>({key:k,kind:"range",vi:vi,en:vi,default:d,min:mn,max:mx,step:st,unit:u||""});
+const DS=rg("do_sang","Độ sáng",100,0,100,1,"%"), TD=rg("toc_do","Tốc độ",100,25,400,5,"%");
+const MAU={key:"mau",kind:"color",vi:"Màu",en:"Colour",default:"#00ff00"};
+add("sensor.r1_cai_dat","settings","cho",{anh_sang:{chuc_nang:prof,dang_ap_dung:"nghe",dich_vu_den:"CHO_PHIA_LOA",loi_dich_vu:null,thu:{},
+ danh_muc:{day:[{id:"co_dinh",vi:"Sáng cố định",en:"Steady",tinh:true,params:[MAU,DS]},{id:"tho",vi:"Thở",en:"Breathe",params:[MAU,DS,TD]}],
+           vien:[{id:"sang",vi:"Sáng liên tục",en:"Steady",tinh:true,params:[DS]},{id:"chay_duoi",vi:"Chạy đuổi",en:"Chase",params:[DS,TD]}]},
+ den_nhac_firmware:{bat:true,luma:50,chroma:60}},
  am_thanh:{khu_tap:{bat:false},agc:{bat:false},han_dinh:{bat:false}},
  ket_noi:{host:"h",cong:1,khoa_bo_dam:"da_co",khoa_nghe_mic:"da_co",cong_nghe_mic:18765,apk_dang_noi:true,tuy_chon:"/config/x"}});
 add("number.r1_am_luong","volume","7",{min:0,max:15,step:1});
@@ -269,16 +359,23 @@ q("[data-mute]").checked=true; q("[data-mute]").dispatchEvent(new Event("change"
 q('[data-tab="light"]').click();                // sang nhóm Ánh sáng
 const anh={panel:q("[data-panel]").dataset.panel, blocks:sr.querySelectorAll("[data-fn-block]").length,
  sink:q("[data-sink]").textContent};
-const c=q('[data-fn="nghe"][data-field="color"]'); c.value="#00ff00"; c.dispatchEvent(new Event("change"));
-const b=q('[data-fn="loi"][data-field="brightness"]'); b.value="35"; b.dispatchEvent(new Event("change"));
-const r=q('[data-fn="nghe"][data-field="rim"]'); r.checked=false; r.dispatchEvent(new Event("change"));
-q('[data-music-field="enabled"]').checked=true; q('[data-music-field="enabled"]').dispatchEvent(new Event("change"));
-q('[data-preview="tat_mic"]').click();
+const ch=(sel,val)=>{const el=q(sel); if(val!==undefined) el.value=val; el.dispatchEvent(new Event("change"));};
+ch('[data-fn="nghe"][data-zone="day"][data-param="mau"]',"#00ff00");        // đổi MỘT thông số của đáy
+ch('[data-fn="loi"][data-zone="vien"][data-fn-effect]',"chay_duoi");         // đổi hiệu ứng viền
+const en=q('[data-fn="nghe"][data-field="enabled"]'); en.checked=false; en.dispatchEvent(new Event("change"));
+const thu0={zone:q("[data-thu-zone]").value, hieuUng:q("[data-thu-effect]").value, ochon:sr.querySelectorAll("[data-thu-param]").length};
+ch("[data-thu-zone]","vien");                                                 // đổi vùng của mục Thử: KHÔNG gọi dịch vụ
+const thu1={zone:q("[data-thu-zone]").value, hieuUng:q("[data-thu-effect]").value, ochon:sr.querySelectorAll("[data-thu-param]").length};
+ch("[data-thu-effect]","chay_duoi");
+ch('[data-thu-param][data-param="toc_do"]',"250");
+q("[data-thu-run]").click();                                                  // chỉ nút Thử mới gọi
+q("[data-thu-stop]").click();
+const khongNut={preview:!!q("[data-preview]"), rimKieu:!!q('[data-field="rim_kieu"]')};
 q('[data-tab="conn"]').click();
 const kn={panel:q("[data-panel]").dataset.panel, apk:q("[data-apk-state]").textContent, nutLenh:!!q("[data-apk-show]")};
 q("[data-open]").click();                       // đóng lại
 const cuoi={panel:!!q("[data-panel]"), nut:q("[data-open]").getAttribute("aria-expanded")};
-document.getElementById("out").textContent=JSON.stringify({dau,mo,anh,kn,cuoi,calls});
+document.getElementById("out").textContent=JSON.stringify({dau,mo,anh,thu0,thu1,khongNut,kn,cuoi,calls});
 </script>"""
 
 
@@ -295,19 +392,23 @@ def test_giao_dien_the_cai_dat_an_hien_ba_nhom_va_goi_dich_vu(tmp_path):
     r = json.loads(html_lib.unescape(m.group(1)))
     assert r["dau"] == {"panel": False, "tabs": 0, "nut": "false"}          # mặc định ẨN
     assert r["mo"] == {"panel": "audio", "tabs": 3, "eq": 2, "nut": "true"}   # bấm → hiện, ba nhóm
-    assert r["anh"]["panel"] == "light" and r["anh"]["blocks"] == 7
+    assert r["anh"]["panel"] == "light" and r["anh"]["blocks"] == 8        # tám chức năng, kể cả phát nhạc
     assert "CHƯA sáng" in r["anh"]["sink"]
+    assert r["thu0"] == {"zone": "day", "hieuUng": "co_dinh", "ochon": 2}      # mục Thử: đáy, hiệu ứng đầu, 2 thông số
+    assert r["thu1"] == {"zone": "vien", "hieuUng": "sang", "ochon": 1}       # đổi vùng: hiệu ứng đầu của viền, 1 thông số
+    assert r["khongNut"] == {"preview": False, "rimKieu": False}              # bỏ nút Thử trong từng cài đặt, bỏ 24 kiểu viền
     assert r["kn"] == {"panel": "conn", "apk": "Đang nối vào HA", "nutLenh": False}   # hass giả không phải quản trị
     assert r["cuoi"] == {"panel": False, "nut": "false"}                    # bấm lại → ẩn
     sid = "sensor.r1_cai_dat"
     assert r["calls"] == [
         ["number", "set_value", {"entity_id": "number.r1_am_luong", "value": 11}],
         ["switch", "turn_on", {"entity_id": "switch.r1_tat_mic"}],
-        ["r1_speaker", "set_light_function", {"entity_id": sid, "function": "nghe", "color": "#00ff00"}],
-        ["r1_speaker", "set_light_function", {"entity_id": sid, "function": "loi", "brightness": 35}],
-        ["r1_speaker", "set_light_function", {"entity_id": sid, "function": "nghe", "rim": False}],
-        ["r1_speaker", "set_music_light", {"entity_id": sid, "enabled": True}],
-        ["r1_speaker", "preview_light", {"entity_id": sid, "function": "tat_mic"}]]
+        ["r1_speaker", "set_light_function", {"entity_id": sid, "function": "nghe", "day": {"params": {"mau": "#00ff00"}}}],
+        ["r1_speaker", "set_light_function", {"entity_id": sid, "function": "loi", "vien": {"effect": "chay_duoi"}}],
+        ["r1_speaker", "set_light_function", {"entity_id": sid, "function": "nghe", "enabled": False}],
+        ["r1_speaker", "preview_light", {"entity_id": sid, "zone": "vien", "effect": "chay_duoi",
+                                         "params": {"do_sang": 100, "toc_do": 250}, "seconds": 8}],
+        ["r1_speaker", "stop_preview_light", {"entity_id": sid}]]
 
 
 async def test_the_khong_bao_gio_phuc_vu_tep_nen_gz_dung_canh(tmp_path):
@@ -372,32 +473,3 @@ async def test_cai_dat_chi_tiet_chinh_duoc_o_the_va_thanh_lenh_dich_vu(hass, r1)
     # mục đã chỉnh khác mặc định được đánh dấu *
     g["states"][sid]["attributes"]["am_thanh"]["nang_cao"][1]["v"] = 0.8
     assert " *" in _html(_mo_hinh(g), {"open": True, "tab": "audio"})
-
-
-def test_o_hieu_ung_vien_la_mot_select_dung_nghia_khong_co_option_tran():
-    """Ô «Hiệu ứng viền» phải là MỘT <select> có nhãn; từng lỗi gỡ dở để lại <option> trần và </select> mồ côi (danh sách dài ngoài ô chọn)."""
-    js = CARD.read_text(encoding="utf-8")
-    assert js.count("</select>") <= js.count("<select"), "có </select> mồ côi"
-    assert "Hiệu ứng viền" in js and 'data-field' in js
-    # mọi chuỗi tạo <option> «Chạy đuổi» chỉ nằm trong khối dựng ô chọn có <select ...rim_kieu
-    dau = js.index("Hiệu ứng viền")
-    assert js.index("Chạy đuổi ") > dau and js.index('</select></div>', dau) > js.index("Chạy đuổi ")
-
-
-async def test_hieu_ung_vien_ket_xuat_dung_o_chon_co_nhan_va_hien_muc_dang_chon(hass, r1):
-    """Kết xuất thật: mỗi chức năng có MỘT <select> «Hiệu ứng viền» (Không + Chạy đuổi 1–24), gói đủ <option>, không có <option> trần."""
-    import re
-    await _them(hass, r1)
-    await hass.services.async_call("r1_speaker", "set_light_function", {
-        "entity_id": "sensor.r1_cai_dat", "function": "nghe", "rim_kieu": 3}, blocking=True)
-    await hass.async_block_till_done()
-    h = _html(_mo_hinh(_hass_gia(hass)), {"open": True, "tab": "light"})
-    for fn in ("cho", "nghe", "nghi", "phan_hoi", "dam_thoai", "loi", "tat_mic"):
-        khoi = re.search(r'<select data-fn="%s" data-field="rim_kieu">(.*?)</select>' % fn, h, re.S)
-        assert khoi, f"chức năng {fn} thiếu ô chọn Hiệu ứng viền"
-        assert len(re.findall(r"<option ", khoi.group(1))) == 25            # Không + 24 kiểu
-    nghe = re.search(r'<select data-fn="nghe" data-field="rim_kieu">(.*?)</select>', h, re.S).group(1)
-    assert '<option value="3" selected>Chạy đuổi 3</option>' in nghe        # hiện đúng mục đang chọn
-    ngoai = re.sub(r"<select.*?</select>", "", h, flags=re.S)
-    assert "Chạy đuổi" not in ngoai, "có <option> trần nằm ngoài ô chọn"
-    assert h.count("<select") == h.count("</select>")

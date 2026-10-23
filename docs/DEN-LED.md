@@ -1,30 +1,319 @@
-# Đèn LED của loa R1 — phần phía HA
+# Đèn LED của loa R1
 
-Trạng thái: **phía HA đã viết và test bằng sink trong bộ nhớ; phía loa CHƯA CÓ gì.** Từ HA tới
-đèn loa không có đường nào: lệnh duy nhất chạy được là `/system/bin/lights_test set <mặt nạ> <rgb 6 số>`,
-mà nó chỉ chạy được TRÊN LOA (shell hoặc một dịch vụ trên loa — dịch vụ đó chưa được duyệt, chưa
-có). Vì vậy HA lưu cài đặt và tính ra đèn nào cần sáng nhưng **không gửi gì tới loa** cho tới khi có
-một bản `LightsSink` thật. Giao diện: `den_port.py`; bộ điều khiển: `den.py`; hiệu ứng:
-`hieu_ung.py`; tóm tắt cho thẻ: `cai_dat.py` (`sensor.r1_cai_dat`); thẻ: `www/r1-settings-card.js`.
+Tài liệu này mô tả toàn bộ phần đèn: phần cứng, cách HA điều khiển (qua ADB), danh mục hiệu ứng và **thông số riêng của
+từng hiệu ứng**, cài đặt theo chức năng, mục **Thử**, dịch vụ HA, thẻ, và cách gỡ rối. Danh mục bên dưới được sinh từ
+mã (`custom_components/r1_speaker/den_hieu_ung.py`); thẻ cài đặt vẽ form từ chính danh mục đó nên thêm hiệu ứng
+hay thông số là thêm dữ liệu, không sửa giao diện.
 
-## 0. ĐƯỜNG CHÍNH (23/10/2026): hiệu ứng có sẵn của firmware, không cần máy chủ
+## 0. Tóm tắt kiến trúc
 
-Các mục 1 và dưới đây mô tả đường «máy chủ đèn quyền shell» (`lights_test`, `scripts/den_loa.sh`) đã dùng trước đó; **mặc định
-nay HA điều khiển đèn bằng hiệu ứng có sẵn của firmware** như app AI box: APK gọi `msgcenter.sendMsg(0x1000, ID, 0)`
-(`TrungTamTin.guiHieuUng`, danh sách ID cho phép, `LenhDieuKhien` khung `{"type":"den_hieu_ung","id":N}`), HA ánh xạ màu/hiệu
-ứng sang ID ở `den_firmware.py` (bảng màu, ID, giới hạn). Không có màu tuỳ ý, không chỉnh độ sáng riêng; xem
-`docs/CAI-DAT-CHI-TIET.md` mục 5. Máy chủ shell chỉ còn là đường dự phòng cho hiệu ứng phần mềm (không dùng mặc định).
+```
+ thẻ r1-card ──dịch vụ HA──▶ den.py (R1Lights)        chọn chức năng đang hiệu lực (tắt mic > lỗi > ... > chờ)
+  (Thử / cài đặt)             │  mỗi chức năng: bật/tắt + vùng đáy + vùng viền (hiệu ứng + thông số)
+                              ▼
+                       den_adb.py (AdbLights) ── adb_client.py ──┬─▶ adb-server (127.0.0.1:5037), nếu có
+                              │  lệnh cố định, đã lọc            └─▶ nối thẳng adbd của loa (cổng 5555)
+                              ▼
+                  loa: sh /data/local/tmp/r1den.sh <vùng> <hiệu ứng> khoa=giatri ...
+                              │  ghi thẳng /sys/class/leds/multi_leds0/led_color (quyền shell của adb)
+                              ▼
+                       15 đèn đáy RGB + 24 đèn viền trắng
+```
 
-## 1. Phần cứng đã kiểm (chủ máy xác nhận bằng mắt)
+* **Hiệu ứng chạy NGAY TRÊN LOA** (script `r1den.sh`), HA chỉ gửi tên hiệu ứng và các số đã kiểm. Nhờ vậy tốc độ
+  không phụ thuộc mạng và không có luồng lệnh từng bước từ HA.
+* **Không cần APK** cho đèn (APK chỉ còn lo mic, âm lượng, đèn theo nhạc của firmware). Không cần máy chủ quyền shell.
+* **Không bắt buộc có adb-server**: custom tự nói giao thức ADB, nối thẳng tới loa nếu không có server (mục 2).
 
-| Đèn | Mặt nạ | Màu | Ghi chú |
+## 1. Phần cứng (đã kiểm, chủ máy xác nhận bằng mắt)
+
+| Đèn | Số đèn | Mặt nạ `led_color` | Màu |
 |---|---|---|---|
-| Viền | `7fffff8000` | CHỈ TRẮNG | bật `ffffff`, tắt `000000`, chỉnh sáng bằng giá trị trắng (`404040` mờ rõ). Hiệu ứng thở ID 202 của firmware KHÔNG chạy. |
-| Đáy | `7fff` | RGB | xanh lá `00ff00` và xanh dương `0000ff` đã xác nhận; đỏ `ff0000` chưa chắc (chưa phân biệt được với mặt nạ) |
+| Đáy | 15 (bit 0–14) | `7fff`; từng đèn `1`, `2`, `4`... `4000` | RGB tự do |
+| Viền | 24 (bit 15–38) | `7fffff8000`; từng đèn `8000`... `4000000000` | **chỉ trắng** (`LLLLLL`, L = mức sáng) |
 
-`/system/etc/lights_effects.conf` có danh mục hiệu ứng của firmware (ID 200–255 thở/sáng liên tục,
-300–315 và 400–412 chuyển dần) nhưng `lights_test set` không áp dụng được ID hiệu ứng từ shell → hiệu
-ứng ở HA là **dữ liệu** (danh sách bước màu + thời gian), không phải ID của firmware.
+Ghi: `echo "<mặt nạ hex> <rrggbb>" > /sys/class/leds/multi_leds0/led_color` (shell của adb ghi được; app thường bị SELinux
+chặn). Mọi hiệu ứng ở mục 4 đã được xem bằng mắt từng cái một trên loa thật (23/10/2026), kèm kiểm tốc độ 50–250 % và
+độ sáng 30 %.
+
+## 2. Đường tới loa: ADB (tự nhận diện)
+
+HA chạy lệnh trên loa bằng ADB. Có ba chế độ, chọn ở **Cấu hình tích hợp → Tuỳ chọn** (hai ô *Địa chỉ adb-server* và
+*Cách nối ADB tới loa*):
+
+| Chế độ (`adb_mode`) | Làm gì |
+|---|---|
+| `auto` (mặc định) | Thử adb-server (`adb_server`, mặc định `127.0.0.1:5037`); **không có server thì nối thẳng tới loa**. |
+| `server` | Chỉ qua adb-server; không có thì báo lỗi. |
+| `direct` | Chỉ nối thẳng tới adbd của loa (cổng `5555`), bỏ qua adb-server. |
+
+Custom tự mang **máy khách ADB riêng** (`adb_client.py`, thuần Python, không thêm thư viện): cả hai đường đều chạy
+lệnh, đẩy tệp (giao thức sync) và mở nhiều luồng cùng lúc. Loa R1 có `ro.adb.secure=0` nên **không đòi khoá RSA**; nếu
+adbd đòi xác thực thì báo lỗi rõ ràng.
+
+**Điều kiện cần biết:**
+
+* **adbd của loa chỉ phục vụ MỘT kết nối TCP tại một thời điểm.** Nếu một client ADB khác đang giữ loa (một adb-server
+  đã `adb connect` tới loa, tích hợp «Android Debug Bridge» của HA, máy tính của bạn), kết nối thẳng của custom không được
+  trả lời và thẻ báo *«adbd của loa không trả lời (đang bận phục vụ một client ADB khác?)»*. Cách xử lý: dùng chế độ
+  `server` hoặc `auto` với một adb-server duy nhất làm trung gian, hoặc ngắt client kia (`adb disconnect <IP-loa>:5555`).
+* Ở chế độ nối thẳng, đáy và viền chạy **cùng một kết nối** (ghép luồng); kết nối được **nhả ngay khi không còn
+  hiệu ứng lặp nào** để client ADB khác dùng được.
+* Cổng ADB mạng của loa (`5555`) phải bật (đã bật sẵn trên loa này và còn sau khi khởi động lại).
+* Nếu bạn dùng adb-server dạng container, nên chỉ mở nó trên máy chủ HA (`127.0.0.1:5037`), không mở ra LAN.
+
+**Cảm biến `binary_sensor.r1_dich_vu_den`** («Dịch vụ đèn»): bật khi ADB tới loa dùng được; thuộc tính `duong_adb`
+(`server` hoặc `direct`), `che_do_adb`, `loi`. Thẻ cài đặt (tab Ánh sáng) hiện đường đang dùng và lỗi gần nhất. Lỗi
+ADB không làm hỏng gì: HA ghi một dòng cảnh báo mỗi lần lỗi *đổi*, rồi **tự thử lại sau 15 giây**; loa khởi động lại hoặc
+nối lại thì HA áp lại đèn.
+
+**An toàn:** lệnh gửi lên loa luôn có dạng `sh /data/local/tmp/r1den.sh <vùng> <hiệu ứng> khoa=giatri ...`, trong đó vùng
+và hiệu ứng lấy từ danh mục, số đã kẹp trong khoảng, màu là sáu số hex, lựa chọn nằm trong danh sách. Phần cuối còn qua
+một bộ lọc `[a-z_]+=[0-9a-z_]+`; **không có đường nào đưa chuỗi tuỳ ý vào shell của loa** (có test chặn).
+
+## 3. Script `r1den.sh` trên loa
+
+Nằm trong tích hợp (`custom_components/r1_speaker/r1den.sh`), HA **tự đẩy lên** `/data/local/tmp/r1den.sh` khi loa chưa
+có hoặc khác phiên bản (dòng `(r1den-vN)` ở đầu tệp).
+
+* Cú pháp: `r1den.sh <day|vien> <hiệu ứng> [khoá=giá_trị ...]`. Chạy **tiền cảnh** trong phiên ADB đang mở.
+* Hiệu ứng **tĩnh** (`co_dinh`, `sang`) chỉ đặt giá trị rồi thoát: đèn giữ nguyên, HA không giữ phiên.
+* Hiệu ứng **lặp** chạy tới khi phiên ADB đóng: script bắt `HUP`/`TERM`/`INT` rồi **tắt đúng vùng của nó** và thoát.
+  Tiến trình nền không sống sau khi phiên ADB đóng (đã đo), nên HA giữ một phiên mở cho mỗi vùng đang chạy hiệu ứng lặp.
+* Mỗi vùng có tệp pid riêng `/data/local/tmp/r1den.<vùng>.pid`: hiệu ứng mới của cùng vùng **dừng hẳn tiến trình cũ**
+  (`kill -9`) trước khi ghi, nên không bao giờ có hai tiến trình cùng ghi một vùng; đáy và viền độc lập nhau.
+* `r1den.sh <vùng> tat` tắt vùng đó. Script tự kẹp mọi số; giá trị sai rơi về mặc định.
+* Loa không có `printf`, `head`, `tr`, `timeout`: script chỉ dùng tính năng của `mksh` (cắt chuỗi, `$((...))`, `RANDOM`).
+  Hex lấy bằng bảng chữ số; HSV→RGB bằng số nguyên.
+
+## 4. Danh mục hiệu ứng và thông số
+
+Mỗi hiệu ứng có **bộ thông số riêng, số lượng khác nhau** (viền sáng liên tục chỉ có độ sáng; sao chổi có sáu). Thông số
+có điều kiện (`chi_khi`) chỉ hiện khi điều kiện đúng. **Tốc độ** là phần trăm so với nhịp gốc (100 = như mô tả; 200 = nhanh
+gấp đôi); **độ sáng** nhân thêm với độ sáng chung (`number.r1_do_sang_den`).
+
+### 4.1 Đèn đáy (15 đèn RGB)
+
+#### `co_dinh` — Sáng cố định (tĩnh: đặt rồi thôi, không giữ phiên ADB)
+
+Một màu sáng liên tục.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `mau` | Màu | màu `#rrggbb`, mặc định `#00ff00` |
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+
+#### `tho` — Thở
+
+Sáng dần rồi tối dần, chu kỳ 2 giây ở tốc độ 100%.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `mau` | Màu | màu `#rrggbb`, mặc định `#0000ff` |
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `do_sau` | Độ sâu (mức tối thấp nhất) | 0–80 %, mặc định 0 |
+
+#### `nhap_nhay` — Nhấp nháy
+
+Bật rồi tắt, chu kỳ 1 giây ở tốc độ 100%.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `mau` | Màu | màu `#rrggbb`, mặc định `#00ff00` |
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `ty_le_bat` | Tỷ lệ thời gian bật | 10–90 %, mặc định 50 |
+
+#### `nhip_tim` — Nhịp tim
+
+Hai nhịp mạnh, yếu rồi nghỉ.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `mau` | Màu | màu `#rrggbb`, mặc định `#ff0000` |
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `nghi_ms` | Nghỉ giữa các nhịp | 200–2000 ms, mặc định 660 |
+
+#### `chop` — Chớp
+
+Vài chớp rất ngắn rồi nghỉ.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `mau` | Màu | màu `#rrggbb`, mặc định `#ffffff` |
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `so_chop` | Số chớp mỗi lượt | 1–6, mặc định 3 |
+| `nghi_ms` | Nghỉ giữa các lượt | 300–3000 ms, mặc định 800 |
+
+#### `phao_hoa` — Pháo hoa nhỏ
+
+Chùm màu ngẫu nhiên bừng lên rồi tắt dần.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `bang_mau` | Bảng màu | `nhieu_mau` (Nhiều màu), `am` (Tông ấm), `lanh` (Tông lạnh); mặc định `nhieu_mau` |
+| `nghi_ms` | Nghỉ giữa các chùm | 100–2000 ms, mặc định 450 |
+
+#### `cau_vong` — Cầu vồng 12 sắc
+
+Cả vòng đáy đổi 12 sắc độ, mỗi sắc 0,4 giây ở tốc độ 100%.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `bao_hoa` | Độ bão hoà màu | 30–100 %, mặc định 100 |
+| `chieu` | Chiều | `xuoi` (Xuôi), `nguoc` (Ngược); mặc định `xuoi` |
+
+#### `cau_vong_fw` — Cầu vồng 6 màu
+
+Đổi lần lượt đỏ, cam, xanh lá, xanh dương, tím, lục lam.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `chieu` | Chiều | `xuoi` (Xuôi), `nguoc` (Ngược); mặc định `xuoi` |
+
+#### `cau_vong_xoay` — Cầu vồng xoay
+
+Mỗi đèn một màu, cả dải xoay vòng.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `chieu` | Chiều | `xuoi` (Xuôi), `nguoc` (Ngược); mặc định `xuoi` |
+| `bao_hoa` | Độ bão hoà màu | 30–100 %, mặc định 100 |
+| `so_dai` | Số dải cầu vồng quanh đáy | 1–3, mặc định 1 |
+
+#### `sao_choi` — Sao chổi
+
+Đầu sáng nhất, đuôi tối dần chạy quanh đáy.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `chieu` | Chiều | `xuoi` (Xuôi), `nguoc` (Ngược); mặc định `xuoi` |
+| `dai_duoi` | Độ dài đuôi | 2–8 đèn, mặc định 5 |
+| `kieu_mau` | Kiểu màu | `nhieu_mau` (Nhiều màu (đỏ đến tím)), `don_sac` (Đơn sắc); mặc định `nhieu_mau` |
+| `mau` | Màu *(chỉ khi `kieu_mau` = `don_sac`)* | màu `#rrggbb`, mặc định `#00ffff` |
+
+### 4.2 Đèn viền (24 đèn, chỉ trắng — không có thông số màu)
+
+#### `sang` — Sáng liên tục (tĩnh: đặt rồi thôi, không giữ phiên ADB)
+
+Viền trắng sáng liên tục.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+
+#### `chay_duoi` — Chạy đuổi
+
+Điểm sáng có đuôi mờ chạy quanh 24 đèn viền.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `chieu` | Chiều | `xuoi` (Xuôi), `nguoc` (Ngược); mặc định `xuoi` |
+| `dai_duoi` | Độ dài đuôi | 1–10 đèn, mặc định 4 |
+
+#### `tho` — Thở
+
+Cả viền sáng dần rồi tối dần.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `do_sau` | Độ sâu (mức tối thấp nhất) | 0–80 %, mặc định 0 |
+
+## 5. Cài đặt theo chức năng
+
+Tám chức năng; mỗi chức năng có **bật/tắt** và **hai vùng** (`day`, `vien`), mỗi vùng một hiệu ứng (hoặc `tat`) kèm bộ
+thông số của hiệu ứng đó. Chức năng đang hiệu lực chọn theo thứ tự (đứng trước thắng):
+
+`tat_mic` > `loi` > `phan_hoi` > `nghi` > `nghe` > `dam_thoai` > `phat_nhac` > `cho`
+
+Chức năng đang **tắt** (`enabled` = không) nghĩa là «lúc đó không có đèn»: tắt cả hai vùng (riêng `phat_nhac` tắt thì coi
+như không có nhạc). Mặc định (đề xuất, chủ máy chỉnh được trên thẻ; chỉ phần khác mặc định mới được lưu):
+
+| Chức năng | Khi nào | Bật | Đèn đáy | Đèn viền |
+|---|---|---|---|---|
+| `cho` | Nghỉ, chờ từ đánh thức | không | `co_dinh` (mau=#0000ff, do_sang=20) | tắt |
+| `nghe` | Loa đang nghe | có | `co_dinh` (mau=#0000ff, do_sang=60) | `sang` (do_sang=60) |
+| `nghi` | Assist đang xử lý | có | `tho` (mau=#0000ff, do_sang=60, toc_do=100, do_sau=0) | tắt |
+| `phan_hoi` | Loa đang trả lời | có | `co_dinh` (mau=#00ff00, do_sang=60) | `sang` (do_sang=60) |
+| `dam_thoai` | Có phiên đàm thoại (giữa hai lượt) | có | `tho` (mau=#00ff00, do_sang=50, toc_do=100, do_sau=0) | `sang` (do_sang=50) |
+| `phat_nhac` | Đang phát nhạc | không | `cau_vong` (do_sang=40, toc_do=100, bao_hoa=100, chieu=xuoi) | tắt |
+| `loi` | Phiên bị lỗi (giữ vài giây) | có | `nhap_nhay` (mau=#ff0000, do_sang=80, toc_do=100, ty_le_bat=50) | `sang` (do_sang=80) |
+| `tat_mic` | Mic đang tắt | có | `co_dinh` (mau=#ff0000, do_sang=25) | `sang` (do_sang=25) |
+
+Cài đặt lưu ở `.storage/r1_speaker.lights.<mã mục>`. **Bản lưu cũ** (mô hình phẳng: màu, hiệu ứng, độ sáng, kiểu viền)
+được **tự chuyển** sang mô hình hai vùng lần đầu nạp (hiệu ứng cũ giữ mã, kiểu viền chạy đuổi cũ thành viền `chay_duoi`,
+viền trắng thành `sang`).
+
+## 6. Mục Thử (tách riêng khỏi cài đặt)
+
+Tab **Ánh sáng** của thẻ có mục **Thử đèn** nằm riêng, phía trên cài đặt từng chức năng; **trong từng cài đặt không có nút
+Thử**. Cách dùng: chọn *Vùng* (đáy hoặc viền), chọn *Hiệu ứng*, chỉnh các thông số của hiệu ứng đó, chọn thời gian rồi bấm
+**Thử**. Đèn chạy hiệu ứng đó vài giây (1–30 giây) rồi **tự trả về trạng thái thật**; **Dừng thử** trả về ngay.
+
+* Thử **không lưu gì**: nó chỉ phủ tạm lên vùng được chọn (vùng kia giữ nguyên), nên bạn thử tốc độ, màu, chiều... thoải mái.
+* Trạng thái của mục Thử (vùng, hiệu ứng, thông số đang chỉnh) chỉ nằm trong thẻ; chỉ nút **Thử** mới gọi dịch vụ.
+* Đang thử thì thẻ hiện nhãn *Đang thử* (thuộc tính `thu` của `sensor.r1_cai_dat`).
+
+## 7. Dịch vụ HA
+
+Gọi qua *Công cụ nhà phát triển → Hành động* hoặc tự động hoá. `entity_id` là thực thể `r1_speaker` bất kỳ của loa
+(ví dụ `sensor.r1_cai_dat`).
+
+| Dịch vụ | Làm gì |
+|---|---|
+| `r1_speaker.set_light_function` | Đổi `enabled` và/hoặc một vùng (`day`, `vien`) của một chức năng (`function`). Mỗi vùng là `{effect, params}`. Đổi `effect` thì thông số về mặc định của hiệu ứng mới; chỉ gửi `params` thì giữ hiệu ứng và trộn vào thông số hiện có (giá trị sai kiểu không thay giá trị tốt). |
+| `r1_speaker.preview_light` | **Thử**: chạy tạm `effect` với `params` ở `zone` (`day`/`vien`) trong `seconds` giây (1–30). Không lưu. |
+| `r1_speaker.stop_preview_light` | Dừng thử, trả đèn về trạng thái thật. |
+
+Ví dụ:
+
+```yaml
+action: r1_speaker.set_light_function
+data:
+  entity_id: sensor.r1_cai_dat
+  function: nghe
+  day:
+    effect: sao_choi
+    params: {kieu_mau: don_sac, mau: "#00ffff", dai_duoi: 6, toc_do: 150}
+  vien:
+    effect: chay_duoi
+    params: {chieu: nguoc, dai_duoi: 4}
+---
+action: r1_speaker.preview_light
+data:
+  entity_id: sensor.r1_cai_dat
+  zone: day
+  effect: cau_vong_xoay
+  params: {so_dai: 2, toc_do: 120}
+  seconds: 10
+```
+
+Giá trị ngoài danh mục (hiệu ứng lạ, hiệu ứng của vùng khác) bị từ chối với lỗi rõ ràng.
+
+## 8. Thuộc tính cho thẻ (`sensor.r1_cai_dat` → `anh_sang`)
+
+`chuc_nang` (cài đặt từng chức năng kèm cờ `mac_dinh`), `danh_muc` (danh mục mục 4, thẻ vẽ form từ đây), `dang_ap_dung`,
+`thu_tu_uu_tien`, `thu` (mục Thử đang chạy), `dich_vu_den`, `duong_adb`, `che_do_adb`, `loi_dich_vu`, `do_sang_chung`,
+`den_nhac_firmware`. **Không có khoá hay địa chỉ bí mật nào** trong các thuộc tính này (có test).
+
+## 9. Đèn theo nhạc của firmware (đường riêng, qua APK)
 
 ### Đèn theo nhạc của firmware — ĐIỀU KHIỂN ĐƯỢC (đã thử trên loa 22/10/2026)
 
@@ -45,139 +334,31 @@ trực tiếp: HA gửi khung `{"type":"den_nhac","ma":65,"gia_tri":50}` xuống
 xác thực; APK kiểm chặt định dạng và khoảng giá trị rồi gọi `msgcenter` (`LenhDieuKhien.java`,
 `TrungTamTin.java`). Thực thể: `number.r1_do_sang_den_nhac`, `number.r1_sac_do_den_nhac`,
 `switch.r1_den_nhac` — chỉ dùng được khi APK đang nối về HA. Đây là đèn của FIRMWARE, khác với «hiệu ứng
-khi phát nhạc của HA» (chức năng `phat_nhac` ở dưới, chưa ra đèn).
+khi phát nhạc» của tích hợp (chức năng `phat_nhac` ở mục 5, chạy qua ADB).
 
-**Đèn viền (trắng) và đèn đáy (RGB) theo mức sáng tuỳ ý** cần quyền shell nên đi vòng qua một **máy chủ đèn**:
-HA gửi `{"type":"den_vien","muc":0-255}` / `{"type":"den_day","rgb":"rrggbb"}` / `{"type":"den_hoi"}` xuống APK
-(kiểm chặt, `LenhDieuKhien.java`), APK xếp vào hàng đợi riêng «mới nhất thắng» (`DenHangDoi.java`, không chặn
-đường phát tiếng) rồi gọi máy chủ đèn quyền shell qua TCP 127.0.0.1:18771 (`DenCau.java` →
-`apk/nguon/den/.../MayChuDen.java`, chỉ chạy `lights_test set <mặt nạ> <rgb>`). APK báo
-`{"type":"den_trang_thai","san_sang":true|false}` lên HA (lúc nối và mỗi lần HA hỏi, 30 giây một lần);
-thực thể `binary_sensor.r1_dich_vu_den` hiện máy chủ đèn có chạy không, `number.r1_do_sang_den` là độ sáng
-chung 0–100 % nhân vào mọi chức năng. **Máy chủ đèn không tự sống sau khi loa khởi động lại**: phải có một
-tiến trình `scripts/den_loa.sh <IP-loa> giam-sat` chạy ở máy khác trong nhà. **Chưa có xác nhận bằng mắt của chủ
-nhà cho đường HA → APK → máy chủ đèn đầu-cuối** (phần HA và APK có test; đèn thật chỉ đã thử riêng
-`lights_test` và vòng loopback). Không dùng hiệu ứng ID 500–505 của AI box (CHƯA thử).
+Đèn viền và đèn đáy (hiệu ứng, màu, độ sáng) **không** đi đường này: xem mục 2 và 3 (ADB). Khung `den_vien`, `den_day`,
+`den_hieu_ung`, `den_hoi` giữa HA và APK **đã bỏ** ở phía HA; APK cũ vẫn hiểu chúng nhưng HA không gửi nữa.
 
-Trước đó, vì sao cần máy chủ đèn: `lights_test` từ app (uid app không mở được
-`/sys/class/leds/multi_leds0/led_color`, thoát 255). AI box điều khiển đèn viền/đáy bằng cách gửi
-nhóm `0x1000` + ID hiệu ứng có sẵn trong `/system/etc/lights_effects.conf` (500/501/502 đáy đỏ/xanh lá/
-xanh dương, 503 viền trắng, 504/505 tắt đáy/viền…) — chỉ chọn hiệu ứng có sẵn, không chỉnh mức sáng
-tuỳ ý; CHƯA thử.
+## 10. Gỡ rối
 
-## 2. Hợp đồng `LightsSink` (`den_port.py`)
+| Hiện tượng | Nguyên nhân thường gặp | Cách xử lý |
+|---|---|---|
+| Thẻ báo *Chưa có đường ADB* | tích hợp chưa tạo được đường ADB (mục `CHO_PHIA_LOA`) | khởi động lại tích hợp; kiểm địa chỉ loa |
+| *adbd của loa không trả lời (đang bận...)* | client ADB khác đang giữ loa | `adb disconnect <IP-loa>:5555`, hoặc dùng chế độ `server` với một adb-server duy nhất |
+| *adb-server: Connection refused* | không có server ở địa chỉ đã đặt | chế độ `auto` tự nối thẳng; hoặc sửa địa chỉ / đặt `direct` |
+| *loa đòi xác thực ADB* | adbd bật khoá RSA | tắt `ro.adb.secure` hoặc dùng adb-server đã được loa tin cậy |
+| Đèn đứng yên sau khi bấm | loa mất mạng | HA tự thử lại sau 15 giây; xem `binary_sensor.r1_dich_vu_den` |
+| Đèn không tắt sau khi tắt tích hợp | phiên ADB bị đứt trước khi script nhận `HUP` | gọi `stop_preview_light` hoặc chạy `adb shell sh /data/local/tmp/r1den.sh day tat` |
 
-```
-available -> bool
-set_rim(level: int 0..255)         # viền: chỉ MỨC trắng, không có tham số màu → luật «chỉ trắng» do chữ ký hàm bảo đảm
-set_base(rgb: (r, g, b))           # đáy
-play_effect(steps, *, repeat)      # trả ngay; sink tự chạy nền (bản trên loa có thể lặp tại chỗ)
-stop_effect()                      # dừng hiệu ứng đang chạy
-```
+Chạy tay để thử trên loa (không qua HA): `adb shell sh /data/local/tmp/r1den.sh day cau_vong_xoay toc_do=120` (Ctrl+C để dừng).
 
-* `Step(base: RGB | None, rim: int | None, seconds)`; `None` = giữ nguyên. `run_steps()` là bộ chạy
-  sẵn cho sink không có bộ chạy riêng (đặt viền, đặt đáy, giữ `seconds`, tối thiểu `MIN_STEP_S`).
-* `rim_write(level)` / `base_write(rgb)` cho ra đúng cặp (mặt nạ, hex) mà `lights_test set` nhận;
-  bản thật chỉ cần gửi `Write.command`. Test dùng `tests/memory_lights.py`.
-* HA luôn `stop_effect()` TRƯỚC khi ghi đèn theo cách khác và đánh số thế hệ: bản áp dụng cũ bị bỏ
-  khi bản mới đến — không bao giờ có hai nơi cùng ghi đèn.
-* Mặc định `NullLights`: `available = False`, trạng thái `CHO_PHIA_LOA`. Cắm sink thật:
-  `entry.runtime_data.lights.set_sink(sink)`.
+## 11. Đã kiểm / chưa kiểm
 
-## 3. Cài đặt theo chức năng (`den.py`)
-
-Tám chức năng, mỗi chức năng có: bật/tắt, dùng đèn viền (trắng), màu đèn đáy, hiệu ứng, độ sáng 0–100.
-Chức năng đang hiệu lực chọn theo thứ tự ưu tiên (đứng trước thắng):
-
-1. `tat_mic` — mic đang tắt (`switch.r1_tat_mic`);
-2. `loi` — phiên đóng vì lỗi (`loi`, `loi_pipeline`, `mic_khong_noi_duoc`, `het_gio`) hoặc pipeline báo
-   `ERROR` (đấu ở `assist_satellite.on_pipeline_event`); giữ `LIGHT_ERROR_HOLD_S` giây;
-3. `phan_hoi` / `nghi` / `nghe` — theo trạng thái `assist_satellite.r1` (HA: TTS_START → responding,
-   INTENT_START → processing, STT_START → listening);
-4. `dam_thoai` — có phiên mở mà vệ tinh đang rảnh (giữa hai lượt);
-5. `phat_nhac` — `media_player.r1_loa` đang phát (chỉ khi chức năng này BẬT);
-6. `cho` — chờ từ đánh thức.
-
-Chức năng TẮT = «lúc đó không có đèn» (tắt cả viền lẫn đáy); riêng `phat_nhac` tắt thì coi như không có
-nhạc (rơi xuống `cho`). Đèn viền chỉ có trắng nên chức năng dùng viền chỉ chọn «dùng viền hay không»
-và độ sáng; màu chỉ áp cho đèn đáy.
-
-### Mặc định — ĐỀ XUẤT, CHƯA ĐO (không số nào được nhìn thử trên loa)
-
-| Chức năng | Bật | Viền | Màu đáy | Hiệu ứng | Sáng |
-|---|---|---|---|---|---|
-| chờ / đánh thức | tắt | không | xanh dương | không | 20 |
-| nghe | bật | có | xanh dương | không | 60 |
-| nghĩ | bật | không | xanh dương | thở | 60 |
-| phản hồi | bật | có | xanh lá | không | 60 |
-| đàm thoại | bật | có | xanh lá | thở | 50 |
-| phát nhạc | **tắt** | không | xanh lá | cầu vồng | 40 |
-| lỗi | bật | có | **đỏ** | nhấp nháy | 80 |
-| tắt mic | bật | có | **đỏ** | không | 25 (viền = `404040`, mức «mờ rõ» đã thấy) |
-
-Lý do: chỉ dùng xanh lá/xanh dương (đã xác nhận) trừ ĐỎ; «lỗi» và «tắt mic» dùng đỏ nhưng **luôn kèm
-đèn viền trắng** để vẫn thấy được nếu đèn đáy không hiện đỏ. «Chờ» tắt vì đèn thường trực gây phiền ban
-đêm; «phát nhạc» tắt vì firmware có đèn nhạc riêng (lệnh chưa rõ) — bật cả hai có thể chồng nhau.
-Cài đặt chỉ lưu phần KHÁC mặc định (`helpers.storage.Store`, khoá `r1_speaker.lights.<entry_id>`), nên
-khi đo xong và đổi mặc định thì mục chưa chỉnh tay tự theo.
-
-### Dịch vụ HA
-
-* `r1_speaker.set_light_function` — `entity_id`, `function`, tuỳ chọn `enabled`, `rim`, `color` (`#rrggbb`),
-  `effect`, `brightness` (0–100).
-* `r1_speaker.set_music_light` — `entity_id`, tuỳ chọn `enabled`, `effect`, `brightness` (= hồ sơ của
-  chức năng `phat_nhac`).
-* `r1_speaker.preview_light` — `entity_id`, `function`, `seconds` (1–30): hiện đèn của chức năng đó rồi
-  trả về trạng thái thật (cần sink thật mới thấy).
-
-## 4. Danh mục hiệu ứng (`hieu_ung.py`)
-
-Nguồn ý tưởng: danh mục hiệu ứng WLED, https://kno.wled.ge/features/effects/ (đọc 22/10/2026; chỉ đọc
-tên + mô tả, KHÔNG lấy mã). Mỗi hiệu ứng chỉ cần «đổi màu đáy theo thời gian + viền trắng bật/tắt/mờ».
-
-| id | Tên | Mục WLED (ID) | Viền làm gì |
-|---|---|---|---|
-| `tho` | Thở | Breathe (2) | sáng tối theo đáy |
-| `cau_vong` | Cầu vồng | Colorloop (8) | mờ cố định (viền không đổi màu) |
-| `nhap_nhay` | Nhấp nháy | Blink (1) | nháy cùng đáy |
-| `nhip_tim` | Nhịp tim | Heartbeat (100) | đập cùng đáy |
-| `phao_hoa` | Pháo hoa nhỏ | Fireworks (42) | bừng cùng đáy |
-| `chop` | Chớp | Strobe Mega (25) | chớp cùng đáy |
-
-Đã BỎ: Chase/Scan/Wipe/sóng/đuổi — cần ghi từng LED, mà chưa biết các bit của mặt nạ có địa chỉ riêng
-từng LED hay không (mới thấy `7fff` = cả đáy, `7fffff8000` = cả viền). Quy ước đèn của loa thương mại
-(Alexa, Google…) không được kiểm từ nguồn nào ở đây nên không viết vào.
-
-Pháo hoa dùng `random.Random` truyền seed vào (test xác định được). Tốc độ đổi đèn tối đa thật
-(mỗi `lights_test` là một tiến trình) CHƯA ĐO nên mọi số thời gian là đề xuất.
-
-## 5. Thẻ cài đặt (`r1-settings-card`)
-
-Mặc định chỉ hiện tiêu đề + nút «Cài đặt». Bấm nút mới mở bảng, ba nhóm:
-
-* **Âm thanh** — âm lượng, EQ 5 dải, tăng mic, tắt mic (thực thể sẵn có); khử tạp / AGC / bộ hạn đỉnh
-  chỉ ĐỌC (là tuỳ chọn của mục cài đặt, sửa ở trang Tuỳ chọn: lưu tuỳ chọn nạp lại cả mục, ngắt mic);
-* **Ánh sáng** — mỗi chức năng một khối (bật, viền, màu, hiệu ứng, sáng, nút «Thử»), mục hiệu ứng khi phát
-  nhạc, đèn nhạc của firmware (chỉ đọc), danh mục hiệu ứng kèm nguồn, và dòng nói thẳng «chưa có dịch
-  vụ đèn trên loa» khi `dich_vu_den != san_sang`;
-* **Kết nối** — IP loa, cổng, `ha_url`, APK trên loa đang nối hay chưa, cổng nghe mic (HA tự cấp). Khoá nghe mic
-  **không bao giờ vào thuộc tính hay thẻ**: nút «Hiện lệnh cài APK» hỏi quản trị viên qua WebSocket
-  `r1_speaker/apk_lenh` (chỉ quản trị viên, kết quả chỉ nằm trong bộ nhớ thẻ).
-
-Thẻ KHÔNG gọi loa: chỉ đọc thực thể HA và gọi `number.set_value`, `switch.turn_on/off`,
-`r1_speaker.set_light_function`, `r1_speaker.set_music_light`, `r1_speaker.preview_light`. Nạp tự động
-như hai thẻ cũ; thêm vào bảng điều khiển: `type: custom:r1-settings-card` (nhiều loa: `device_id`).
-
-## 6. Cần dịch vụ trên loa mới chạy (CHƯA CÓ)
-
-* Mọi thứ liên quan đèn: không có đường từ HA tới `lights_test`. Cần một dịch vụ trên loa (chưa được duyệt)
-  thoả `LightsSink`; trong lúc chờ, đèn KHÔNG sáng và thẻ nói rõ.
-* Hiệu ứng khi phát nhạc của HA cũng vậy. (Đèn nhạc của FIRMWARE thì đã điều khiển được, xem mục 1.)
-
-## 7. Chưa đo
-
-* Đỏ `ff0000` trên đèn đáy; mọi màu pha (vàng, tím, lục lam…) dùng trong cầu vồng/pháo hoa.
-* Chỉnh sáng đèn đáy bằng cách nhân RGB có tuyến tính không; mức sáng tối thiểu nhìn thấy của viền/đáy.
-* Bước thời gian ngắn nhất `lights_test` theo kịp; hiệu ứng nào làm được ở tốc độ đó.
-* Đèn nhạc của firmware chồng lên hiệu ứng nhạc của HA ra sao.
-* Toàn bộ bảng mặc định ở mục 3.
+* **Đã xem bằng mắt trên loa thật (23/10/2026) với BẢN NGUYÊN MẪU của script** (trước khi thêm thông số riêng): cả 13 hiệu
+  ứng (10 đáy, 3 viền) ở tốc độ và độ sáng mặc định; viền chạy đuổi ở tốc độ 250 % và 50 %; độ sáng 30 % (viền sáng,
+  cầu vồng); tự tắt khi phiên ADB đóng.
+* **Đã kiểm bằng máy trên loa thật:** máy khách ADB ở cả hai đường (qua adb-server và nối thẳng): chạy lệnh, đẩy tệp (md5 khớp),
+  hai luồng (đáy + viền) cùng lúc trên một kết nối.
+* **CHƯA xem bằng mắt với `r1den.sh` bản cuối** (có thông số riêng, màu cầu vồng tính bằng HSV, tệp pid từng vùng) và từng
+  *thông số riêng* ở giá trị lạ (chiều ngược, số dải 2–3, đuôi dài, bảng màu ấm/lạnh, tỷ lệ bật...). Test chỉ kiểm mô hình, lệnh
+  gửi đi và thẻ, **không** kiểm ánh sáng thật.

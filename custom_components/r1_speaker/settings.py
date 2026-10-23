@@ -14,6 +14,7 @@ from homeassistant.config_entries import ConfigEntry
 
 from .agc import AgcSettings, LimiterSettings
 from .noise_suppress import NoiseSettings
+from .const import CONF_ADB_MODE, CONF_ADB_SERVER, DEFAULT_ADB_MODE, DEFAULT_ADB_SERVER
 from .const import (CONF_WAKE_ENABLE, CONF_WAKE_SENSITIVITY, CONF_WAKE_WORD,
                     DEFAULT_WAKE_ENABLE, DEFAULT_WAKE_SENSITIVITY, DEFAULT_WAKE_WORD)
 from .const import (CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, CONF_AGC_TARGET_DB,
@@ -170,3 +171,10 @@ def wake_settings(entry: ConfigEntry) -> dict[str, Any]:
         "tu_khoa": str(conf(entry, CONF_WAKE_WORD, DEFAULT_WAKE_WORD) or ""),
         "do_nhay": float(conf(entry, CONF_WAKE_SENSITIVITY, DEFAULT_WAKE_SENSITIVITY)),
     }
+
+
+def adb_settings(entry: ConfigEntry) -> tuple[str, str]:
+    """(địa chỉ adb-server, chế độ ``auto``/``server``/``direct``). Chế độ lạ rơi về ``auto``."""
+    mode = str(conf(entry, CONF_ADB_MODE, DEFAULT_ADB_MODE))
+    return (str(conf(entry, CONF_ADB_SERVER, DEFAULT_ADB_SERVER) or "").strip(),
+            mode if mode in ("auto", "server", "direct") else DEFAULT_ADB_MODE)

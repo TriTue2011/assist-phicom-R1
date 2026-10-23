@@ -169,56 +169,180 @@ Nhạc phát qua AirPlay/DLNA không đi qua đường tiếng của HA nên kh�
 
 ## 5. Đèn
 
-Loa có **đèn viền** (24 đèn, chỉ màu trắng) và **đèn đáy** (15 đèn, RGB). HA điều khiển chúng bằng **hiệu ứng CÓ SẴN
-của firmware**, đúng cách app AI box làm: HA gửi `den_hieu_ung` xuống APK trên loa, APK gọi dịch vụ hệ thống
-`msgcenter.sendMsg(0x1000, ID, 0)` với ID lấy từ `/system/etc/lights_effects.conf`. **Không cần máy chủ quyền shell, không
-cần máy ngoài**: chỉ cần APK mới đang nối vào HA (cảm biến «Dịch vụ đèn» = bật). Hệ quả: chỉ có tập màu và hiệu ứng khai
-trong tệp của firmware, không có màu tuỳ ý, không chỉnh độ sáng từng chức năng (độ sáng 0 hoặc «Độ sáng đèn» = 0 là
-TẮT, lớn hơn 0 là bật). Chủ nhà đã thấy đèn đáy lên màu khi gửi đúng đường (22/10/2026).
+Chi tiết kiến trúc, ADB, script, an toàn và gỡ rối: [DEN-LED.md](DEN-LED.md). Phần này là **bảng cài đặt**.
 
-**Firmware chỉ chạy MỘT hiệu ứng tại một thời điểm** (log `close light X` / `show light Y`): bật hiệu ứng mới là đóng cái cũ, nên
-đèn đáy và đèn viền KHÔNG sáng đồng thời. Mỗi lần áp, tích hợp gửi đúng một ID: đáy đang có màu thì ưu tiên đáy, không thì viền,
-không thì tắt cả hai. (Lỗi cũ «đáy không sáng, viền thì sáng» là do gửi ID đáy rồi ngay ID tắt viền 505 đóng mất hiệu ứng đáy.)
+**Cách chạy:** hiệu ứng chạy trên loa (`r1den.sh`) qua ADB; custom nối adb-server nếu có, không thì nối thẳng loa
+(tuỳ chọn `adb_server`, `adb_mode` = `auto` / `server` / `direct` ở Cấu hình tích hợp). `binary_sensor.r1_dich_vu_den` cho biết
+ADB dùng được không và đi đường nào.
 
-**Tốc độ hiệu ứng** (thanh «Tốc độ hiệu ứng» 25–400 %, 100 = như đề xuất, dịch vụ `set_light_function` trường `toc_do`): chỉnh được cho
-mọi hiệu ứng do HA tự đổi màu theo nhịp (cầu vồng, nhịp tim, pháo hoa, chớp). Thở và nháy gốc của firmware có chu kỳ cố định nên thanh
-tốc độ không hiện. **Không làm được bằng firmware** (cần ghi `/sys/class/leds/multi_leds0/led_color`, app bị SELinux chặn):
-cầu vồng mỗi đèn một màu xoay, sao chổi nhiều màu, tăng giảm độ sáng mượt cho mọi màu.
-
-| Màu (đèn đáy) | Sáng cố định | Thở | Ghi chú |
-|---|---|---|---|
-| Đỏ | 500 | 206 (nháy nhanh, chu kỳ 0,5 s) | «Nháy» chỉ có màu đỏ |
-| Xanh lá | 501 | không có | thở rơi về sáng cố định |
-| Xanh dương | 502 | 203 | |
-| Cam | 252 | 200 | |
-| Tím | 253 | không có | |
-| Lục lam | 255 | 204 | |
-| Trắng | không có | 202 | đáy không có «sáng cố định trắng» |
-| Tắt | 504 | | |
-
-Viền: trắng 503, tắt 505. **Hiệu ứng:** «sáng cố định», «thở» và «nhấp nháy» (đỏ) là hiệu ứng GỐC của firmware (một ID); «cầu vồng»,
-«nhịp tim», «pháo hoa», «chớp» chạy bằng cách HA đổi liên tiếp giữa các màu của firmware (như AI box gửi chuỗi ID kèm nghỉ
-ngắn), nên màu bị làm tròn về bảng trên và bước tối thiểu khoảng 0,1 giây. Firmware còn có tăng dần/giảm dần xanh dương theo
-bước (300–315, 400–415) và các mẫu xoay vòng quanh viền (1–25); **chưa dùng**.
-
-Tám chức năng, mỗi chức năng có: **bật/tắt**, **dùng đèn viền**, **màu đèn đáy**, **hiệu ứng**, **độ sáng 0–100**. Khi
-nhiều chức năng cùng đúng, chức năng đứng trước thắng:
+**Mỗi chức năng** có **bật/tắt** và **hai vùng** (đáy, viền), mỗi vùng một hiệu ứng (hoặc tắt) kèm bộ thông số riêng của
+hiệu ứng đó (số thông số khác nhau từng hiệu ứng). Khi nhiều chức năng cùng đúng, chức năng đứng trước thắng:
 
 `Tắt mic` > `Lỗi` > `Phản hồi` > `Nghĩ` > `Nghe` > `Đàm thoại` > `Phát nhạc` > `Chờ`
 
-| Chức năng | Khi nào | Mặc định (bật / viền / màu / hiệu ứng / sáng) |
-|---|---|---|
-| `cho` Chờ | Nghỉ | tắt / không / xanh dương / không / 20 |
-| `nghe` Nghe | Loa đang nghe | bật / có / xanh dương / không / 60 |
-| `nghi` Nghĩ | Assist đang xử lý | bật / không / xanh dương / thở / 60 |
-| `phan_hoi` Phản hồi | Loa đang trả lời | bật / có / xanh lá / không / 60 |
-| `dam_thoai` Đàm thoại | Có phiên đàm thoại | bật / có / xanh lá / thở / 50 |
-| `phat_nhac` Phát nhạc | Đang phát nhạc | tắt / không / xanh lá / cầu vồng / 40 |
-| `loi` Lỗi | Phiên bị lỗi | bật / có / đỏ / nhấp nháy / 80 |
-| `tat_mic` Tắt mic | Mic đang tắt | bật / có / đỏ / không / 25 |
+**Mặc định** (đề xuất, chủ máy chỉnh được; chỉ phần khác mặc định mới được lưu):
 
-Hiệu ứng của tích hợp: `không`, `thở`, `cầu vồng`, `nhấp nháy`, `nhịp tim`, `pháo hoa`, `chớp`; trên đèn firmware tất cả đều
-chạy (xem bảng trên). Máy chủ đèn quyền shell cũ (`scripts/den_loa.sh`) không còn dùng mặc định. Nút **Thử** của mỗi chức năng bật thử đèn đó vài giây. **Đèn theo nhạc của firmware** (công tắc + hai thanh) là đèn riêng của hãng, chỉnh được từ app.
+| Chức năng | Khi nào | Bật | Đèn đáy | Đèn viền |
+|---|---|---|---|---|
+| `cho` | Nghỉ, chờ từ đánh thức | không | `co_dinh` (mau=#0000ff, do_sang=20) | tắt |
+| `nghe` | Loa đang nghe | có | `co_dinh` (mau=#0000ff, do_sang=60) | `sang` (do_sang=60) |
+| `nghi` | Assist đang xử lý | có | `tho` (mau=#0000ff, do_sang=60, toc_do=100, do_sau=0) | tắt |
+| `phan_hoi` | Loa đang trả lời | có | `co_dinh` (mau=#00ff00, do_sang=60) | `sang` (do_sang=60) |
+| `dam_thoai` | Có phiên đàm thoại (giữa hai lượt) | có | `tho` (mau=#00ff00, do_sang=50, toc_do=100, do_sau=0) | `sang` (do_sang=50) |
+| `phat_nhac` | Đang phát nhạc | không | `cau_vong` (do_sang=40, toc_do=100, bao_hoa=100, chieu=xuoi) | tắt |
+| `loi` | Phiên bị lỗi (giữ vài giây) | có | `nhap_nhay` (mau=#ff0000, do_sang=80, toc_do=100, ty_le_bat=50) | `sang` (do_sang=80) |
+| `tat_mic` | Mic đang tắt | có | `co_dinh` (mau=#ff0000, do_sang=25) | `sang` (do_sang=25) |
+
+**Thông số từng hiệu ứng.** Tốc độ là phần trăm so với nhịp gốc (100 = như mô tả); độ sáng nhân thêm với độ sáng chung
+(`number.r1_do_sang_den`). Đèn viền chỉ trắng nên **không có thông số màu**.
+
+##### Đèn đáy (15 đèn RGB)
+
+#### `co_dinh` — Sáng cố định (tĩnh: đặt rồi thôi, không giữ phiên ADB)
+
+Một màu sáng liên tục.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `mau` | Màu | màu `#rrggbb`, mặc định `#00ff00` |
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+
+#### `tho` — Thở
+
+Sáng dần rồi tối dần, chu kỳ 2 giây ở tốc độ 100%.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `mau` | Màu | màu `#rrggbb`, mặc định `#0000ff` |
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `do_sau` | Độ sâu (mức tối thấp nhất) | 0–80 %, mặc định 0 |
+
+#### `nhap_nhay` — Nhấp nháy
+
+Bật rồi tắt, chu kỳ 1 giây ở tốc độ 100%.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `mau` | Màu | màu `#rrggbb`, mặc định `#00ff00` |
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `ty_le_bat` | Tỷ lệ thời gian bật | 10–90 %, mặc định 50 |
+
+#### `nhip_tim` — Nhịp tim
+
+Hai nhịp mạnh, yếu rồi nghỉ.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `mau` | Màu | màu `#rrggbb`, mặc định `#ff0000` |
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `nghi_ms` | Nghỉ giữa các nhịp | 200–2000 ms, mặc định 660 |
+
+#### `chop` — Chớp
+
+Vài chớp rất ngắn rồi nghỉ.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `mau` | Màu | màu `#rrggbb`, mặc định `#ffffff` |
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `so_chop` | Số chớp mỗi lượt | 1–6, mặc định 3 |
+| `nghi_ms` | Nghỉ giữa các lượt | 300–3000 ms, mặc định 800 |
+
+#### `phao_hoa` — Pháo hoa nhỏ
+
+Chùm màu ngẫu nhiên bừng lên rồi tắt dần.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `bang_mau` | Bảng màu | `nhieu_mau` (Nhiều màu), `am` (Tông ấm), `lanh` (Tông lạnh); mặc định `nhieu_mau` |
+| `nghi_ms` | Nghỉ giữa các chùm | 100–2000 ms, mặc định 450 |
+
+#### `cau_vong` — Cầu vồng 12 sắc
+
+Cả vòng đáy đổi 12 sắc độ, mỗi sắc 0,4 giây ở tốc độ 100%.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `bao_hoa` | Độ bão hoà màu | 30–100 %, mặc định 100 |
+| `chieu` | Chiều | `xuoi` (Xuôi), `nguoc` (Ngược); mặc định `xuoi` |
+
+#### `cau_vong_fw` — Cầu vồng 6 màu
+
+Đổi lần lượt đỏ, cam, xanh lá, xanh dương, tím, lục lam.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `chieu` | Chiều | `xuoi` (Xuôi), `nguoc` (Ngược); mặc định `xuoi` |
+
+#### `cau_vong_xoay` — Cầu vồng xoay
+
+Mỗi đèn một màu, cả dải xoay vòng.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `chieu` | Chiều | `xuoi` (Xuôi), `nguoc` (Ngược); mặc định `xuoi` |
+| `bao_hoa` | Độ bão hoà màu | 30–100 %, mặc định 100 |
+| `so_dai` | Số dải cầu vồng quanh đáy | 1–3, mặc định 1 |
+
+#### `sao_choi` — Sao chổi
+
+Đầu sáng nhất, đuôi tối dần chạy quanh đáy.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `chieu` | Chiều | `xuoi` (Xuôi), `nguoc` (Ngược); mặc định `xuoi` |
+| `dai_duoi` | Độ dài đuôi | 2–8 đèn, mặc định 5 |
+| `kieu_mau` | Kiểu màu | `nhieu_mau` (Nhiều màu (đỏ đến tím)), `don_sac` (Đơn sắc); mặc định `nhieu_mau` |
+| `mau` | Màu *(chỉ khi `kieu_mau` = `don_sac`)* | màu `#rrggbb`, mặc định `#00ffff` |
+
+##### Đèn viền (24 đèn, chỉ trắng)
+
+#### `sang` — Sáng liên tục (tĩnh: đặt rồi thôi, không giữ phiên ADB)
+
+Viền trắng sáng liên tục.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+
+#### `chay_duoi` — Chạy đuổi
+
+Điểm sáng có đuôi mờ chạy quanh 24 đèn viền.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `chieu` | Chiều | `xuoi` (Xuôi), `nguoc` (Ngược); mặc định `xuoi` |
+| `dai_duoi` | Độ dài đuôi | 1–10 đèn, mặc định 4 |
+
+#### `tho` — Thở
+
+Cả viền sáng dần rồi tối dần.
+
+| Thông số | Ý nghĩa | Giá trị |
+|---|---|---|
+| `do_sang` | Độ sáng | 0–100 %, mặc định 100 |
+| `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
+| `do_sau` | Độ sâu (mức tối thấp nhất) | 0–80 %, mặc định 0 |
+
+**Thử đèn** là mục riêng trên thẻ (tab Ánh sáng): chọn vùng, hiệu ứng, thông số rồi bấm Thử; chạy tạm vài giây rồi tự trả
+đèn về trạng thái thật, không lưu gì (dịch vụ `preview_light`, `stop_preview_light`). Trong từng cài đặt chức năng không có
+nút Thử.
 
 ---
 
@@ -245,9 +369,9 @@ chạy (xem bảng trên). Máy chủ đèn quyền shell cũ (`scripts/den_loa.
 | Dịch vụ | Làm gì |
 |---|---|
 | `set_advanced_option` | Đổi một cài đặt nâng cao: `entity_id` (thực thể của loa), `key` (khoá ở mục 4), `value` (số hoặc true/false). Giá trị ngoài khoảng bị từ chối; nạp lại tích hợp để áp dụng |
-| `set_light_function` | Đổi cấu hình đèn của một chức năng: `function`, `enabled`, `rim`, `color`, `effect`, `brightness` |
-| `set_music_light` | Đổi đèn khi phát nhạc (hiệu ứng, độ sáng) |
-| `preview_light` | Bật thử đèn của một chức năng |
+| `set_light_function` | Đổi cấu hình đèn của một chức năng: `function`, `enabled`, và mỗi vùng `day` / `vien` là `{effect, params}` |
+| `preview_light` | **Thử** một hiệu ứng ở một vùng: `zone`, `effect`, `params`, `seconds` (không lưu) |
+| `stop_preview_light` | Dừng thử, trả đèn về trạng thái thật |
 | `start_duplex` / `stop_duplex` | Mở/đóng phiên đàm thoại song công của loa |
 | `get_intercom_source` | Trả hai dòng nguồn cho `go2rtc.yaml`: nói vào loa (`talk`) và nghe mic (`listen`) |
 | `get_wake_endpoint` | Trả địa chỉ để loa/thiết bị khác POST trigger từ đánh thức về HA |

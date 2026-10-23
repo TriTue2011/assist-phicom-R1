@@ -78,8 +78,6 @@ class R1MicServer:
         self._server: asyncio.Server | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._on_state: list[Callable[[], None]] = []
-        #: Máy chủ đèn quyền shell trên loa có chạy không (APK báo): None = chưa biết / loa chưa nối.
-        self.den_san_sang: bool | None = None
         #: Âm lượng NHẠC của loa (APK báo): ``(mức, tối đa)``; None = chưa biết / loa chưa nối / APK cũ không báo.
         self.am_luong: tuple[int, int] | None = None
         #: Gọi mỗi khi APK xác thực thành công (hello đúng khoá): dùng để đóng «cửa ghép khoá».
@@ -173,13 +171,6 @@ class R1MicServer:
         """Gửi một khúc PCM16 16 kHz mono xuống APK loa (cùng kết nối đang nhận mic)."""
         await self._gui_khung(pcm)
 
-    async def gui_hieu_ung(self, ma: int) -> None:
-        """Hiệu ứng đèn CÓ SẴN của firmware (ID trong ``den_firmware.ID_HOP_LE``). Hợp đồng khung với ``LenhDieuKhien.java``."""
-        from .den_firmware import ID_HOP_LE
-        if isinstance(ma, bool) or not isinstance(ma, int) or ma not in ID_HOP_LE:
-            raise ValueError(f"hiệu ứng đèn ngoài danh sách cho phép: {ma!r}")
-        await self._gui_khung(json.dumps({"type": "den_hieu_ung", "id": ma}, separators=(",", ":")).encode())
-
     async def gui_am_luong(self, muc: int) -> None:
         """Đặt âm lượng NHẠC của loa (0–``VOL_MAX``) qua APK (``AudioManager.setStreamVolume``). Hợp đồng khung với
         ``LenhDieuKhien.java``. APK trả lại ``am_luong_trang_thai`` với mức thật."""
@@ -191,23 +182,6 @@ class R1MicServer:
     async def hoi_am_luong(self) -> None:
         """Hỏi APK mức âm lượng hiện tại; APK trả ``am_luong_trang_thai``."""
         await self._gui_khung(b'{"type":"am_hoi"}')
-
-    async def gui_den_vien(self, muc: int) -> None:
-        """Đèn viền (CHỈ trắng) mức 0–255 qua APK loa → máy chủ đèn quyền shell. Hợp đồng khung với
-        ``LenhDieuKhien.java`` (khoá đúng thứ tự, dạng tách gọn)."""
-        if isinstance(muc, bool) or not isinstance(muc, int) or not 0 <= muc <= 255:
-            raise ValueError(f"mức đèn viền ngoài 0–255: {muc!r}")
-        await self._gui_khung(json.dumps({"type": "den_vien", "muc": muc}, separators=(",", ":")).encode())
-
-    async def gui_den_day(self, rgb: str) -> None:
-        """Đèn đáy RGB: sáu số hex viết thường."""
-        if not isinstance(rgb, str) or len(rgb) != 6 or any(c not in "0123456789abcdef" for c in rgb):
-            raise ValueError(f"màu đèn đáy phải là 6 số hex thường: {rgb!r}")
-        await self._gui_khung(json.dumps({"type": "den_day", "rgb": rgb}, separators=(",", ":")).encode())
-
-    async def hoi_den(self) -> None:
-        """Hỏi APK máy chủ đèn có chạy không; APK trả ``den_trang_thai``."""
-        await self._gui_khung(b'{"type":"den_hoi"}')
 
     async def set_music_light(self, ma: int, gia_tri: int) -> None:
         """Đặt đèn theo nhạc của firmware qua APK loa (mã/giá trị xem ``const.MUSIC_LIGHT_*``).
@@ -270,7 +244,6 @@ class R1MicServer:
                     self.khi_sai_khoa()
                 return
             self._writer = writer
-            self.den_san_sang = None
             self.am_luong = None
             if self.khi_xac_thuc is not None:
                 self.khi_xac_thuc()
@@ -296,13 +269,7 @@ class R1MicServer:
                                     self.am_luong = (muc, toi_da)
                                     self._notify_state()
                             continue
-                        if loai == "den_trang_thai":
-                            # Chỉ coi là sẵn sàng khi APK báo ĐÈN FIRMWARE (APK cũ dùng máy chủ shell không báo che_do).
-                            moi = ctrl.get("san_sang") is True and ctrl.get("che_do") == "firmware"
-                            if moi != self.den_san_sang:
-                                self.den_san_sang = moi
-                                self._notify_state()
-                        continue
+                        continue                    # khung điều khiển khác: bỏ qua
                     # PCM16 phải đủ cặp byte: khung rỗng bỏ qua, byte lẻ chuyển sang khung sau
                     # để mẫu không bị lệch một byte về sau.
                     payload = du + payload
@@ -313,7 +280,6 @@ class R1MicServer:
             finally:
                 if self._writer is writer:
                     self._writer = None
-                    self.den_san_sang = None
                     self.am_luong = None
                 self._mic.note_inbound(False)
                 self._notify_state()

@@ -3,14 +3,15 @@
  * Mặc định chỉ hiện tiêu đề + nút «Cài đặt»; bấm nút mới mở bảng cài đặt, chia ba nhóm:
  *   Âm thanh  — âm lượng, EQ 5 dải, tăng mic, tắt mic; khử tạp / AGC / bộ hạn đỉnh (CHỈ ĐỌC: là
  *               tuỳ chọn của mục cài đặt, không phải thực thể; sửa ở trang Tuỳ chọn của tích hợp);
- *   Ánh sáng  — đèn theo chức năng (bật/tắt, đèn viền trắng, màu đèn đáy, hiệu ứng, độ sáng),
- *               hiệu ứng khi phát nhạc, danh mục hiệu ứng;
+ *   Ánh sáng  — mục «Thử đèn» RIÊNG (chọn vùng, hiệu ứng, thông số rồi bấm Thử; không lưu), và cài đặt đèn theo
+ *               chức năng: mỗi chức năng có bật/tắt + hai vùng (đáy, viền), mỗi vùng một hiệu ứng với bộ thông số
+ *               RIÊNG của hiệu ứng đó (form dựng từ danh mục ``danh_muc`` do HA gửi);
  *   Kết nối   — host, cổng, ha_url, khoá bộ đàm (chỉ «đã có / chưa có», KHÔNG hiện giá trị khoá).
  *
  * Thẻ KHÔNG gọi loa: chỉ đọc thực thể HA (sensor.r1_cai_dat và các thực thể EQ / âm lượng / mic) và
  * gọi dịch vụ HA (number.set_value, switch.turn_on/off, r1_speaker.set_light_function,
- * r1_speaker.set_music_light, r1_speaker.preview_light). Đèn chỉ sáng khi có dịch vụ đèn trên loa
- * (CHƯA có); thẻ nói rõ điều đó thay vì giả vờ.
+ * r1_speaker.preview_light, r1_speaker.stop_preview_light). Hiệu ứng chạy trên loa qua ADB (HA nối adb-server hoặc
+ * nối thẳng loa); thẻ báo đang đi đường nào và lỗi nếu có.
  *
  * Cấu hình tối thiểu:   type: custom:r1-settings-card
  * Nhiều loa:            device_id: <mã thiết bị>
@@ -19,7 +20,7 @@
  */
 (function () {
   "use strict";
-  var BUILD = "2026-10-22.20";
+  var BUILD = "2026-10-23.30";
 
   var PLATFORM = "r1_speaker";
   var FUNCTIONS = ["cho", "nghe", "nghi", "phan_hoi", "dam_thoai", "phat_nhac", "loi", "tat_mic"];
@@ -44,20 +45,18 @@
         duplex_duck: "Cắt vọng: bỏ tiếng mic nhỏ khi HA đang phát", duplex_duck_db: "Ngưỡng mức tiếng cắt vọng (dBFS)" },
       read_only: "Chỉ đọc — sửa ở trang Tuỳ chọn của tích hợp", noise: "Khử tạp âm",
       agc: "Tự chỉnh mức (AGC)", limiter: "Bộ hạn đỉnh", on: "Bật", off: "Tắt", goto: "Mở tuỳ chọn",
-      sink_pending: "Chưa có dịch vụ đèn trên loa: cài đặt được lưu nhưng đèn CHƯA sáng.",
-      sink_svc: "Loa chưa sẵn sàng điều khiển đèn bằng hiệu ứng firmware: hãy cài APK mới nhất lên loa.",
-      fw_sang: "Đèn firmware không chỉnh độ sáng từng chức năng: 0 = tắt, lớn hơn 0 = bật. Màu làm tròn về bảng màu của firmware; thở và nháy chạy gốc, các hiệu ứng còn lại chạy bằng cách đổi liên tục màu.",
-      sink_lost: "Dịch vụ đèn trên loa không trả lời.", sink_ready: "Dịch vụ đèn: sẵn sàng",
-      sink_err: "Lỗi gần nhất",
+      sink_pending: "Chưa có đường ADB tới loa: cài đặt được lưu nhưng đèn CHƯA sáng.",
+      sink_ready: "Đèn: ADB sẵn sàng", sink_err: "Lỗi gần nhất",
+      adb_server: "qua adb-server", adb_direct: "nối thẳng loa", adb_idle: "chưa dùng", adb_lbl: "Đường ADB",
+      thu_title: "Thử đèn", thu_note: "Chạy tạm vài giây rồi tự trả đèn về trạng thái thật. Không lưu gì; cài đặt từng chức năng nằm ở dưới.",
+      zone: "Vùng", zone_day: "Đèn đáy (15 đèn RGB)", zone_vien: "Đèn viền (24 đèn, chỉ trắng)",
+      thu_run: "Thử", thu_stop: "Dừng thử", thu_secs: "Thời gian thử (giây)", thu_on: "Đang thử",
+      fn_title: "Cài đặt đèn theo chức năng", zone_off: "Tắt",
       fn: { cho: "Chờ / từ đánh thức", nghe: "Đang nghe", nghi: "Đang nghĩ", phan_hoi: "Đang trả lời",
-            dam_thoai: "Đàm thoại", phat_nhac: "Phát nhạc (hiệu ứng của HA)", loi: "Lỗi", tat_mic: "Tắt mic" },
-      enabled: "Bật", rim: "Đèn viền (chỉ trắng)", color: "Màu đèn đáy", effect: "Hiệu ứng",
-      brightness: "Độ sáng", speed: "Tốc độ hiệu ứng", preview: "Thử", active: "đang áp dụng", proposal: "mặc định đề xuất, chưa đo",
-      no_effect: "Không (sáng cố định)", red_warn: "Đỏ chưa xác nhận trên đèn đáy",
-      music: "Hiệu ứng khi phát nhạc",
+            dam_thoai: "Đàm thoại", phat_nhac: "Phát nhạc", loi: "Lỗi", tat_mic: "Tắt mic" },
+      enabled: "Bật", effect: "Hiệu ứng", active: "đang áp dụng", proposal: "mặc định đề xuất, chưa đo",
       fw: "Đèn theo nhạc của firmware (chỉnh ở các thực thể «Đèn theo nhạc», «Độ sáng/Sắc độ đèn nhạc»)",
       fw_on: "bật", fw_luma: "luma", fw_chroma: "chroma", unknown: "không rõ",
-      catalog: "Danh mục hiệu ứng", source: "nguồn",
       host: "Địa chỉ loa", port: "Cổng điều khiển / EQ", mic: "Mic (host:cổng)",
       play: "Phát về loa (host:cổng)", wake: "Từ đánh thức chạy ở", ha_url: "Địa chỉ HA loa gọi tới",
       key: "Khoá bộ đàm", key_set: "Đã có (không hiện giá trị)", key_unset: "Chưa có", empty: "(trống)",
@@ -87,20 +86,18 @@
       read_only: "Read-only — change it on the integration's Options page",
       noise: "Noise suppression", agc: "Auto gain (AGC)", limiter: "Peak limiter", on: "On", off: "Off",
       goto: "Open options",
-      sink_pending: "No light service on the speaker yet: settings are saved but the light does NOT shine.",
-      sink_svc: "The speaker is not ready for firmware light effects: install the latest APK on the speaker.",
-      fw_sang: "Firmware lights have no per-function brightness: 0 = off, above 0 = on. Colours snap to the firmware palette; breathe and blink run natively, other effects run by cycling colours.",
-      sink_lost: "The light service on the speaker is not answering.", sink_ready: "Light service: ready",
-      sink_err: "Last error",
+      sink_pending: "No ADB path to the speaker yet: settings are saved but the light does NOT shine.",
+      sink_ready: "Light: ADB ready", sink_err: "Last error",
+      adb_server: "via adb-server", adb_direct: "straight to the speaker", adb_idle: "not used yet", adb_lbl: "ADB path",
+      thu_title: "Try a light", thu_note: "Runs for a few seconds, then the lights return to their real state. Nothing is saved; per-function settings are below.",
+      zone: "Zone", zone_day: "Base light (15 RGB LEDs)", zone_vien: "Rim light (24 LEDs, white only)",
+      thu_run: "Try", thu_stop: "Stop trying", thu_secs: "Try time (seconds)", thu_on: "Trying",
+      fn_title: "Light settings per function", zone_off: "Off",
       fn: { cho: "Idle / wake word", nghe: "Listening", nghi: "Thinking", phan_hoi: "Responding",
-            dam_thoai: "Conversation", phat_nhac: "Music playing (HA effect)", loi: "Error", tat_mic: "Mic muted" },
-      enabled: "On", rim: "Rim light (white only)", color: "Base colour", effect: "Effect",
-      brightness: "Brightness", speed: "Effect speed", preview: "Try", active: "in effect", proposal: "suggested default, not measured",
-      no_effect: "None (steady)", red_warn: "Red is unconfirmed on the base light",
-      music: "Light effect while music plays",
+            dam_thoai: "Conversation", phat_nhac: "Music playing", loi: "Error", tat_mic: "Mic muted" },
+      enabled: "On", effect: "Effect", active: "in effect", proposal: "suggested default, not measured",
       fw: "Speaker firmware's own music light (set with the «Music light» entities)",
       fw_on: "on", fw_luma: "luma", fw_chroma: "chroma", unknown: "unknown",
-      catalog: "Effect catalogue", source: "source",
       host: "Speaker address", port: "Control / EQ port", mic: "Mic (host:port)",
       play: "Playback to speaker (host:port)", wake: "Wake word runs on", ha_url: "HA address the speaker calls",
       key: "Intercom key", key_set: "Set (value is never shown)", key_unset: "Not set", empty: "(empty)",
@@ -167,14 +164,13 @@
     }).sort(function (x, y) { return x.band - y.band; });
     var mst = stateOf(hass, ent.mute);
     var chuc = al.chuc_nang || {};
+    var zoneOf = function (z) { z = z || {}; return { effect: z.effect || "tat", params: z.params || {} }; };
     var fns = FUNCTIONS.filter(function (k) { return chuc[k]; }).map(function (k) {
       var p = chuc[k];
-      return { key: k, enabled: p.enabled === true, rim: p.rim === true, color: String(p.color || "#000000"),
-               effect: p.effect || "none", brightness: num(p.brightness, 0), tocDo: num(p.toc_do, 100), rimKieu: num(p.rim_kieu, 0), isDefault: p.mac_dinh === true,
+      return { key: k, enabled: p.enabled === true, day: zoneOf(p.day), vien: zoneOf(p.vien), isDefault: p.mac_dinh === true,
                active: al.dang_ap_dung === k };
     });
     var fw = al.den_nhac_firmware || {};
-    var music = fns.filter(function (f) { return f.key === "phat_nhac"; })[0] || null;
     return {
       found: !!(ent.settings || ent.volume || bands.length),
       gop: config.gop === true,
@@ -188,16 +184,10 @@
         adv: Array.isArray(am.nang_cao) ? am.nang_cao : [],
       },
       light: {
-        sink: { state: al.dich_vu_den || null, ready: al.dich_vu_den === "san_sang",
-                lost: al.dich_vu_den === "mat_ket_noi", svc: al.dich_vu_den === "CHO_DICH_VU_DEN", error: al.loi_dich_vu || null },
-        functions: fns, music: music, current: al.dang_ap_dung || null,
-        tocDoHoTro: Array.isArray(al.hieu_ung_co_toc_do) ? al.hieu_ung_co_toc_do : null,
-        tocDo: { min: num((al.toc_do || {}).min, 25), max: num((al.toc_do || {}).max, 400) },
-        fw: al.den_firmware === true, hoTro: Array.isArray(al.hieu_ung_ho_tro) ? al.hieu_ung_ho_tro : null,
-        bangMau: Array.isArray(al.bang_mau_firmware) ? al.bang_mau_firmware : [],
-        effects: (al.hieu_ung || []).map(function (h) {
-          return { id: h.id, name: h.ten, nameEn: h.ten_en, source: h.nguon, rimNote: h.vien };
-        }),
+        sink: { state: al.dich_vu_den || null, ready: al.dich_vu_den === "san_sang", error: al.loi_dich_vu || null,
+                path: al.duong_adb || null, mode: al.che_do_adb || null },
+        functions: fns, current: al.dang_ap_dung || null,
+        catalog: al.danh_muc || { day: [], vien: [] }, thu: al.thu || {},
         firmware: { on: fw.bat === undefined ? null : fw.bat, luma: fw.luma === undefined ? null : fw.luma,
                     chroma: fw.chroma === undefined ? null : fw.chroma },
       },
@@ -211,11 +201,21 @@
     };
   }
 
-  /* Trạng thái giao diện: ĐÓNG mặc định. */
-  function initialUi() { return { open: false, tab: "audio" }; }
+  /* Trạng thái giao diện: ĐÓNG mặc định. ``thu`` là mục Thử RIÊNG (chỉ nằm trong thẻ, không lưu ở HA). */
+  function initialUi() { return { open: false, tab: "audio", thu: { zone: "day", effect: null, params: {}, secs: 8 } }; }
   function reduceUi(ui, action) {
-    if (action.type === "toggle") return { open: !ui.open, tab: ui.tab };
-    if (action.type === "tab" && TABS.indexOf(action.tab) >= 0) return { open: ui.open, tab: action.tab };
+    var thu = ui.thu || initialUi().thu;
+    if (action.type === "toggle") return { open: !ui.open, tab: ui.tab, thu: thu };
+    if (action.type === "tab" && TABS.indexOf(action.tab) >= 0) return { open: ui.open, tab: action.tab, thu: thu };
+    if (action.type === "thu_zone" && (action.zone === "day" || action.zone === "vien")) {
+      return { open: ui.open, tab: ui.tab, thu: { zone: action.zone, effect: null, params: {}, secs: thu.secs } };
+    }
+    if (action.type === "thu_effect") return { open: ui.open, tab: ui.tab, thu: { zone: thu.zone, effect: action.effect, params: {}, secs: thu.secs } };
+    if (action.type === "thu_param") {
+      var p = {}; Object.keys(thu.params).forEach(function (k) { p[k] = thu.params[k]; }); p[action.key] = action.value;
+      return { open: ui.open, tab: ui.tab, thu: { zone: thu.zone, effect: thu.effect, params: p, secs: thu.secs } };
+    }
+    if (action.type === "thu_secs") return { open: ui.open, tab: ui.tab, thu: { zone: thu.zone, effect: thu.effect, params: thu.params, secs: action.secs } };
     return ui;
   }
 
@@ -235,14 +235,29 @@
     if (!sid) return null;
     var coerce = function (field, v) {
       if (field === "enabled" || field === "rim" || field === "bat") return v === true || v === "true" || v === "on";
-      if (field === "brightness" || field === "toc_do" || field === "sang" || field === "che_do" || field === "rim_kieu") return Math.round(Number(v));
+      if (field === "sang" || field === "che_do") return Math.round(Number(v));
       return String(v);
     };
-    if (a.type === "fn" && FUNCTIONS.indexOf(a.key) >= 0) {
-      var d = { entity_id: sid, function: a.key };
-      d[a.field] = coerce(a.field, a.value);
-      return ["r1_speaker", "set_light_function", d];
+    var zoneKey = function (z) { return z === "vien" ? "vien" : "day"; };
+    var val = function (kind, v) { return kind === "range" ? Math.round(Number(v)) : String(v); };
+    if (a.type === "fn" && FUNCTIONS.indexOf(a.key) >= 0 && a.field === "enabled") {
+      return ["r1_speaker", "set_light_function", { entity_id: sid, function: a.key, enabled: coerce("enabled", a.value) }];
     }
+    if (a.type === "fn_effect" && FUNCTIONS.indexOf(a.key) >= 0) {       // đổi hiệu ứng: thông số về mặc định của hiệu ứng mới
+      var e = { entity_id: sid, function: a.key }; e[zoneKey(a.zone)] = { effect: String(a.effect) };
+      return ["r1_speaker", "set_light_function", e];
+    }
+    if (a.type === "fn_param" && FUNCTIONS.indexOf(a.key) >= 0) {          // đổi MỘT thông số: giữ hiệu ứng, trộn vào thông số hiện có
+      var pr = {}; pr[a.param] = val(a.kind, a.value);
+      var f = { entity_id: sid, function: a.key }; f[zoneKey(a.zone)] = { params: pr };
+      return ["r1_speaker", "set_light_function", f];
+    }
+    if (a.type === "thu_run" && a.effect) {
+      var tp = {}; Object.keys(a.params || {}).forEach(function (k) { tp[k] = a.params[k]; });
+      return ["r1_speaker", "preview_light", { entity_id: sid, zone: zoneKey(a.zone), effect: String(a.effect), params: tp,
+                                                 seconds: Math.max(1, Math.min(30, Math.round(Number(a.secs) || 8))) }];
+    }
+    if (a.type === "thu_stop") return ["r1_speaker", "stop_preview_light", { entity_id: sid }];
     if (a.type === "opt" && typeof a.key === "string") {
       var kieuBat = !!a.bool;
       var val = kieuBat ? (a.value === true || a.value === "true" || a.value === "on") : Number(a.value);
@@ -253,14 +268,6 @@
       var mn = { entity_id: sid };
       mn[a.field] = coerce(a.field, a.value);
       return ["r1_speaker", "set_main_light", mn];
-    }
-    if (a.type === "music") {
-      var m = { entity_id: sid };
-      m[a.field] = coerce(a.field, a.value);
-      return ["r1_speaker", "set_music_light", m];
-    }
-    if (a.type === "preview" && FUNCTIONS.indexOf(a.key) >= 0) {
-      return ["r1_speaker", "preview_light", { entity_id: sid, function: a.key }];
     }
     return null;
   }
@@ -323,50 +330,93 @@
     return h;
   }
 
-  function effectSelect(attrs, selected, effects, t, lg) {
-    var h = "<select " + attrs + '><option value="none"' + (selected === "none" ? " selected" : "") + ">" +
-      esc(t.no_effect) + "</option>";
-    effects.forEach(function (e) {
-      h += '<option value="' + esc(e.id) + '"' + (selected === e.id ? " selected" : "") + ">" +
-        esc(lg === "vi" ? e.name : e.nameEn) + "</option>";
+  /* ── Nhóm Ánh sáng: danh mục hiệu ứng do HA gửi (den_hieu_ung.py); form dựng theo thông số CỦA TỪNG hiệu ứng. ── */
+  function nm(o, lg) { return lg === "vi" ? o.vi : o.en; }
+  function findEffect(L, zone, id) {
+    return ((L.catalog || {})[zone] || []).filter(function (e) { return e.id === id; })[0] || null;
+  }
+  function paramShown(p, values) { return !p.chi_khi || values[p.chi_khi.key] === p.chi_khi.value; }
+  function paramValue(p, values) { return values[p.key] === undefined ? p.default : values[p.key]; }
+  /* ``attrs``: chuỗi thuộc tính data-* gắn vào MỌI ô để bộ lắng nghe biết đây là thông số nào. */
+  function htmlParams(eff, values, attrs, lg) {
+    var h = "";
+    (eff ? eff.params : []).forEach(function (p) {
+      if (!paramShown(p, values)) return;
+      var cur = paramValue(p, values), a = attrs + ' data-param="' + esc(p.key) + '" data-kind="' + esc(p.kind) + '"';
+      h += '<div class="row"><label>' + esc(nm(p, lg)) + "</label>";
+      if (p.kind === "range") {
+        h += slider(a + ' data-unit="' + esc(p.unit || "") + '"', cur, p.min, p.max, p.step, false) +
+          '<span class="val">' + esc(cur) + esc(p.unit || "") + "</span>";
+      } else if (p.kind === "color") {
+        h += '<input type="color" ' + a + ' value="' + esc(hexOk(cur)) + '">';
+      } else {
+        h += "<select " + a + ">" + (p.options || []).map(function (o) {
+          return '<option value="' + esc(o.value) + '"' + (cur === o.value ? " selected" : "") + ">" + esc(nm(o, lg)) + "</option>";
+        }).join("") + "</select>";
+      }
+      h += "</div>";
     });
-    return h + "</select>";
+    return h;
+  }
+  function effectOptions(L, zone, selected, t, lg, withOff) {
+    var o = withOff ? '<option value="tat"' + (selected === "tat" ? " selected" : "") + ">" + esc(t.zone_off) + "</option>" : "";
+    ((L.catalog || {})[zone] || []).forEach(function (e) {
+      o += '<option value="' + esc(e.id) + '"' + (selected === e.id ? " selected" : "") + ">" + esc(nm(e, lg)) + "</option>";
+    });
+    return o;
   }
 
-  /* Đèn firmware: chỉ các hiệu ứng làm được; màu chọn trong bảng của firmware (màu gần nhất với màu đang lưu). */
-  function hieuUngDung(L) {
-    if (!L.hoTro) return L.effects;
-    return L.effects.filter(function (e) { return L.hoTro.indexOf(e.id) >= 0; });
-  }
-  function rgbOf(hex) { return [1, 3, 5].map(function (i) { return parseInt(String(hex).substr(i, 2), 16) || 0; }); }
-  function mauGan(hex, bang) {
-    var c = rgbOf(hex), best = null, bd = 1e12;
-    bang.forEach(function (b) {
-      var r = rgbOf(b.rgb), d = 0;
-      for (var i = 0; i < 3; i++) d += (c[i] - r[i]) * (c[i] - r[i]);
-      if (d < bd) { bd = d; best = b; }
-    });
-    return best;
-  }
-  function mauSelect(attrs, hex, L, lg) {
-    var gan = mauGan(hexOk(hex), L.bangMau), o = "";
-    L.bangMau.forEach(function (b) {
-      o += '<option value="' + esc(b.rgb) + '"' + (gan && gan.rgb === b.rgb ? " selected" : "") + ">" +
-        esc(lg === "vi" ? b.ten : b.ten_en) + (b.tho ? "" : "") + "</option>";
-    });
-    return "<select " + attrs + ">" + o + "</select>";
+  /* Hiệu ứng + thông số ĐẦY ĐỦ của mục Thử (mặc định của hiệu ứng, phủ giá trị người dùng đã đổi). */
+  function thuEffective(L, ui) {
+    var thu = (ui && ui.thu) || initialUi().thu, list = (L.catalog || {})[thu.zone] || [];
+    var id = thu.effect && findEffect(L, thu.zone, thu.effect) ? thu.effect : (list[0] ? list[0].id : null);
+    var eff = id ? findEffect(L, thu.zone, id) : null, params = {};
+    (eff ? eff.params : []).forEach(function (p) { params[p.key] = thu.params[p.key] !== undefined ? thu.params[p.key] : p.default; });
+    (eff ? eff.params : []).forEach(function (p) { if (!paramShown(p, params)) delete params[p.key]; });
+    return { zone: thu.zone, effect: id, params: params, secs: thu.secs, def: eff };
   }
 
-  function htmlLight(m, t, lg) {
-    var L = m.light, h = '<div data-panel="light">';
-    var s = L.sink;
+  function htmlThu(L, ui, t, lg) {
+    var e = thuEffective(L, ui), dang = Object.keys(L.thu || {}).length > 0;
+    return '<section data-thu><details class="grp" open><summary><b>' + esc(t.thu_title) + "</b>" +
+      (dang ? ' <span class="tag">' + esc(t.thu_on) + "</span>" : "") + "</summary>" +
+      '<div class="note">' + esc(t.thu_note) + "</div>" +
+      '<div class="row"><label>' + esc(t.zone) + '</label><select data-thu-zone><option value="day"' + (e.zone === "day" ? " selected" : "") + ">" +
+      esc(t.zone_day) + '</option><option value="vien"' + (e.zone === "vien" ? " selected" : "") + ">" + esc(t.zone_vien) + "</option></select></div>" +
+      '<div class="row"><label>' + esc(t.effect) + "</label><select data-thu-effect>" + effectOptions(L, e.zone, e.effect, t, lg, false) + "</select></div>" +
+      htmlParams(e.def, e.params, "data-thu-param", lg) +
+      '<div class="row"><label>' + esc(t.thu_secs) + "</label>" + slider("data-thu-secs", e.secs, 1, 30, 1, false) +
+      '<span class="val">' + esc(e.secs) + "</span></div>" +
+      '<div class="row"><button class="sec" data-thu-run>' + esc(t.thu_run) + '</button><button class="sec" data-thu-stop>' + esc(t.thu_stop) + "</button></div>" +
+      "</details></section>";
+  }
+
+  function htmlZone(f, zone, L, t, lg) {
+    var z = f[zone], eff = z.effect === "tat" ? null : findEffect(L, zone, z.effect);
+    var base = 'data-fn="' + esc(f.key) + '" data-zone="' + zone + '"';
+    return '<div class="zone" data-zone-block="' + zone + '"><div class="zname">' + esc(zone === "day" ? t.zone_day : t.zone_vien) + "</div>" +
+      '<div class="row"><label>' + esc(t.effect) + "</label><select " + base + " data-fn-effect>" + effectOptions(L, zone, z.effect, t, lg, true) + "</select></div>" +
+      htmlParams(eff, z.params, base + " data-fn-param", lg) + "</div>";
+  }
+
+  function htmlFunction(f, L, t, lg) {
+    var key = esc(f.key);
+    return '<section class="fn' + (f.active ? " active" : "") + '" data-fn-block="' + key + '">' +
+      '<details class="grp"><summary><b>' + esc(t.fn[f.key] || f.key) + "</b>" + (f.active ? ' <span class="tag">' + esc(t.active) + "</span>" : "") + "</summary>" +
+      '<div class="row"><label>' + esc(t.enabled) + '</label><input type="checkbox" data-fn="' + key + '" data-field="enabled"' + (f.enabled ? " checked" : "") + "></div>" +
+      htmlZone(f, "day", L, t, lg) + htmlZone(f, "vien", L, t, lg) +
+      (f.isDefault ? '<div class="note">' + esc(t.proposal) + "</div>" : "") + "</details></section>";
+  }
+
+  function htmlLight(m, t, lg, ui) {
+    var L = m.light, h = '<div data-panel="light">', s = L.sink;
+    var via = s.path === "server" ? t.adb_server : (s.path === "direct" ? t.adb_direct : t.adb_idle);
     h += '<div class="sink ' + (s.ready ? "ok" : "warn") + '" data-sink>' +
-      esc(s.ready ? t.sink_ready : (s.lost ? t.sink_lost : (s.svc ? t.sink_svc : t.sink_pending))) +
+      esc(s.state === "CHO_PHIA_LOA" ? t.sink_pending : (s.ready ? t.sink_ready : t.sink_err)) + " — " + esc(t.adb_lbl) + ": " + esc(via) +
       (s.error ? " — " + esc(t.sink_err) + ": " + esc(s.error) : "") + "</div>";
-    L.functions.forEach(function (f) {
-      if (f.key === "phat_nhac") return;      // hiện riêng ở mục «hiệu ứng khi phát nhạc»
-      h += htmlFunction(f, L, t, lg);
-    });
+    h += htmlThu(L, ui, t, lg);
+    h += '<div class="gtitle"><b>' + esc(t.fn_title) + "</b></div>";
+    L.functions.forEach(function (f) { h += htmlFunction(f, L, t, lg); });
     // Đèn CHÍNH (RGB): mode 0–16 của firmware (cổng 8080, dịch vụ set_main_light). Mode 1 = cầu vồng đã test.
     var CHE_DO_CHINH = [[0, "Mặc định"], [1, "Cầu vồng (xoay vòng)"], [3, "Đơn sắc"], [2, "Mode 2"], [4, "Mode 4"], [5, "Mode 5"],
       [6, "Mode 6"], [8, "Mode 8"], [9, "Mode 9"], [10, "Mode 10"], [11, "Mode 11"], [12, "Mode 12"], [13, "Mode 13"],
@@ -381,54 +431,11 @@
       '<div class="row"><label>Tốc độ (firmware)</label>' + slider('data-main-field="toc_do"', 50, 1, 100, 1, false) +
       '<span class="val">50</span></div>' +
       '<div class="note">Đèn RGB chính theo mode của firmware (lệnh qua cổng 8080): chỉ mode 1 là cầu vồng đã kiểm; các mode khác chưa đặt tên, xem trên loa.</div></details></section>';
-    var mu = L.music;
-    if (mu) {
-      h += '<section data-music><details class="grp"><summary><b>' + esc(t.music) + "</b></summary>" +
-        '<div class="row"><label>' + esc(t.enabled) + '</label><input type="checkbox" data-music-field="enabled"' +
-        (mu.enabled ? " checked" : "") + "></div>" +
-        '<div class="row"><label>' + esc(t.effect) + "</label>" +
-        effectSelect('data-music-field="effect"', mu.effect, hieuUngDung(L), t, lg) + "</div>" +
-        '<div class="row"><label>' + esc(t.brightness) + "</label>" +
-        slider('data-music-field="brightness"', mu.brightness, 0, 100, 5, false) +
-        '<span class="val">' + esc(mu.brightness) + "</span></div>" +
-        (mu.isDefault ? '<div class="note">' + esc(t.proposal) + "</div>" : "") +
-        '<div class="note" data-fw>' + esc(t.fw) + ": " + esc(t.fw_on) + "=" +
-        esc(L.firmware.on === null ? t.unknown : (L.firmware.on ? t.on : t.off)) + ", " + esc(t.fw_luma) + "=" +
-        esc(L.firmware.luma === null ? t.unknown : L.firmware.luma) + ", " + esc(t.fw_chroma) + "=" +
-        esc(L.firmware.chroma === null ? t.unknown : L.firmware.chroma) + "</div></details></section>";
-    }
-    return h + "</div>";                     // danh mục hiệu ứng + nguồn đã bỏ khỏi thẻ (theo yêu cầu)
-  }
-
-  function htmlFunction(f, L, t, lg) {
-    var key = esc(f.key), d = 'data-fn="' + key + '" data-field=';
-    return '<section class="fn' + (f.active ? " active" : "") + '" data-fn-block="' + key + '">' +
-      '<details class="grp"><summary><b>' + esc(t.fn[f.key] || f.key) + "</b>" + (f.active ? ' <span class="tag">' + esc(t.active) + "</span>" : "") + "</summary>" +
-      '<div class="row"><label>' + esc(t.enabled) + "</label><input type=\"checkbox\" " + d + '"enabled"' +
-      (f.enabled ? " checked" : "") + "></div>" +
-      '<div class="row"><label>' + esc(t.rim) + "</label><input type=\"checkbox\" " + d + '"rim"' +
-      (f.rim ? " checked" : "") + "></div>" +
-      '<div class="row"><label>Hiệu ứng viền</label><select ' + d + '"rim_kieu">' +
-      ['<option value="0"' + (f.rimKieu === 0 ? " selected" : "") + ">Không</option>"].concat(
-        Array.from({ length: 24 }, function (_, i) {
-          return '<option value="' + (i + 1) + '"' + (f.rimKieu === i + 1 ? " selected" : "") + ">Chạy đuổi " + (i + 1) + "</option>";
-        })).join("") + "</select></div>" +
-      '<div class="row"><label>' + esc(t.color) + "</label>" + (L.fw && L.bangMau.length
-        ? mauSelect(d + '"color"', f.color, L, lg)
-        : '<input type="color" ' + d + '"color" value="' + esc(hexOk(f.color)) + '">') + "</div>" +
-      (!L.fw && isRed(f.color) ? '<div class="warn small">' + esc(t.red_warn) + "</div>" : "") +
-      '<div class="row"><label>' + esc(t.effect) + "</label>" + effectSelect(d + '"effect"', f.effect, hieuUngDung(L), t, lg) +
-      "</div>" +
-      (L.fw ? '<div class="note">' + esc(t.fw_sang) + "</div>" : "") +
-      '<div class="row"><label>' + esc(t.brightness) + "</label>" + slider(d + '"brightness"', f.brightness, 0, 100, 5, false) +
-      '<span class="val">' + esc(f.brightness) + "</span></div>" +
-      // Tốc độ: chỉ hiện khi hiệu ứng đang chọn do HA tự đổi màu theo nhịp (thở/nháy gốc của firmware có chu kỳ cố định).
-      (f.effect !== "none" && (!L.tocDoHoTro || L.tocDoHoTro.indexOf(f.effect) >= 0)
-        ? '<div class="row"><label>' + esc(t.speed) + "</label>" + slider(d + '"toc_do"', f.tocDo, L.tocDo.min, L.tocDo.max, 5, false) +
-          '<span class="val">' + esc(f.tocDo) + "%</span></div>"
-        : "") +
-      (f.isDefault ? '<div class="note">' + esc(t.proposal) + "</div>" : "") +
-      '<button class="sec" data-preview="' + key + '">' + esc(t.preview) + "</button></details></section>";
+    var mu = L.firmware;
+    h += '<div class="note" data-fw>' + esc(t.fw) + ": " + esc(t.fw_on) + "=" +
+      esc(mu.on === null ? t.unknown : (mu.on ? t.on : t.off)) + ", " + esc(t.fw_luma) + "=" +
+      esc(mu.luma === null ? t.unknown : mu.luma) + ", " + esc(t.fw_chroma) + "=" + esc(mu.chroma === null ? t.unknown : mu.chroma) + "</div>";
+    return h + "</div>";
   }
 
   function htmlConn(m, t) {
@@ -460,7 +467,7 @@
         '" aria-selected="' + (ui.tab === k ? "true" : "false") + '">' + esc(t[k]) + "</button>";
     });
     h += "</div>";
-    h += ui.tab === "light" ? htmlLight(m, t, lg) : (ui.tab === "conn" ? htmlConn(m, t) : htmlAudio(m, t));
+    h += ui.tab === "light" ? htmlLight(m, t, lg, ui) : (ui.tab === "conn" ? htmlConn(m, t) : htmlAudio(m, t));
     return h + "</ha-card>";
   }
 
@@ -476,6 +483,7 @@
     "background:transparent;color:inherit;cursor:pointer}", "button.sec{margin-top:4px}",
     ".warn{color:var(--error-color,#db4437)}", ".small{font-size:.8em}", ".note{font-size:.8em;opacity:.75}", ".grp{font-weight:600;margin-top:8px}", "input[type=number]{width:90px}", "pre.lenh{white-space:pre-wrap;word-break:break-all;font-size:.75em;user-select:all;margin:6px 0}",
     ".ok{color:var(--success-color,#43a047)}", ".sink{margin:8px 0;font-size:.9em}",
+    ".zone{margin:6px 0 6px 6px;padding-left:8px;border-left:2px solid var(--divider-color,#ddd)}", ".zname{font-weight:600;font-size:.9em}", ".gtitle{margin-top:14px}",
     ".tag{font-size:.75em;padding:1px 6px;border-radius:8px;background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff)}",
   ].join("");
 
@@ -566,7 +574,7 @@
         el.addEventListener("input", function () {
           var v = el.parentNode && el.parentNode.querySelector(".val");
           if (!v) return;
-          var dv = el.hasAttribute("data-mic-gain") ? " dB" : (el.dataset.eq ? " mB" : "");
+          var dv = el.hasAttribute("data-mic-gain") ? " dB" : (el.dataset.eq ? " mB" : (el.dataset.unit || ""));
           v.textContent = el.value + dv;
         });
       });
@@ -579,20 +587,42 @@
       if (mg) mg.addEventListener("change", function () { dispatch({ type: "micgain", value: mg.value }); });
       var mu = q("[data-mute]");
       if (mu) mu.addEventListener("change", function () { dispatch({ type: "mute", on: mu.checked }); });
-      all("[data-fn][data-field]", function (el) {
+      all("[data-fn][data-field]", function (el) {                      // chỉ ô «Bật» của chức năng
         el.addEventListener("change", function () {
-          dispatch({ type: "fn", key: el.dataset.fn, field: el.dataset.field,
-                     value: el.type === "checkbox" ? el.checked : el.value });
+          dispatch({ type: "fn", key: el.dataset.fn, field: el.dataset.field, value: el.checked });
         });
       });
+      all("[data-fn-effect]", function (el) {
+        el.addEventListener("change", function () {
+          dispatch({ type: "fn_effect", key: el.dataset.fn, zone: el.dataset.zone, effect: el.value });
+        });
+      });
+      all("[data-fn-param]", function (el) {
+        el.addEventListener("change", function () {
+          dispatch({ type: "fn_param", key: el.dataset.fn, zone: el.dataset.zone, param: el.dataset.param, kind: el.dataset.kind, value: el.value });
+        });
+      });
+      // Mục Thử: trạng thái chỉ nằm trong thẻ; chỉ nút «Thử» mới gọi dịch vụ.
+      var ui = function (a) { self._ui = reduceUi(self._ui, a); self._render(true); };
+      var tz = q("[data-thu-zone]");
+      if (tz) tz.addEventListener("change", function () { ui({ type: "thu_zone", zone: tz.value }); });
+      var te = q("[data-thu-effect]");
+      if (te) te.addEventListener("change", function () { ui({ type: "thu_effect", effect: te.value }); });
+      all("[data-thu-param]", function (el) {
+        el.addEventListener("change", function () { ui({ type: "thu_param", key: el.dataset.param, value: el.dataset.kind === "range" ? Number(el.value) : el.value }); });
+      });
+      var ts = q("[data-thu-secs]");
+      if (ts) ts.addEventListener("change", function () { ui({ type: "thu_secs", secs: Number(ts.value) }); });
+      var tr = q("[data-thu-run]");
+      if (tr) tr.addEventListener("click", function () {
+        var e = thuEffective(self._model().light, self._ui);
+        dispatch({ type: "thu_run", zone: e.zone, effect: e.effect, params: e.params, secs: e.secs });
+      });
+      var tstop = q("[data-thu-stop]");
+      if (tstop) tstop.addEventListener("click", function () { dispatch({ type: "thu_stop" }); });
       all("[data-main-field]", function (el) {
         el.addEventListener("change", function () {
           dispatch({ type: "main", field: el.dataset.mainField, value: el.type === "checkbox" ? el.checked : el.value });
-        });
-      });
-      all("[data-music-field]", function (el) {
-        el.addEventListener("change", function () {
-          dispatch({ type: "music", field: el.dataset.musicField, value: el.type === "checkbox" ? el.checked : el.value });
         });
       });
       all("[data-opt]", function (el) {
@@ -600,9 +630,6 @@
           var bat = el.dataset.bool === "1";
           dispatch({ type: "opt", key: el.dataset.opt, bool: bat, value: bat ? el.checked : el.value });
         });
-      });
-      all("[data-preview]", function (el) {
-        el.addEventListener("click", function () { dispatch({ type: "preview", key: el.dataset.preview }); });
       });
     }
   }
@@ -621,6 +648,6 @@
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = { buildModel: buildModel, renderHtml: renderHtml, initialUi: initialUi, reduceUi: reduceUi,
-                       makeCall: makeCall, TEXT: TEXT, FUNCTIONS: FUNCTIONS, TABS: TABS };
+                       makeCall: makeCall, thuEffective: thuEffective, TEXT: TEXT, FUNCTIONS: FUNCTIONS, TABS: TABS };
   }
 })();

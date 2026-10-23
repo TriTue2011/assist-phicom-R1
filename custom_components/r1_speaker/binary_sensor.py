@@ -54,9 +54,8 @@ class R1IntercomLink(R1MicEntity, BinarySensorEntity):
 
 
 class R1LightService(R1MicEntity, BinarySensorEntity):
-    """Máy chủ đèn quyền shell trên loa có chạy không. Trên loa KHÔNG giữ được tiến trình quyền shell sau
-    khi loa khởi động lại, nên tắt = chưa chạy: chạy ``scripts/den_loa.sh <IP-loa> giam-sat`` ở một máy
-    trong nhà. Không có dịch vụ này thì cài đặt đèn vẫn được lưu nhưng đèn không sáng."""
+    """Đường ADB tới loa (chạy hiệu ứng đèn) dùng được không: bật khi đã nối thành công và lần áp đèn gần nhất
+    không lỗi. Thuộc tính ``duong_adb`` cho biết đang đi qua adb-server (``server``) hay nối thẳng (``direct``)."""
 
     _attr_translation_key = "light_service"
     _attr_device_class = BinarySensorDeviceClass.RUNNING
@@ -66,20 +65,32 @@ class R1LightService(R1MicEntity, BinarySensorEntity):
         super().__init__(entry, "light_service")
 
     @property
-    def _server(self):
-        return self._entry.runtime_data.mic_server
+    def _lights(self):
+        return self._entry.runtime_data.lights
 
     @property
     def available(self) -> bool:
-        return self._server.receiving          # APK chưa nối thì không biết
+        return True
 
     @property
     def is_on(self) -> bool | None:
-        return self._server.den_san_sang
+        """ADB tới loa đang dùng được: đã nối thành công (qua adb-server hoặc nối thẳng) và lần áp đèn gần nhất không lỗi."""
+        dev = getattr(self._lights.sink, "dev", None)
+        if dev is None:
+            return None
+        if self._lights.last_error is not None:
+            return False
+        return True if dev.duong else None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        dev = getattr(self._lights.sink, "dev", None)
+        return {"duong_adb": getattr(dev, "duong", None), "che_do_adb": getattr(dev, "mode", None),
+                "loi": self._lights.last_error}
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        self.async_on_remove(self._server.add_state_listener(self.async_write_ha_state))
+        self.async_on_remove(self._lights.add_listener(self.async_write_ha_state))
 
 
 class R1WakeTrigger(R1MicEntity, BinarySensorEntity):

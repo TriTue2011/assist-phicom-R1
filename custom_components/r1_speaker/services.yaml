@@ -55,59 +55,14 @@ set_light_function:
     enabled:
       selector:
         boolean:
-    rim:
+    day:
+      example: '{"effect": "tho", "params": {"mau": "#0000ff", "do_sang": 60, "toc_do": 100}}'
       selector:
-        boolean:
-    color:
-      example: "#0000ff"
+        object:
+    vien:
+      example: '{"effect": "chay_duoi", "params": {"do_sang": 60, "chieu": "xuoi"}}'
       selector:
-        text:
-    effect:
-      selector:
-        select:
-          translation_key: light_effect
-          options: [none, tho, cau_vong, nhap_nhay, nhip_tim, phao_hoa, chop]
-    rim_kieu:
-      selector:
-        number:
-          min: 0
-          max: 24
-          mode: slider
-    brightness:
-      selector:
-        number:
-          min: 0
-          max: 100
-          mode: slider
-    toc_do:
-      selector:
-        number:
-          min: 25
-          max: 400
-          step: 5
-          unit_of_measurement: "%"
-          mode: slider
-set_music_light:
-  fields:
-    entity_id:
-      required: true
-      selector:
-        entity:
-          integration: r1_speaker
-    enabled:
-      selector:
-        boolean:
-    effect:
-      selector:
-        select:
-          translation_key: light_effect
-          options: [none, tho, cau_vong, nhap_nhay, nhip_tim, phao_hoa, chop]
-    brightness:
-      selector:
-        number:
-          min: 0
-          max: 100
-          mode: slider
+        object:
 preview_light:
   fields:
     entity_id:
@@ -115,18 +70,33 @@ preview_light:
       selector:
         entity:
           integration: r1_speaker
-    function:
+    zone:
       required: true
       selector:
         select:
-          translation_key: light_function
-          options: [cho, nghe, nghi, phan_hoi, dam_thoai, phat_nhac, loi, tat_mic]
+          options: [day, vien]
+    effect:
+      required: true
+      example: cau_vong_xoay
+      selector:
+        text:
+    params:
+      example: '{"toc_do": 150, "chieu": "nguoc"}'
+      selector:
+        object:
     seconds:
       selector:
         number:
           min: 1
           max: 30
           mode: box
+stop_preview_light:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
 start_duplex:
   fields:
     entity_id:

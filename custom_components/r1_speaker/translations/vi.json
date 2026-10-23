@@ -132,7 +132,9 @@
           "ha_url": "Địa chỉ HA mà loa gọi tới (trống = tự đoán)",
           "rotate_intercom_key": "Đổi khoá URL bộ đàm (các dòng go2rtc cũ sẽ ngừng chạy)",
           "nang_cao": "Chỉnh thông số nâng cao (cổng thoại, khử tạp, song công)",
-          "ghep_lai_apk": "Ghép lại APK (sinh khoá mới; APK tự lấy, không phải copy)"
+          "ghep_lai_apk": "Ghép lại APK (sinh khoá mới; APK tự lấy, không phải copy)",
+          "adb_server": "Địa chỉ adb-server (dùng khi chế độ là tự nhận diện hoặc server)",
+          "adb_mode": "Cách nối ADB tới loa: auto (tự nhận diện), server (qua adb-server), direct (nối thẳng loa)"
         }
       },
       "nang_cao": {
@@ -198,7 +200,7 @@
     },
     "set_light_function": {
       "name": "Đặt đèn theo chức năng",
-      "description": "Đổi cài đặt đèn của một chức năng (bật/tắt, đèn viền, màu đèn đáy, hiệu ứng, độ sáng). Đèn viền chỉ có màu trắng. Lưu ở HA; chưa gửi gì tới loa cho tới khi có dịch vụ đèn trên loa (CHƯA có).",
+      "description": "Đổi bật/tắt và hiệu ứng của vùng đáy / viền cho một chức năng. Mỗi vùng là {effect, params}; thông số theo từng hiệu ứng (danh mục ở thuộc tính danh_muc của cảm biến cài đặt). Đổi hiệu ứng thì thông số về mặc định của hiệu ứng mới.",
       "fields": {
         "entity_id": {
           "name": "Loa",
@@ -212,61 +214,39 @@
           "name": "Bật",
           "description": "Tắt = không có đèn khi chức năng này đang hiệu lực."
         },
-        "rim": {
-          "name": "Đèn viền (trắng)",
-          "description": "Dùng đèn viền trắng cùng độ sáng."
+        "day": {
+          "name": "Đèn đáy",
+          "description": "{effect, params} của đèn đáy (15 đèn RGB)."
         },
-        "color": {
-          "name": "Màu đèn đáy",
-          "description": "#rrggbb của đèn đáy. Mới xác nhận xanh lá và xanh dương; đỏ chưa chắc."
-        },
-        "effect": {
-          "name": "Hiệu ứng",
-          "description": "Hiệu ứng trong danh mục, hoặc không (sáng cố định)."
-        },
-        "brightness": {
-          "name": "Độ sáng",
-          "description": "0–100."
-        }
-      }
-    },
-    "set_music_light": {
-      "name": "Đặt đèn khi phát nhạc",
-      "description": "Hiệu ứng đèn lúc phát nhạc (chức năng «Phát nhạc (hiệu ứng của HA)», KHÁC đèn nhạc của firmware ở các thực thể «Đèn theo nhạc»): bật/tắt, hiệu ứng, độ sáng. Đèn theo nhạc của firmware điều khiển bằng các thực thể «Đèn theo nhạc», «Độ sáng/Sắc độ đèn nhạc».",
-      "fields": {
-        "entity_id": {
-          "name": "Loa",
-          "description": "Thực thể r1_speaker bất kỳ của loa."
-        },
-        "enabled": {
-          "name": "Bật",
-          "description": "Tắt = HA không chạy hiệu ứng đèn khi phát nhạc."
-        },
-        "effect": {
-          "name": "Hiệu ứng",
-          "description": "Hiệu ứng trong danh mục, hoặc không."
-        },
-        "brightness": {
-          "name": "Độ sáng",
-          "description": "0–100."
+        "vien": {
+          "name": "Đèn viền",
+          "description": "{effect, params} của đèn viền (24 đèn, chỉ trắng)."
         }
       }
     },
     "preview_light": {
       "name": "Thử đèn",
-      "description": "Hiện đèn của một chức năng vài giây rồi trả về trạng thái thật. Cần dịch vụ đèn trên loa.",
+      "description": "Chạy tạm một hiệu ứng ở một vùng vài giây rồi tự trả về trạng thái thật. Không lưu gì.",
       "fields": {
         "entity_id": {
           "name": "Loa",
           "description": "Thực thể r1_speaker bất kỳ của loa."
         },
-        "function": {
-          "name": "Chức năng",
-          "description": "Chức năng cần thử."
+        "zone": {
+          "name": "Vùng",
+          "description": "day (đáy) hoặc vien (viền)."
+        },
+        "effect": {
+          "name": "Hiệu ứng",
+          "description": "Mã hiệu ứng trong danh mục của vùng, hoặc tat."
+        },
+        "params": {
+          "name": "Thông số",
+          "description": "Thông số của hiệu ứng; thiếu thì dùng mặc định."
         },
         "seconds": {
           "name": "Số giây",
-          "description": "Hiện bao lâu (1–30)."
+          "description": "Thử bao lâu (1–30)."
         }
       }
     },
@@ -287,6 +267,16 @@
           "description": "Giá trị (số hoặc true/false)"
         }
       }
+    },
+    "stop_preview_light": {
+      "name": "Dừng thử đèn",
+      "description": "Dừng hiệu ứng đang thử và trả đèn về trạng thái thật.",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        }
+      }
     }
   },
   "selector": {
@@ -300,17 +290,6 @@
         "phat_nhac": "Phát nhạc (hiệu ứng của HA)",
         "loi": "Lỗi",
         "tat_mic": "Tắt mic"
-      }
-    },
-    "light_effect": {
-      "options": {
-        "none": "Không (sáng cố định)",
-        "tho": "Thở",
-        "cau_vong": "Cầu vồng",
-        "nhap_nhay": "Nhấp nháy",
-        "nhip_tim": "Nhịp tim",
-        "phao_hoa": "Pháo hoa nhỏ",
-        "chop": "Chớp"
       }
     }
   }

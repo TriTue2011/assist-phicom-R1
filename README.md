@@ -27,7 +27,7 @@ Dành cho người phát triển (trạng thái đã kiểm, chạy test, cấu 
 |---|---|
 | Home Assistant **2026.2 trở lên** | bản thử nghiệm là **2026.2.3**; `hacs.json` ghi tối thiểu 2026.2.0. Chưa thử bản cũ hơn. |
 | Loa Phicomm R1 cùng mạng LAN với HA | nên đặt IP tĩnh/giữ chỗ DHCP cho loa. Cổng điều khiển/EQ mặc định **8080**. |
-| `adb` (Android platform-tools) | chỉ khi cài APK hoặc đo/thử đèn, phím trên loa. |
+| ADB tới loa (cổng `5555`) | **đèn chạy qua ADB**: custom tự nối thẳng loa, hoặc dùng `adb-server` (`127.0.0.1:5037`) nếu có. Cần `adb` trên máy bạn chỉ khi cài APK lần đầu. |
 
 **Chỉ cần để kiểm thử hoặc tự build lại APK (không cần để dùng):**
 
@@ -113,20 +113,21 @@ Chi tiết từng bước và kiểm tra sau cài: `docs/CAI-APK.md`.
 
 ## 5. Đèn
 
-Loa có hai nhóm đèn, điều khiển bằng lệnh `/system/bin/lights_test set <mặt nạ> <6 số hex RRGGBB>` **chạy trên loa**:
+Loa có **15 đèn đáy RGB** và **24 đèn viền chỉ trắng**. HA điều khiển bằng **hiệu ứng chạy ngay trên loa**: custom nói
+**ADB** tới loa (qua adb-server nếu có, **không thì nối thẳng**, tự nhận diện) và chạy script `r1den.sh` ghi thẳng vào đèn.
+Không cần APK, không cần máy chủ quyền shell, **không bắt buộc có adb-server**.
 
-| Đèn | Mặt nạ | Màu | Đã kiểm |
-|---|---|---|---|
-| **Viền** | `7fffff8000` | **chỉ trắng**: bật `ffffff`, tắt `000000`, mờ `404040` | chủ máy xác nhận bằng mắt |
-| **Đáy** | `7fff` | RGB | **xanh lá `00ff00` và xanh dương `0000ff` đã xác nhận**; **đỏ `ff0000` chưa chắc** |
-
-
-
-**Đèn chạy bằng hiệu ứng CÓ SẴN của firmware, như app AI box.** HA gửi khung `den_hieu_ung` xuống APK `vn.r1.bodam`, APK gọi
-`msgcenter.sendMsg(0x1000, ID, 0)`; không cần máy chủ quyền shell hay máy ngoài (cần APK mới). Chỉ có tập màu của firmware (đỏ,
-xanh lá, xanh dương, cam, tím, lục lam, trắng) và hiệu ứng sáng cố định / thở / nháy gốc; cầu vồng, nhịp tim, pháo hoa, chớp chạy
-bằng chuỗi ID. Không chỉnh được độ sáng riêng (0 = tắt). Chi tiết: `docs/CAI-DAT-CHI-TIET.md` mục 5. **Tên màu của từng ID chưa xác nhận
-bằng mắt**; mọi giá trị mặc định của bảng chức năng đều **chưa đo**.
+* **Đèn viền (chỉ trắng):** `sang` (sáng liên tục: độ sáng), `chay_duoi` (chạy đuổi 24 đèn: độ sáng, tốc độ, chiều, độ dài đuôi),
+  `tho` (thở: độ sáng, tốc độ, độ sâu).
+* **Đèn đáy:** `co_dinh`, `tho`, `nhap_nhay`, `nhip_tim`, `chop`, `phao_hoa`, `cau_vong` (12 sắc), `cau_vong_fw` (6 màu),
+  `cau_vong_xoay` (mỗi đèn một màu), `sao_choi`. **Mỗi hiệu ứng có bộ thông số riêng** (màu, độ sáng, tốc độ, chiều...); cầu vồng,
+  pháo hoa và sao chổi nhiều màu **không** bắt chọn màu.
+* **Tám chức năng** (chờ, nghe, nghĩ, trả lời, đàm thoại, phát nhạc, lỗi, tắt mic) mỗi cái có bật/tắt và chọn hiệu ứng riêng cho
+  đáy và viền. Trên thẻ **Cài đặt → Ánh sáng** có mục **Thử đèn** riêng: chọn vùng, hiệu ứng, thông số rồi bấm *Thử* (tự
+  trả đèn về trạng thái thật sau vài giây, không lưu gì); trong từng cài đặt **không có nút Thử**.
+* Điều kiện: **adbd của loa chỉ phục vụ một kết nối TCP tại một thời điểm**; nếu client ADB khác đang giữ loa, dùng chế độ `server`
+  với một adb-server duy nhất hoặc ngắt client kia. Chi tiết, danh mục thông số, dịch vụ và gỡ rối: **[docs/DEN-LED.md](docs/DEN-LED.md)**;
+  bảng cài đặt: [docs/CAI-DAT-CHI-TIET.md](docs/CAI-DAT-CHI-TIET.md) mục 5.
 
 ## 6. Nối mic loa về HA
 
@@ -145,7 +146,7 @@ bằng mắt**; mọi giá trị mặc định của bảng chức năng đều 
 - **Mic chỉ gửi khi được bật.** APK không ghi âm ra bộ nhớ hay log, không tự khởi động cùng máy (không có receiver khởi động), không có wake-word, chỉ ghi
   khi bạn bật bằng nút trên màn hình, nút giữa, hoặc lệnh kiểm thử. Tắt là dừng ghi, gửi khung `end` và đóng kết nối.
 - **Báo hiệu khi đang gửi:** APK chạy dịch vụ tiền cảnh với thông báo «Đang gửi mic về Home Assistant»; trong HA, `sensor.r1_trang_thai_mic` hiện `gui`.
-  **Nhưng:** loa không có màn hình nên thông báo gần như không ai thấy, và đèn báo chạy bằng hiệu ứng firmware (cần APK mới, mục 5; màu CHƯA xác nhận bằng mắt). Đừng coi hai thứ này
+  **Nhưng:** loa không có màn hình nên thông báo gần như không ai thấy, và đèn báo chạy qua ADB (mục 5; màu CHƯA xác nhận bằng mắt). Đừng coi hai thứ này
   là chỉ báo đủ cho người đứng cạnh loa.
 - Tắt mic bằng `switch.r1_tat_mic` trong HA đóng kết nối của loa (mục 6).
 - **Đường truyền không mã hoá**: khoá và tiếng đi qua TCP trơn trong LAN. Chỉ dùng trong mạng tin cậy; đầu nhận lọc theo IP loa và khoá nhưng IP có thể bị giả mạo trong LAN.

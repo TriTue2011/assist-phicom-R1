@@ -27,6 +27,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from . import den_chinh, giao_dien, lenh_apk, media_player, nang_cao
 from .client import R1Client
+from .const import ADB_PORT
 from .const import (CARD_GOP_URL, CARD_URL, CONF_INTERCOM_KEY, CONF_MIC_CHUA_GHEP, CONF_MIC_LISTEN_KEY, CONF_MIC_LISTEN_PORT, DOMAIN, SETTINGS_CARD_URL, TALK_CARD_URL,
                     WAKE_SPEAKER)
 from .cong_vao import PingView, WakeView
@@ -34,7 +35,8 @@ from .dam_thoai_ws import DamThoaiWsView
 from .ghep_khoa import GhepKhoaView
 from .nghe_ws import NgheWsView
 from .den import R1Lights, dang_ky_dich_vu as dang_ky_dich_vu_den
-from .den_apk import ApkLights
+from .adb_client import AdbDevice
+from .den_adb import AdbLights
 from .dam_thoai import R1Talk
 from .giu_nhac import MusicKeeper
 from .coordinator import R1ConfigEntry, R1Coordinator
@@ -42,7 +44,7 @@ from .intercom import IntercomView, MicView, R1Intercom, go2rtc_source, wake_end
 from .mic import R1Mic
 from .mic_server import R1MicServer
 from .playback import R1Playback
-from .settings import (DuplexSettings, TalkSettings, agc_settings, cong_nghe_trong, limiter_settings, mic_host_hieu_luc, noise_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
+from .settings import (adb_settings, DuplexSettings, TalkSettings, agc_settings, cong_nghe_trong, limiter_settings, mic_host_hieu_luc, noise_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
                        speaker_port, wake_mode)
 from .song_cong import DuplexView, R1Duplex
 
@@ -240,22 +242,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
     # còn ai nghe: cứ 2 giây một lượt nối hỏng và một dòng cảnh báo trong log).
     if not listen_key:
         entry.async_create_background_task(hass, coordinator.mic.run(), "r1_speaker mic")
-    # Đèn: mặc định CHƯA có dịch vụ đèn trên loa (NullLights) — chỉ lưu cài đặt, không gửi gì.
-    coordinator.lights = R1Lights(hass, entry, sink=ApkLights(coordinator.mic_server))
+    # Đèn: hiệu ứng chạy trên loa qua ADB (adb-server nếu có, không thì nối thẳng); xem den_adb.py.
+    adb_server, adb_mode = adb_settings(entry)
+    sink = AdbLights(AdbDevice(speaker_host(entry), ADB_PORT, adb_server, adb_mode))
+    coordinator.lights = R1Lights(hass, entry, sink=sink)
+    sink.khi_roi = coordinator.lights.ap_dung_lai        # phiên đèn đứt (loa khởi động lại, ADB rớt) thì áp lại
     await coordinator.lights.async_load()
     _don_thuc_the_cu(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     coordinator.lights.start()
-    # Loa nối vào / máy chủ đèn sẵn sàng hoặc rớt → áp lại đèn hiện tại; hỏi trạng thái máy chủ đèn định kỳ
-    # (nó do người dùng bật ngoài HA nên HA không tự biết lúc nó lên).
+    # Loa nối lại vào HA (vừa khởi động lại) → áp lại đèn hiện tại.
     entry.async_on_unload(coordinator.mic_server.add_state_listener(coordinator.lights.ap_dung_lai))
-
-    async def _hoi_den(_now=None) -> None:
-        if coordinator.mic_server.receiving:
-            with contextlib.suppress(ConnectionError, OSError, TimeoutError):
-                await coordinator.mic_server.hoi_den()
-
-    entry.async_on_unload(async_track_time_interval(hass, _hoi_den, timedelta(seconds=30)))
     return True
 
 

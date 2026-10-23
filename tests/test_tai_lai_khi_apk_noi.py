@@ -1,14 +1,14 @@
-"""Lưu tuỳ chọn khi APK đang nối và đèn firmware sẵn sàng: mục phải nạp lại được, không kẹt ở dỡ tải."""
+"""Lưu tuỳ chọn khi APK đang nối: mục phải nạp lại được, không kẹt ở dỡ tải."""
 
 import asyncio
 
 from homeassistant.config_entries import ConfigEntryState
 
 from .test_den_nhac import _cong_trong, _noi_apk
-from .test_mic_server import KHOA, khung_json
+from .test_mic_server import KHOA
 
 
-async def test_luu_tuy_chon_khi_apk_noi_va_den_san_sang_thi_nap_lai_duoc(hass, r1):
+async def test_luu_tuy_chon_khi_apk_dang_noi_thi_nap_lai_duoc(hass, r1):
     from custom_components.r1_speaker.const import DOMAIN
     from pytest_homeassistant_custom_component.common import MockConfigEntry
     port = _cong_trong()
@@ -18,13 +18,6 @@ async def test_luu_tuy_chon_khi_apk_noi_va_den_san_sang_thi_nap_lai_duoc(hass, r
     assert await hass.config_entries.async_setup(e.entry_id)
     await hass.async_block_till_done()
     reader, writer = await _noi_apk(e, port)
-    writer.write(khung_json({"type": "den_trang_thai", "san_sang": True, "che_do": "firmware"}))
-    await writer.drain()
-    for _ in range(50):
-        if e.runtime_data.mic_server.den_san_sang:
-            break
-        await asyncio.sleep(0.05)
-    assert e.runtime_data.mic_server.den_san_sang is True
     hass.config_entries.async_update_entry(
         e, options={"agc_enable": True, "agc_max_gain_db": 18.0, "limiter_enable": True})
     await asyncio.wait_for(hass.async_block_till_done(), 20)

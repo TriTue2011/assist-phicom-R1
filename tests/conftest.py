@@ -105,3 +105,17 @@ async def r1():
     await f.start()
     yield f
     await f.stop()
+
+
+@pytest.fixture(autouse=True)
+def _khong_adb_that(monkeypatch):
+    """Mục R1 dựng trong test không được thử nối ADB thật: sink đèn mặc định là ``NullLights`` (có ``dev`` để
+    test tuỳ chọn ADB đọc lại). Test của sink thật (``test_den_adb``) tự dựng ``AdbLights`` với thiết bị giả."""
+    from custom_components.r1_speaker.den_port import NullLights
+
+    def tao(dev):
+        n = NullLights()
+        n.dev = dev
+        return n
+
+    monkeypatch.setattr("custom_components.r1_speaker.AdbLights", tao)

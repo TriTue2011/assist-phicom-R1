@@ -177,6 +177,12 @@ WAKE_SPEAKER = "speaker"
 DEFAULT_WAKE_MODE = WAKE_HA
 #: Địa chỉ HA mà loa / go2rtc gọi tới (đã kiểm ở options flow). Trống = tự đoán như trước.
 CONF_HA_URL = "ha_url"
+#: ADB tới loa để chạy hiệu ứng đèn (xem adb_client.py): địa chỉ adb-server, chế độ auto/server/direct.
+CONF_ADB_SERVER = "adb_server"
+CONF_ADB_MODE = "adb_mode"
+DEFAULT_ADB_SERVER = "127.0.0.1:5037"
+DEFAULT_ADB_MODE = "auto"
+ADB_PORT = 5555
 
 #: Một phiên (nút đàm thoại / từ đánh thức / bộ đàm) chạy tối đa ngần này giây kể từ lượt cuối.
 SESSION_MAX_S = 60.0

@@ -132,7 +132,9 @@
           "ha_url": "Home Assistant address the speaker calls (empty = guess)",
           "rotate_intercom_key": "Rotate the intercom URL key (old go2rtc lines stop working)",
           "nang_cao": "Edit advanced parameters (voice gate, noise, duplex)",
-          "ghep_lai_apk": "Re-pair the speaker APK (new key; the APK fetches it by itself)"
+          "ghep_lai_apk": "Re-pair the speaker APK (new key; the APK fetches it by itself)",
+          "adb_server": "adb-server address (used when the mode is auto or server)",
+          "adb_mode": "How to reach the speaker over ADB: auto, server (via adb-server) or direct (straight to the speaker)"
         }
       },
       "nang_cao": {
@@ -197,8 +199,8 @@
       }
     },
     "set_light_function": {
-      "name": "Set light for a function",
-      "description": "Changes the LED settings of one function (on/off, rim light, base colour, effect, brightness). The rim light is white only. Stored in HA; nothing is sent to the speaker until a light service exists on the speaker (NOT built yet).",
+      "name": "Set light per function",
+      "description": "Change on/off and the base / rim effect of a function. Each zone is {effect, params}; parameters depend on the effect (catalogue in the settings sensor attribute danh_muc).",
       "fields": {
         "entity_id": {
           "name": "Speaker",
@@ -206,67 +208,45 @@
         },
         "function": {
           "name": "Function",
-          "description": "Which function's light to change."
+          "description": "Function to change."
         },
         "enabled": {
           "name": "Enabled",
           "description": "Off = no light while this function is active."
         },
-        "rim": {
-          "name": "Rim light (white)",
-          "description": "Use the white rim light at the same brightness."
+        "day": {
+          "name": "Base light",
+          "description": "{effect, params} of the base light (15 RGB LEDs)."
         },
-        "color": {
-          "name": "Base colour",
-          "description": "#rrggbb of the base light. Only green and blue are confirmed on the hardware; red is unconfirmed."
-        },
-        "effect": {
-          "name": "Effect",
-          "description": "Effect from the catalogue, or none for a steady colour."
-        },
-        "brightness": {
-          "name": "Brightness",
-          "description": "0-100."
-        }
-      }
-    },
-    "set_music_light": {
-      "name": "Set music light",
-      "description": "Light effect while music plays (the 'Music playing (HA effect)' function, NOT the speaker firmware's music light — see the Music light entities): on/off, effect, brightness. The speaker firmware's own music light is controlled by the Music light entities.",
-      "fields": {
-        "entity_id": {
-          "name": "Speaker",
-          "description": "Any r1_speaker entity of the speaker."
-        },
-        "enabled": {
-          "name": "Enabled",
-          "description": "Off = no HA light effect for music."
-        },
-        "effect": {
-          "name": "Effect",
-          "description": "Effect from the catalogue, or none."
-        },
-        "brightness": {
-          "name": "Brightness",
-          "description": "0-100."
+        "vien": {
+          "name": "Rim light",
+          "description": "{effect, params} of the rim light (24 white LEDs)."
         }
       }
     },
     "preview_light": {
-      "name": "Preview light",
-      "description": "Shows one function's light for a few seconds, then returns to the real state. Needs a light service on the speaker.",
+      "name": "Try light",
+      "description": "Run an effect on one zone for a few seconds, then return to the real state. Nothing is saved.",
       "fields": {
         "entity_id": {
           "name": "Speaker",
           "description": "Any r1_speaker entity of the speaker."
         },
-        "function": {
-          "name": "Function",
-          "description": "Function to preview."
+        "zone": {
+          "name": "Zone",
+          "description": "day (base) or vien (rim)."
+        },
+        "effect": {
+          "name": "Effect",
+          "description": "Effect id in the zone catalogue, or tat."
+        },
+        "params": {
+          "name": "Parameters",
+          "description": "Effect parameters; missing ones use defaults."
         },
         "seconds": {
           "name": "Seconds",
-          "description": "How long to show it (1-30)."
+          "description": "How long (1–30)."
         }
       }
     },
@@ -287,6 +267,16 @@
           "description": "Value (number or true/false)"
         }
       }
+    },
+    "stop_preview_light": {
+      "name": "Stop light preview",
+      "description": "Stop the preview and return the lights to the real state.",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        }
+      }
     }
   },
   "selector": {
@@ -300,17 +290,6 @@
         "phat_nhac": "Music playing (HA effect)",
         "loi": "Error",
         "tat_mic": "Microphone muted"
-      }
-    },
-    "light_effect": {
-      "options": {
-        "none": "None (steady)",
-        "tho": "Breathe",
-        "cau_vong": "Rainbow",
-        "nhap_nhay": "Blink",
-        "nhip_tim": "Heartbeat",
-        "phao_hoa": "Small fireworks",
-        "chop": "Strobe"
       }
     }
   }

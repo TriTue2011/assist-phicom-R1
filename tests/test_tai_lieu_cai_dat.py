@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from custom_components.r1_speaker import hieu_ung, nang_cao
+from custom_components.r1_speaker import den_hieu_ung, nang_cao
 from custom_components.r1_speaker.den import FUNCTIONS
 from custom_components.r1_speaker import const
 
@@ -24,12 +24,15 @@ def test_du_muoi_chin_khoa_nang_cao_kem_khoang_va_mac_dinh():
             assert vn(lo) in d and vn(hi) in d and vn(mac_dinh) in d, (khoa, dong)
 
 
-def test_du_tam_chuc_nang_den_va_moi_hieu_ung():
+def test_du_tam_chuc_nang_den_moi_hieu_ung_va_moi_thong_so():
     for k in FUNCTIONS:
         assert f"`{k}`" in DOC, k
-    for hu in ("thở", "cầu vồng", "nhấp nháy", "nhịp tim", "pháo hoa", "chớp"):
-        assert hu in DOC
-    assert len(hieu_ung.HIEU_UNG) == 8     # 6 ban đầu + cầu vồng firmware + chạy đuổi viền
+    for vung, he in den_hieu_ung.EFFECTS.items():
+        for e in he.values():
+            assert f"`{e.id}`" in DOC and e.vi in DOC, (vung, e.id)          # tên hiệu ứng, cả mã và nhãn
+            for p in e.params:
+                assert f"`{p.key}`" in DOC, (e.id, p.key)                   # mỗi thông số có mặt trong tài liệu
+    assert len(den_hieu_ung.EFFECTS["day"]) == 10 and len(den_hieu_ung.EFFECTS["vien"]) == 3
 
 
 def test_du_thuc_the_dich_vu_va_preset_eq():

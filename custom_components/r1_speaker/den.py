@@ -1,13 +1,8 @@
 """Đèn LED của loa R1 theo CHỨC NĂNG: cài đặt, chọn chức năng đang hiệu lực, áp xuống sink.
 
-Phần cứng và giới hạn: xem ``den_port.py`` (đèn viền chỉ trắng, đèn đáy RGB, KHÔNG có đường từ HA
-tới đèn loa — cần một dịch vụ trên loa, chưa có). Mặc định ``R1Lights`` dùng ``NullLights``: lưu
-cài đặt, tính chức năng đang hiệu lực, hiện ở ``sensor.r1_cai_dat``, nhưng không gửi gì đi.
-Cắm sink thật sau này: ``coordinator.lights.set_sink(sink)`` (sink thoả ``den_port.LightsSink``).
-
-Tám chức năng (``FUNCTIONS``); mỗi chức năng có năm số: bật/tắt, dùng đèn viền (trắng), màu đèn
-đáy, hiệu ứng (``hieu_ung.HIEU_UNG`` hoặc ``none``), độ sáng 0–100. Chức năng đang hiệu lực chọn
-theo ``UU_TIEN`` (đứng trước thắng):
+Tám chức năng (``FUNCTIONS``). Mỗi chức năng có: bật/tắt, và HAI VÙNG độc lập — ``day`` (15 đèn RGB) và ``vien``
+(24 đèn chỉ trắng) — mỗi vùng một hiệu ứng kèm bộ thông số RIÊNG của hiệu ứng đó (danh mục ở ``den_hieu_ung.py``, thẻ
+cài đặt vẽ form từ danh mục). Chức năng đang hiệu lực chọn theo ``UU_TIEN`` (đứng trước thắng):
 
 1. ``tat_mic`` — mic đang tắt (luôn thắng: người dùng phải thấy mic không nghe);
 2. ``loi`` — phiên đóng vì lỗi / pipeline báo lỗi, giữ ``LIGHT_ERROR_HOLD_S`` giây;
@@ -15,13 +10,15 @@ theo ``UU_TIEN`` (đứng trước thắng):
    (responding / processing / listening; HA đặt STT_START → listening, INTENT_START → processing,
    TTS_START → responding);
 4. ``dam_thoai`` — có phiên đàm thoại mở mà vệ tinh đang rảnh (giữa hai lượt);
-5. ``phat_nhac`` — ``media_player.r1_loa`` đang phát (chỉ khi chức năng này BẬT; tắt thì coi như
-   không có nhạc và rơi xuống mục kế);
+5. ``phat_nhac`` — ``media_player.r1_loa`` đang phát (chỉ khi chức năng này BẬT);
 6. ``cho`` — chờ từ đánh thức (vệ tinh rảnh, không phiên, không nhạc).
 
-Chức năng đang TẮT (``enabled = False``) nghĩa là «lúc đó không có đèn»: tắt cả viền lẫn đáy
-(riêng ``phat_nhac`` tắt thì xem như không có nhạc). Mọi ghi đèn đều qua ``_ap_dung`` đã khoá và
-đánh số thế hệ: bản mới đến thì bản cũ bỏ, hiệu ứng cũ bị ``stop_effect`` TRƯỚC khi ghi lại.
+Chức năng đang TẮT (``enabled = False``) nghĩa là «lúc đó không có đèn»: tắt cả hai vùng (riêng ``phat_nhac`` tắt thì
+xem như không có nhạc).
+
+**Thử** (``thu``) là MỤC RIÊNG, không nằm trong cài đặt chức năng: phủ một hiệu ứng tạm lên một vùng trong vài giây
+rồi tự trả về trạng thái thật; không lưu gì. Mọi ghi đèn đều qua ``_ap_dung`` đã khoá và đánh số thế hệ: bản mới đến
+thì bản cũ bỏ.
 """
 
 from __future__ import annotations
@@ -29,8 +26,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
-import re
-from dataclasses import asdict, dataclass, replace
+from dataclasses import dataclass, field
 from typing import Any
 
 import voluptuous as vol
@@ -43,9 +39,8 @@ from homeassistant.helpers.storage import Store
 
 from .coordinator import R1ConfigEntry
 from .const import DOMAIN, LIGHT_ERROR_HOLD_S, LIGHT_PREVIEW_MAX_S, LIGHT_PREVIEW_S
-from . import den_firmware as fw
-from .den_port import RGB, LightsError, LightsSink, NullLights
-from .hieu_ung import HIEU_UNG, KHONG, TOC_DO_MAX, TOC_DO_MIN, dung, sang_rgb, sang_vien
+from .den_hieu_ung import EFFECTS, TAT, VUNG, VUNG_DAY, VUNG_VIEN, chuan_hoa, danh_muc, loc_hop_le
+from .den_port import LightsError, LightsSink, NullLights
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,6 +48,8 @@ _LOGGER = logging.getLogger(__name__)
 FUNCTIONS = ("cho", "nghe", "nghi", "phan_hoi", "dam_thoai", "phat_nhac", "loi", "tat_mic")
 #: Ai đứng trước thắng khi nhiều chức năng cùng đúng.
 UU_TIEN = ("tat_mic", "loi", "phan_hoi", "nghi", "nghe", "dam_thoai", "phat_nhac", "cho")
+#: Sau lỗi ADB, thử áp lại đèn sau ngần này giây.
+THU_LAI_S = 15.0
 
 #: Lý do ``R1Talk.end`` coi là lỗi (xem dam_thoai.py): đèn «lỗi» nháy một lúc.
 LY_DO_LOI = frozenset({"loi", "loi_pipeline", "mic_khong_noi_duoc", "het_gio"})
@@ -67,65 +64,108 @@ def la_loi_that(code: Any) -> bool:
     return code not in KHONG_PHAI_LOI_HONG
 
 
-_MAU = re.compile(r"^#?([0-9a-fA-F]{6})$")
 
 
-def chuan_mau(value: Any) -> str | None:
-    """``"#RRGGBB"`` chữ thường, hoặc None nếu không phải 6 số hex."""
-    m = _MAU.match(str(value or "").strip())
-    return f"#{m.group(1).lower()}" if m else None
+@dataclass(frozen=True)
+class Zone:
+    """Một vùng đèn: ``effect`` (``tat`` hoặc id trong danh mục của vùng) + bộ thông số ĐẦY ĐỦ của hiệu ứng đó."""
+
+    effect: str = TAT
+    params: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"effect": self.effect, "params": dict(self.params)}
 
 
-def mau_rgb(color: str) -> RGB:
-    c = chuan_mau(color) or "#000000"
-    return (int(c[1:3], 16), int(c[3:5], 16), int(c[5:7], 16))
+def tao_vung(vung: str, effect: str, params: Any = None) -> Zone:
+    """Vùng hợp lệ; ``ValueError`` nếu hiệu ứng không có trong danh mục của vùng."""
+    return Zone(effect, chuan_hoa(vung, effect, params))
+
+
+def vung_tu_dict(vung: str, d: Any, base: Zone) -> Zone:
+    """Đọc từ dữ liệu đã lưu / gọi dịch vụ. Chỉ ``params`` đổi: giữ hiệu ứng, trộn vào thông số hiện có.
+    Hỏng thì rơi về ``base`` (không bỏ cả cấu hình)."""
+    if not isinstance(d, dict):
+        return base
+    effect = d.get("effect", base.effect)
+    if effect != TAT and effect not in EFFECTS[vung]:
+        return base
+    goc = base.params if effect == base.effect else {}
+    return tao_vung(vung, effect, {**goc, **loc_hop_le(vung, effect, d.get("params"))})
 
 
 @dataclass(frozen=True)
 class FunctionLight:
     enabled: bool
-    rim: bool          # có dùng đèn viền (TRẮNG, cùng độ sáng) không — viền không đổi màu được
-    color: str         # màu đèn đáy "#rrggbb"
-    effect: str        # ``none`` hoặc id trong ``HIEU_UNG``
-    brightness: int    # 0–100
-    rim_kieu: int = 0  # kiểu viền chạy đuổi firmware: 0 = không, 1–24 = ID viền (thay hiệu ứng đáy khi bật)
-    toc_do: int = 100  # % tốc độ hiệu ứng đổi màu (25–400, 100 = như đề xuất); hiệu ứng gốc của firmware có chu kỳ cố định
+    day: Zone
+    vien: Zone
+
+    def zone(self, vung: str) -> Zone:
+        return self.day if vung == VUNG_DAY else self.vien
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"enabled": self.enabled, "day": self.day.to_dict(), "vien": self.vien.to_dict()}
 
     @classmethod
     def from_dict(cls, d: Any, base: "FunctionLight") -> "FunctionLight":
-        """Đọc từ dữ liệu đã lưu, giá trị hỏng rơi về ``base`` TỪNG TRƯỜNG (không bỏ cả cấu hình)."""
+        """Giá trị hỏng rơi về ``base`` TỪNG TRƯỜNG."""
         if not isinstance(d, dict):
             return base
-        bright = d.get("brightness", base.brightness)
         return cls(
             enabled=d["enabled"] if isinstance(d.get("enabled"), bool) else base.enabled,
-            rim=d["rim"] if isinstance(d.get("rim"), bool) else base.rim,
-            color=chuan_mau(d.get("color")) or base.color,
-            effect=d["effect"] if d.get("effect") in (KHONG, *HIEU_UNG) else base.effect,
-            brightness=bright if isinstance(bright, int) and not isinstance(bright, bool)
-            and 0 <= bright <= 100 else base.brightness,
-            rim_kieu=(d["rim_kieu"] if isinstance(d.get("rim_kieu"), int) and not isinstance(d.get("rim_kieu"), bool)
-                      and 0 <= d["rim_kieu"] <= 24 else base.rim_kieu),
-            toc_do=(d["toc_do"] if isinstance(d.get("toc_do"), int) and not isinstance(d.get("toc_do"), bool)
-                    and TOC_DO_MIN <= d["toc_do"] <= TOC_DO_MAX else base.toc_do))
+            day=vung_tu_dict(VUNG_DAY, d.get("day"), base.day),
+            vien=vung_tu_dict(VUNG_VIEN, d.get("vien"), base.vien))
 
 
-#: MẶC ĐỊNH — ĐỀ XUẤT, CHƯA ĐO (không số nào được nghe/nhìn thử trên loa thật):
-#:  * chỉ dùng xanh lá ``00ff00`` / xanh dương ``0000ff`` (hai màu đã xác nhận); ĐỎ (lỗi, tắt mic)
-#:    chưa chắc hiện đúng → «lỗi» và «tắt mic» luôn kèm đèn viền trắng để vẫn thấy được;
-#:  * «chờ» TẮT (đèn thường trực dễ gây phiền ban đêm), «phát nhạc» TẮT (firmware có đèn nhạc
-#:    riêng, lệnh chưa rõ — bật cả hai có thể chồng nhau);
-#:  * độ sáng 60 ≈ viền ``99999`` (trắng 0x99); 25 → viền ``404040`` = mức «mờ rõ» đã thấy.
+def _z(vung: str, effect: str, **p: Any) -> Zone:
+    return tao_vung(vung, effect, p)
+
+
+#: MẶC ĐỊNH (đề xuất, chủ máy chỉnh được): «chờ» và «phát nhạc» tắt; các chức năng khác sáng đáy một màu + viền trắng.
 DEFAULTS: dict[str, FunctionLight] = {
-    "cho":       FunctionLight(False, False, "#0000ff", KHONG, 20),
-    "nghe":      FunctionLight(True, True, "#0000ff", KHONG, 60),
-    "nghi":      FunctionLight(True, False, "#0000ff", "tho", 60),
-    "phan_hoi":  FunctionLight(True, True, "#00ff00", KHONG, 60),
-    "dam_thoai": FunctionLight(True, True, "#00ff00", "tho", 50),
-    "phat_nhac": FunctionLight(False, False, "#00ff00", "cau_vong", 40),
-    "loi":       FunctionLight(True, True, "#ff0000", "nhap_nhay", 80),
-    "tat_mic":   FunctionLight(True, True, "#ff0000", KHONG, 25),
+    "cho":       FunctionLight(False, _z(VUNG_DAY, "co_dinh", mau="#0000ff", do_sang=20), Zone()),
+    "nghe":      FunctionLight(True, _z(VUNG_DAY, "co_dinh", mau="#0000ff", do_sang=60), _z(VUNG_VIEN, "sang", do_sang=60)),
+    "nghi":      FunctionLight(True, _z(VUNG_DAY, "tho", mau="#0000ff", do_sang=60), Zone()),
+    "phan_hoi":  FunctionLight(True, _z(VUNG_DAY, "co_dinh", mau="#00ff00", do_sang=60), _z(VUNG_VIEN, "sang", do_sang=60)),
+    "dam_thoai": FunctionLight(True, _z(VUNG_DAY, "tho", mau="#00ff00", do_sang=50), _z(VUNG_VIEN, "sang", do_sang=50)),
+    "phat_nhac": FunctionLight(False, _z(VUNG_DAY, "cau_vong", do_sang=40), Zone()),
+    "loi":       FunctionLight(True, _z(VUNG_DAY, "nhap_nhay", mau="#ff0000", do_sang=80), _z(VUNG_VIEN, "sang", do_sang=80)),
+    "tat_mic":   FunctionLight(True, _z(VUNG_DAY, "co_dinh", mau="#ff0000", do_sang=25), _z(VUNG_VIEN, "sang", do_sang=25)),
 }
+
+#: Mặc định của BẢN LƯU CŨ (mô hình phẳng: rim/color/effect/brightness/rim_kieu/toc_do) — chỉ để chuyển cài đặt cũ.
+_CU_MAC_DINH = {
+    "cho": (False, False, "#0000ff", "none", 20), "nghe": (True, True, "#0000ff", "none", 60),
+    "nghi": (True, False, "#0000ff", "tho", 60), "phan_hoi": (True, True, "#00ff00", "none", 60),
+    "dam_thoai": (True, True, "#00ff00", "tho", 50), "phat_nhac": (False, False, "#00ff00", "cau_vong", 40),
+    "loi": (True, True, "#ff0000", "nhap_nhay", 80), "tat_mic": (True, True, "#ff0000", "none", 25),
+}
+
+
+def tu_ban_luu_cu(fn: str, d: dict[str, Any]) -> FunctionLight:
+    """Chuyển cài đặt phẳng đã lưu (chỉ chứa trường khác mặc định cũ) sang mô hình hai vùng."""
+    en, rim, mau, eff, sang = _CU_MAC_DINH[fn]
+    en = d["enabled"] if isinstance(d.get("enabled"), bool) else en
+    rim = d["rim"] if isinstance(d.get("rim"), bool) else rim
+    mau = d.get("color") or mau
+    eff = d.get("effect") or eff
+    b = d.get("brightness")
+    sang = b if isinstance(b, int) and not isinstance(b, bool) and 0 <= b <= 100 else sang
+    toc = d.get("toc_do") if isinstance(d.get("toc_do"), int) else 100
+    kieu = d.get("rim_kieu") if isinstance(d.get("rim_kieu"), int) else 0
+    if eff == "none":
+        day = tao_vung(VUNG_DAY, "co_dinh", {"mau": mau, "do_sang": sang}) if sang > 0 else Zone()
+    elif eff in EFFECTS[VUNG_DAY]:
+        day = tao_vung(VUNG_DAY, eff, {"mau": mau, "do_sang": sang, "toc_do": toc})
+    else:
+        day = Zone()
+    if kieu:
+        vien = tao_vung(VUNG_VIEN, "chay_duoi", {"do_sang": sang, "toc_do": toc})
+    elif rim:
+        vien = tao_vung(VUNG_VIEN, "sang", {"do_sang": sang})
+    else:
+        vien = Zone()
+    return FunctionLight(en, day, vien)
 
 
 @dataclass(frozen=True)
@@ -155,6 +195,7 @@ def chon_chuc_nang(tin: Signals, profiles: dict[str, FunctionLight]) -> str:
     return "cho"
 
 
+
 class R1Lights:
     """Bộ điều khiển đèn của MỘT loa (xem docstring module)."""
 
@@ -164,7 +205,7 @@ class R1Lights:
         self._sink: LightsSink = sink or NullLights()
         self._rng = rng
         self.profiles: dict[str, FunctionLight] = dict(DEFAULTS)
-        #: Độ sáng chung 0–100 (%), nhân vào độ sáng của MỌI chức năng khi ghi xuống đèn.
+        #: Độ sáng chung 0–100 (%), nhân vào độ sáng của MỌI hiệu ứng khi ghi xuống đèn.
         self.master = 100
         self.current: str | None = None
         self.last_error: str | None = None
@@ -177,12 +218,14 @@ class R1Lights:
         self._listeners: list = []
         self._loi = False
         self._loi_huy = None
-        self._preview: str | None = None
-        self._preview_huy = None
+        #: Hiệu ứng THỬ đang phủ lên từng vùng: ``{vùng: Zone}`` (mục riêng, không lưu).
+        self._thu: dict[str, Zone] = {}
+        self._thu_huy = None
+        self._thu_lai_huy = None
         self._phien_truoc = None
         self._dong = False
 
-    # ── Lưu / nạp ─────────────────────────────────────────────────────────────
+    # ── Lưu / nạp ────────────────────────────────────────────────
 
     async def async_load(self) -> None:
         data = await self._store.async_load()
@@ -192,19 +235,20 @@ class R1Lights:
         saved = (data or {}).get("functions") if isinstance(data, dict) else None
         if isinstance(saved, dict):
             for fn in FUNCTIONS:
-                if fn in saved:
-                    self.profiles[fn] = FunctionLight.from_dict(saved[fn], DEFAULTS[fn])
+                d = saved.get(fn)
+                if not isinstance(d, dict):
+                    continue
+                if "day" in d or "vien" in d:
+                    self.profiles[fn] = FunctionLight.from_dict(d, DEFAULTS[fn])
+                else:                                              # bản lưu cũ (mô hình phẳng)
+                    self.profiles[fn] = tu_ban_luu_cu(fn, d)
 
     def _du_lieu(self) -> dict:
-        """Chỉ lưu trường KHÁC mặc định: mặc định đổi sau khi đo thì mục chưa chỉnh tay tự theo."""
-        ra = {}
-        for fn, p in self.profiles.items():
-            diff = {k: v for k, v in asdict(p).items() if v != getattr(DEFAULTS[fn], k)}
-            if diff:
-                ra[fn] = diff
+        """Chỉ lưu chức năng KHÁC mặc định: mặc định đổi sau này thì mục chưa chỉnh tay tự theo."""
+        ra = {fn: p.to_dict() for fn, p in self.profiles.items() if p != DEFAULTS[fn]}
         return {"functions": ra, **({"master": self.master} if self.master != 100 else {})}
 
-    # ── Sink ──────────────────────────────────────────────────────────────────
+    # ── Sink ──────────────────────────────────────────────────�
 
     @property
     def sink(self) -> LightsSink:
@@ -212,11 +256,9 @@ class R1Lights:
 
     @property
     def sink_state(self) -> str:
-        if self._sink.available:
-            return "san_sang"
         if isinstance(self._sink, NullLights):
             return "CHO_PHIA_LOA"
-        return getattr(self._sink, "ly_do", "mat_ket_noi")
+        return "san_sang" if self.last_error is None else "loi_adb"
 
     def set_sink(self, sink: LightsSink | None) -> None:
         """Đổi sink (None = về ``NullLights``) và áp lại đèn hiện tại."""
@@ -224,7 +266,7 @@ class R1Lights:
         self._key = None
         self.evaluate()
 
-    # ── Vòng đời ──────────────────────────────────────────────────────────────
+    # ── Vòng đời ────────────────────────────────────────────────
 
     def start(self) -> None:
         """Bắt đầu theo dõi vệ tinh, nhạc, phiên, mic. Gọi SAU khi các nền tảng đã đăng ký thực thể."""
@@ -239,26 +281,25 @@ class R1Lights:
         self.evaluate()
 
     async def async_close(self) -> None:
-        """Tắt theo dõi, dừng hiệu ứng và tắt đèn (nếu có sink)."""
+        """Tắt theo dõi, dừng hiệu ứng và tắt đèn."""
         self._dong = True
         for u in self._unsub:
             u()
         self._unsub = []
-        for huy in (self._loi_huy, self._preview_huy):
+        for huy in (self._loi_huy, self._thu_huy, self._thu_lai_huy):
             if huy is not None:
                 huy()
-        self._loi_huy = self._preview_huy = None
+        self._loi_huy = self._thu_huy = self._thu_lai_huy = None
         self._gen += 1
         for t in list(self._tasks):
             t.cancel()
         await asyncio.gather(*self._tasks, return_exceptions=True)
         async with self._lock:
-            if self._sink.available:
-                try:
-                    await self._sink.stop_effect()
-                    await self._tat(self._sink)
-                except LightsError as exc:
-                    _LOGGER.debug("tắt đèn khi đóng: %s", exc)
+            try:
+                await self._sink.tat()
+                await self._sink.dung()
+            except LightsError as exc:
+                _LOGGER.debug("tắt đèn khi đóng: %s", exc)
 
     def add_listener(self, cb) -> Any:
         self._listeners.append(cb)
@@ -268,7 +309,7 @@ class R1Lights:
         for cb in list(self._listeners):
             cb()
 
-    # ── Đọc trạng thái → chức năng ───────────────────────────────────────────
+    # ── Đọc trạng thái → chức năng ───────────────────────────────────────�
 
     @callback
     def _khi_doi_trang_thai(self, _event: Event) -> None:
@@ -297,9 +338,14 @@ class R1Lights:
             dang_phat=st_mp is not None and st_mp.state in ("playing", "buffering"))
 
     def chuc_nang_hien_tai(self) -> str:
-        if self._preview:
-            return self._preview
         return chon_chuc_nang(self._tin_hieu(), self.profiles)
+
+    def _viec_can_lam(self, fn: str) -> dict[str, Zone]:
+        """Hiệu ứng mỗi vùng NÊN chạy: chức năng (hoặc tắt) rồi mục Thử phủ lên."""
+        p = self.profiles[fn]
+        ra = {v: (p.zone(v) if p.enabled else Zone()) for v in VUNG}
+        ra.update(self._thu)
+        return ra
 
     @callback
     def evaluate(self) -> None:
@@ -307,19 +353,20 @@ class R1Lights:
         if self._dong:
             return
         fn = self.chuc_nang_hien_tai()
-        key = (fn, self.profiles[fn], self.master)
+        viec = self._viec_can_lam(fn)
+        key = (fn, tuple((v, z.effect, tuple(sorted(z.params.items()))) for v, z in viec.items()), self.master)
         if key == self._key:
             return
         self._key = key
         self.current = fn
         self._gen += 1
         gen = self._gen
-        t = self.hass.async_create_task(self._ap_dung(gen, fn))
+        t = self.hass.async_create_task(self._ap_dung(gen, viec))
         self._tasks.add(t)
         t.add_done_callback(self._tasks.discard)
         self._notify()
 
-    # ── Lỗi / thử ─────────────────────────────────────────────────────────────
+    # ── Lỗi / thử ───────────────────────────────────────────────�
 
     @callback
     def bao_loi(self) -> None:
@@ -336,52 +383,55 @@ class R1Lights:
         self.evaluate()
 
     @callback
-    def preview(self, fn: str, seconds: float = LIGHT_PREVIEW_S) -> None:
-        """Thử chức năng ``fn`` ``seconds`` giây (thẻ cài đặt), rồi trả về trạng thái thật."""
-        if fn not in FUNCTIONS:
-            raise ServiceValidationError(f"không có chức năng đèn «{fn}»")
-        if self._preview_huy is not None:
-            self._preview_huy()
-        self._preview = fn
-        self._preview_huy = async_call_later(
-            self.hass, min(max(seconds, 1.0), LIGHT_PREVIEW_MAX_S), self._het_thu)
+    def thu(self, vung: str, effect: str, params: Any = None, seconds: float = LIGHT_PREVIEW_S) -> None:
+        """THỬ một hiệu ứng ở ``vung`` ``seconds`` giây (mục Thử của thẻ), rồi tự trả về trạng thái thật. Không lưu."""
+        if vung not in VUNG:
+            raise ServiceValidationError(f"vùng đèn phải là {', '.join(VUNG)}")
+        try:
+            z = tao_vung(vung, effect, params)
+        except ValueError as exc:
+            raise ServiceValidationError(str(exc)) from exc
+        if self._thu_huy is not None:
+            self._thu_huy()
+        self._thu[vung] = z
+        self._thu_huy = async_call_later(self.hass, min(max(seconds, 1.0), LIGHT_PREVIEW_MAX_S), self._het_thu)
         self.evaluate()
+        self._notify()
+
+    @callback
+    def dung_thu(self) -> None:
+        self._het_thu()
 
     @callback
     def _het_thu(self, _now=None) -> None:
-        self._preview, self._preview_huy = None, None
+        if self._thu_huy is not None:
+            self._thu_huy()
+        self._thu, self._thu_huy = {}, None
         self.evaluate()
+        self._notify()
 
-    # ── Cài đặt ───────────────────────────────────────────────────────────────
+    # ── Cài đặt ────────────────────────────────────────────────�
 
-    async def async_set_function(self, fn: str, **fields: Any) -> FunctionLight:
-        """Đổi một vài trường của chức năng ``fn``; giá trị sai ném ``ServiceValidationError``."""
+    async def async_set_function(self, fn: str, *, enabled: Any = None, day: Any = None, vien: Any = None) -> FunctionLight:
+        """Đổi ``enabled`` và/hoặc một vùng của chức năng ``fn``. Mỗi vùng là ``{"effect": ..., "params": {...}}``;
+        đổi hiệu ứng thì thông số về mặc định của hiệu ứng mới (trừ phần gửi kèm); giá trị sai ném ``ServiceValidationError``."""
         if fn not in self.profiles:
             raise ServiceValidationError(f"không có chức năng đèn «{fn}»")
-        new = dict(fields)
-        if "color" in new:
-            mau = chuan_mau(new["color"])
-            if mau is None:
-                raise ServiceValidationError("màu phải dạng #rrggbb")
-            new["color"] = mau
-        if "effect" in new and new["effect"] not in (KHONG, *HIEU_UNG):
-            raise ServiceValidationError(f"hiệu ứng «{new['effect']}» không có trong danh mục")
-        if "brightness" in new:
-            b = new["brightness"]
-            if isinstance(b, bool) or not isinstance(b, int) or not 0 <= b <= 100:
-                raise ServiceValidationError("độ sáng phải là số nguyên 0–100")
-        if "rim_kieu" in new:
-            v = new["rim_kieu"]
-            if isinstance(v, bool) or not isinstance(v, int) or not 0 <= v <= 24:
-                raise ServiceValidationError("kiểu viền phải là 0 (không) hoặc 1–24")
-        if "toc_do" in new:
-            v = new["toc_do"]
-            if isinstance(v, bool) or not isinstance(v, int) or not TOC_DO_MIN <= v <= TOC_DO_MAX:
-                raise ServiceValidationError(f"tốc độ phải là số nguyên {TOC_DO_MIN}–{TOC_DO_MAX} (%)")
-        for k in ("enabled", "rim"):
-            if k in new and not isinstance(new[k], bool):
-                raise ServiceValidationError(f"{k} phải là đúng/sai")
-        self.profiles[fn] = replace(self.profiles[fn], **new)
+        cu = self.profiles[fn]
+        if enabled is not None and not isinstance(enabled, bool):
+            raise ServiceValidationError("enabled phải là đúng/sai")
+        zones = {}
+        for vung, d in ((VUNG_DAY, day), (VUNG_VIEN, vien)):
+            if d is None:
+                continue
+            if not isinstance(d, dict):
+                raise ServiceValidationError(f"{vung} phải là {{effect, params}}")
+            eff = d.get("effect", cu.zone(vung).effect)
+            if eff != TAT and eff not in EFFECTS[vung]:
+                raise ServiceValidationError(f"hiệu ứng «{eff}» không có ở vùng {vung}")
+            zones[vung] = vung_tu_dict(vung, d, cu.zone(vung))
+        self.profiles[fn] = FunctionLight(cu.enabled if enabled is None else enabled,
+                                          zones.get(VUNG_DAY, cu.day), zones.get(VUNG_VIEN, cu.vien))
         await self._store.async_save(self._du_lieu())
         self.evaluate()
         self._notify()
@@ -389,7 +439,7 @@ class R1Lights:
 
     @callback
     def ap_dung_lai(self) -> None:
-        """Áp lại đèn hiện tại (loa vừa nối / máy chủ đèn vừa sẵn sàng)."""
+        """Áp lại đèn hiện tại (loa vừa nối / ADB vừa nối lại)."""
         self._key = None
         self.evaluate()
 
@@ -401,85 +451,54 @@ class R1Lights:
         self.evaluate()
         self._notify()
 
-    async def async_set_music(self, *, enabled: bool | None = None, effect: str | None = None,
-                              brightness: int | None = None) -> FunctionLight:
-        """Hiệu ứng khi phát nhạc = hồ sơ chức năng ``phat_nhac`` (bật/tắt, hiệu ứng, sáng).
+    # ── Áp xuống sink ──────────────────────────────────────────────�
 
-        KHÁC «đèn theo nhạc» CỦA FIRMWARE (``music_light_enable/luma/chroma`` ở get_info): cái đó điều
-        khiển bằng ``number.r1_do_sang_den_nhac`` / ``switch.r1_den_nhac`` (qua APK loa). Phần này
-        của HA chỉ chạy hiệu ứng khi có dịch vụ đèn trên loa, và chưa đo xem nó có chồng lên đèn nhạc
-        firmware hay không."""
-        f = {k: v for k, v in (("enabled", enabled), ("effect", effect),
-                               ("brightness", brightness)) if v is not None}
-        return await self.async_set_function("phat_nhac", **f)
-
-    # ── Áp xuống sink ─────────────────────────────────────────────────────────
-
-    async def _tat(self, sink: LightsSink) -> None:
-        if getattr(sink, "firmware", False):
-            await sink.tat()
-            return
-        await sink.set_rim(0)
-        await sink.set_base((0, 0, 0))
-
-    async def _ap_dung(self, gen: int, fn: str) -> None:
+    async def _ap_dung(self, gen: int, viec: dict[str, Zone]) -> None:
         async with self._lock:
             if gen != self._gen or self._dong:
                 return
-            sink, p = self._sink, self.profiles[fn]
+            sink = self._sink
             if not sink.available:
                 return
-            sang = round(p.brightness * self.master / 100)
             try:
-                await sink.stop_effect()          # KHÔNG bao giờ để hai nơi cùng ghi đèn
-                if not p.enabled:
-                    await self._tat(sink)
-                elif getattr(sink, "firmware", False) and p.rim_kieu and sang > 0:
-                    # Hiệu ứng viền riêng (ID 1–24). Firmware chỉ chạy MỘT hiệu ứng: viền chạy thì đáy của chức năng này tạm nhường.
-                    await sink.ap_dung_ham(rim=True, color=mau_rgb(p.color), effect=f"vien_{p.rim_kieu}", sang=sang)
-                elif getattr(sink, "firmware", False) and p.effect in getattr(sink, "hieu_ung_goc", ()):
-                    # Hiệu ứng GỐC của firmware (một ID): màu gần nhất trong bảng; sáng cố định / thở / nháy; viền trắng.
-                    await sink.ap_dung_ham(rim=p.rim, color=mau_rgb(p.color), effect=p.effect, sang=sang)
-                elif p.effect != KHONG:
-                    await sink.play_effect(
-                        dung(p.effect, mau_rgb(p.color), sang, p.rim, self._rng, p.toc_do),
-                        repeat=HIEU_UNG[p.effect].lap)
-                else:
-                    await sink.set_rim(sang_vien(sang) if p.rim else 0)
-                    await sink.set_base(sang_rgb(mau_rgb(p.color), sang))
+                for vung in VUNG:
+                    z = viec[vung]
+                    await sink.ap_dung(vung, z.effect, z.params, self.master)
                 self.last_error = None
+                if self._thu_lai_huy is not None:
+                    self._thu_lai_huy()
+                    self._thu_lai_huy = None
             except LightsError as exc:
-                # Ghi một lần mỗi lần ĐỔI lỗi, không ngập log khi loa mất kết nối.
+                # Ghi một lần mỗi lần ĐỔI lỗi, không ngập log khi loa mất kết nối; tự thử lại sau ``THU_LAI_S``.
                 if str(exc) != self.last_error:
-                    _LOGGER.warning("đèn loa R1 (%s): %s", fn, exc)
+                    _LOGGER.warning("đèn loa R1: %s", exc)
                 self.last_error = str(exc)
+                if self._thu_lai_huy is None and not self._dong:
+                    self._thu_lai_huy = async_call_later(self.hass, THU_LAI_S, self._thu_lai)
             self._notify()
 
-    # ── Thuộc tính cho sensor / thẻ ──────────────────────────────────────────
+    @callback
+    def _thu_lai(self, _now=None) -> None:
+        self._thu_lai_huy = None
+        self.ap_dung_lai()
+
+    # ── Thuộc tính cho sensor / thẻ ─────────────────────────────────────────�
 
     def attributes(self) -> dict[str, Any]:
         d = getattr(self.entry.runtime_data, "data", None)
+        dev = getattr(self._sink, "dev", None)
         return {
-            "chuc_nang": {fn: {**asdict(p), "mac_dinh": p == DEFAULTS[fn]}
-                          for fn, p in self.profiles.items()},
+            "chuc_nang": {fn: {**p.to_dict(), "mac_dinh": p == DEFAULTS[fn]} for fn, p in self.profiles.items()},
             "thu_tu_uu_tien": list(UU_TIEN),
             "dang_ap_dung": self.current,
-            "hieu_ung": [{"id": h.id, "ten": h.ten, "ten_en": h.ten_en, "mo_ta": h.mo_ta,
-                          "vien": h.vien, "nguon": h.nguon} for h in HIEU_UNG.values()],
+            "danh_muc": danh_muc(),
             "dich_vu_den": self.sink_state,
-            # Đèn firmware chỉ làm được tập màu/hiệu ứng cố định (None = làm được mọi thứ như sink phần mềm).
-            "den_firmware": bool(getattr(self._sink, "firmware", False)),
-            "hieu_ung_ho_tro": list(getattr(self._sink, "hieu_ung_ho_tro", None) or []) or None,
-            "hieu_ung_goc": list(getattr(self._sink, "hieu_ung_goc", None) or []) or None,
-            # Hiệu ứng chỉnh được tốc độ: mọi hiệu ứng HA tự đổi màu theo nhịp; hiệu ứng gốc của firmware (thở/nháy) có chu kỳ cố định.
-            "hieu_ung_co_toc_do": [h for h in HIEU_UNG
-                                   if h not in (getattr(self._sink, "hieu_ung_goc", None) or ())],
-            "toc_do": {"min": TOC_DO_MIN, "max": TOC_DO_MAX, "mac_dinh": 100},
-            "bang_mau_firmware": [{"ten": m.ten, "ten_en": m.ten_en, "rgb": "#%02x%02x%02x" % m.rgb,
-                                   "tho": m.tho is not None} for m in fw.MAU.values()],
+            "duong_adb": getattr(dev, "duong", None),
+            "che_do_adb": getattr(dev, "mode", None),
+            "thu": {v: z.to_dict() for v, z in self._thu.items()},
             "do_sang_chung": self.master,
             "loi_dich_vu": self.last_error,
-            # Đèn theo nhạc CỦA FIRMWARE: đọc ở đây; điều khiển bằng các thực thể ``r1_*_den_nhac`` (qua APK).
+            # Đèn theo nhạc CỦA FIRMWARE (khác hiệu ứng ở trên): đọc ở đây; điều khiển bằng các thực thể ``r1_*_den_nhac``.
             "den_nhac_firmware": {
                 "bat": getattr(d, "music_light_enable", None),
                 "luma": getattr(d, "music_light_luma", None),
@@ -488,7 +507,7 @@ class R1Lights:
         }
 
 
-# ── Dịch vụ ───────────────────────────────────────────────────────────────────
+# ── Dịch vụ ─────────────────────────────────────────────────�
 
 def _lights_cua(hass: HomeAssistant, entity_id: str) -> R1Lights:
     rec = er.async_get(hass).async_get(entity_id)
@@ -501,33 +520,23 @@ def _lights_cua(hass: HomeAssistant, entity_id: str) -> R1Lights:
     return lights
 
 
-_EFFECTS = [KHONG, *HIEU_UNG]
-_BRIGHT = vol.All(vol.Coerce(int), vol.Range(min=0, max=100))
-_TOC_DO = vol.All(vol.Coerce(int), vol.Range(min=TOC_DO_MIN, max=TOC_DO_MAX))
-_COLOR = vol.All(str, vol.Match(_MAU, msg="màu phải dạng #rrggbb"))
+_ZONE = vol.Schema({vol.Optional("effect"): str, vol.Optional("params"): dict})
 
 SET_FUNCTION_SCHEMA = vol.Schema({
     vol.Required("entity_id"): cv.entity_id,
     vol.Required("function"): vol.In(list(FUNCTIONS)),
     vol.Optional("enabled"): cv.boolean,
-    vol.Optional("rim"): cv.boolean,
-    vol.Optional("color"): _COLOR,
-    vol.Optional("effect"): vol.In(_EFFECTS),
-    vol.Optional("brightness"): _BRIGHT,
-    vol.Optional("toc_do"): _TOC_DO,
-    vol.Optional("rim_kieu"): vol.All(vol.Coerce(int), vol.Range(min=0, max=24)),
-})
-SET_MUSIC_SCHEMA = vol.Schema({
-    vol.Required("entity_id"): cv.entity_id,
-    vol.Optional("enabled"): cv.boolean,
-    vol.Optional("effect"): vol.In(_EFFECTS),
-    vol.Optional("brightness"): _BRIGHT,
+    vol.Optional("day"): _ZONE,
+    vol.Optional("vien"): _ZONE,
 })
 PREVIEW_SCHEMA = vol.Schema({
     vol.Required("entity_id"): cv.entity_id,
-    vol.Required("function"): vol.In(list(FUNCTIONS)),
+    vol.Required("zone"): vol.In(list(VUNG)),
+    vol.Required("effect"): str,
+    vol.Optional("params"): dict,
     vol.Optional("seconds"): vol.All(vol.Coerce(float), vol.Range(min=1, max=LIGHT_PREVIEW_MAX_S)),
 })
+STOP_PREVIEW_SCHEMA = vol.Schema({vol.Required("entity_id"): cv.entity_id})
 
 
 def dang_ky_dich_vu(hass: HomeAssistant) -> None:
@@ -536,15 +545,14 @@ def dang_ky_dich_vu(hass: HomeAssistant) -> None:
         lights = _lights_cua(hass, d.pop("entity_id"))
         await lights.async_set_function(d.pop("function"), **d)
 
-    async def _dat_den_nhac(call: ServiceCall) -> None:
-        d = dict(call.data)
-        await _lights_cua(hass, d.pop("entity_id")).async_set_music(**d)
-
     async def _thu_den(call: ServiceCall) -> None:
-        _lights_cua(hass, call.data["entity_id"]).preview(
-            call.data["function"], call.data.get("seconds", LIGHT_PREVIEW_S))
+        d = call.data
+        _lights_cua(hass, d["entity_id"]).thu(d["zone"], d["effect"], d.get("params"),
+                                              d.get("seconds", LIGHT_PREVIEW_S))
 
-    hass.services.async_register(DOMAIN, "set_light_function", _dat_chuc_nang,
-                                 schema=SET_FUNCTION_SCHEMA)
-    hass.services.async_register(DOMAIN, "set_music_light", _dat_den_nhac, schema=SET_MUSIC_SCHEMA)
+    async def _dung_thu(call: ServiceCall) -> None:
+        _lights_cua(hass, call.data["entity_id"]).dung_thu()
+
+    hass.services.async_register(DOMAIN, "set_light_function", _dat_chuc_nang, schema=SET_FUNCTION_SCHEMA)
     hass.services.async_register(DOMAIN, "preview_light", _thu_den, schema=PREVIEW_SCHEMA)
+    hass.services.async_register(DOMAIN, "stop_preview_light", _dung_thu, schema=STOP_PREVIEW_SCHEMA)
