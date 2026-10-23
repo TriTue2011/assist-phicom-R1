@@ -5,7 +5,7 @@
  * dưới tên riêng (r1-*-card-n): trình duyệt/ứng dụng HA/proxy giữ bản cũ của URL cố định hàng giờ (có
  * lớp đệm còn bỏ qua cả tham số ?...), nên dùng thẳng ``<r1-talk-card>`` thì sửa xong vẫn thấy bản cũ.
  * Nếu vẫn nhận bản cũ thì dùng tạm thẻ cũ và ghi rõ ở cuối thẻ. */
-const BUILD = "2026-10-22.11";
+const BUILD = "2026-10-22.12";
 
 const TABS = [
   { id: "talk", tag: "r1-talk-card-n", ten: "Đàm thoại", cfg: { show_eq: false } },
@@ -88,7 +88,8 @@ class R1Card extends HTMLElement {
     const ver = document.createElement("div");
     ver.className = "ver";
     const cu = TABS.filter((x) => !x.tuoi).map((x) => x.id);
-    ver.textContent = "r1-card " + BUILD + " · đàm thoại " + (((window.R1_THE || {}).talk || {}).build || "?") +
+    const bd = (id) => (((window.R1_THE || {})[id] || {}).build || "?");
+    ver.textContent = "r1-card " + BUILD + " · đàm thoại " + bd("talk") + " · EQ " + bd("eq") + " · cài đặt " + bd("settings") +
       (cu.length ? " · DÙNG BẢN CŨ của: " + cu.join(", ") + " (lớp đệm chặn bản mới)" : "");
     this._body.appendChild(ver);
     if (this._hass) this._gan(this._hass);
