@@ -139,3 +139,20 @@ set_main_light:
           min: 1
           max: 100
           mode: slider
+install_apps:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+    apps:
+      example: '["player", "unisound", "bodam"]'
+      selector:
+        object:
+    force:
+      selector:
+        boolean:
+    configure:
+      selector:
+        boolean:

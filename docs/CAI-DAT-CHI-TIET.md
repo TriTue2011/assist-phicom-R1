@@ -62,7 +62,14 @@ nữa với IP khác, mỗi loa có khoá, cổng, phiên, đèn và thực th�
 | Loa | media_player | Phát nhạc, tạm dừng, âm lượng; nhận `play_media`, TTS, thông báo | |
 | Bộ đàm | binary_sensor | Bật khi loa đã nối về HA (kênh phát sẵn sàng) | |
 | Từ đánh thức | binary_sensor | Bật thoáng chốc khi có trigger từ đánh thức | |
-| Dịch vụ đèn | binary_sensor | APK trên loa có sẵn sàng điều khiển đèn bằng hiệu ứng firmware không (mục 5) | tắt = APK chưa nối hoặc là bản cũ |
+| Dịch vụ đèn | binary_sensor | Đường ADB tới loa (chạy hiệu ứng đèn, cài ứng dụng, đọc thông tin) có dùng được không; thuộc tính `duong_adb` = `server` hoặc `direct` (mục 5) | tắt = lỗi ADB gần nhất, xem thuộc tính `loi` |
+| Khởi động lại loa | button | Gửi lệnh `reboot` cho loa qua ADB (loa lên lại sau khoảng nửa phút, APK tự nối về HA, HA áp lại đèn) | cần ADB (mục 5) |
+| Ứng dụng: *tên ứng dụng* | update | Một thực thể cho mỗi ứng dụng cài lên loa (trình phát, thiết bị, APK mic): phiên bản đã cài, bản đi kèm, nút **Cài đặt** (xem [CAI-UNG-DUNG.md](CAI-UNG-DUNG.md)) | đọc mỗi giờ |
+| CPU của loa | sensor | % CPU dùng, kèm số nhân, tần số, tải 1/5/15 phút và tiến trình nặng nhất ([THONG-TIN-HE-THONG.md](THONG-TIN-HE-THONG.md)) | 0–100 %, đọc qua ADB mỗi 60 giây |
+| RAM của loa | sensor | % RAM đang dùng (không tính bộ nhớ đệm), kèm tổng, đang dùng, khả dụng, đệm (MB) | 0–100 % |
+| Bộ nhớ trong của loa | sensor | % phân vùng `/data` đã dùng, kèm tổng, đã dùng, còn trống (MB) | 0–100 % |
+| Sóng WiFi của loa | sensor | Cường độ tín hiệu (dBm), kèm tên WiFi, tốc độ liên kết, tần số | −30 rất tốt … −90 rất yếu |
+| Thời gian loa đã chạy | sensor | Từ lần khởi động gần nhất (giờ) | |
 | Trạng thái mic | sensor | `tat` / `nghe` / `gui`; ở chế độ HA, «nghe» = luồng chảy liên tục về HA và HA đang dò từ đánh thức | |
 | Tóm tắt cài đặt | sensor | Dữ liệu cho thẻ (đừng dùng trong tự động hoá) | |
 | Trạng thái thiết bị | sensor | Số đo thiết bị từ loa | |
@@ -371,6 +378,7 @@ nút Thử.
 | `set_advanced_option` | Đổi một cài đặt nâng cao: `entity_id` (thực thể của loa), `key` (khoá ở mục 4), `value` (số hoặc true/false). Giá trị ngoài khoảng bị từ chối; nạp lại tích hợp để áp dụng |
 | `set_light_function` | Đổi cấu hình đèn của một chức năng: `function`, `enabled`, và mỗi vùng `day` / `vien` là `{effect, params}` |
 | `preview_light` | **Thử** một hiệu ứng ở một vùng: `zone`, `effect`, `params`, `seconds` (không lưu) |
+| `install_apps` | Cài ứng dụng lên loa qua ADB (cả loa mới tinh): `apps`, `force`, `configure`; trả kết quả từng ứng dụng ([CAI-UNG-DUNG.md](CAI-UNG-DUNG.md)) |
 | `stop_preview_light` | Dừng thử, trả đèn về trạng thái thật |
 | `start_duplex` / `stop_duplex` | Mở/đóng phiên đàm thoại song công của loa |
 | `get_intercom_source` | Trả hai dòng nguồn cho `go2rtc.yaml`: nói vào loa (`talk`) và nghe mic (`listen`) |

@@ -25,7 +25,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.typing import ConfigType
 
-from . import den_chinh, giao_dien, lenh_apk, media_player, nang_cao
+from . import cai_ung_dung, den_chinh, giao_dien, lenh_apk, media_player, nang_cao
 from .client import R1Client
 from .const import ADB_PORT
 from .const import (CARD_GOP_URL, CARD_URL, CONF_INTERCOM_KEY, CONF_MIC_CHUA_GHEP, CONF_MIC_LISTEN_KEY, CONF_MIC_LISTEN_PORT, DOMAIN, SETTINGS_CARD_URL, TALK_CARD_URL,
@@ -36,6 +36,8 @@ from .ghep_khoa import GhepKhoaView
 from .nghe_ws import NgheWsView
 from .den import R1Lights, dang_ky_dich_vu as dang_ky_dich_vu_den
 from .adb_client import AdbDevice
+from .cai_ung_dung import BoCai
+from .he_thong import HeThongLoa
 from .den_adb import AdbLights
 from .dam_thoai import R1Talk
 from .giu_nhac import MusicKeeper
@@ -52,8 +54,8 @@ _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-PLATFORMS = [Platform.ASSIST_SATELLITE, Platform.BINARY_SENSOR, Platform.MEDIA_PLAYER,
-             Platform.NUMBER, Platform.SELECT, Platform.SENSOR, Platform.SWITCH]
+PLATFORMS = [Platform.ASSIST_SATELLITE, Platform.BINARY_SENSOR, Platform.BUTTON, Platform.MEDIA_PLAYER,
+             Platform.NUMBER, Platform.SELECT, Platform.SENSOR, Platform.SWITCH, Platform.UPDATE]
 
 _WWW = Path(__file__).parent / "www"
 _CARDS = ((CARD_URL, _WWW / "r1-eq-card.js"), (TALK_CARD_URL, _WWW / "r1-talk-card.js"),
@@ -76,6 +78,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     den_chinh.dang_ky_dich_vu(hass)
     lenh_apk.dang_ky(hass)
     nang_cao.dang_ky_dich_vu(hass)
+    cai_ung_dung.dang_ky_dich_vu(hass)
 
     def _entry_va_goc(call: ServiceCall):
         entity_id = call.data["entity_id"]
@@ -244,7 +247,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
         entry.async_create_background_task(hass, coordinator.mic.run(), "r1_speaker mic")
     # Đèn: hiệu ứng chạy trên loa qua ADB (adb-server nếu có, không thì nối thẳng); xem den_adb.py.
     adb_server, adb_mode = adb_settings(entry)
-    sink = AdbLights(AdbDevice(speaker_host(entry), ADB_PORT, adb_server, adb_mode))
+    adb_dev = AdbDevice(speaker_host(entry), ADB_PORT, adb_server, adb_mode)
+    sink = AdbLights(adb_dev)
+    # Bộ cài ứng dụng dùng CHUNG AdbDevice với đèn (adbd của loa chỉ nhận một kết nối: dùng chung kết nối đã mở).
+    def _cau_hinh_apk():
+        cong, khoa = mic_listen(entry)
+        return (lenh_apk._host_ha(hass, entry), cong, khoa) if khoa else None
+    coordinator.apps = BoCai(adb_dev, cau_hinh_bodam=_cau_hinh_apk)
+    coordinator.he_thong = HeThongLoa(hass, entry, adb_dev, sink)        # đèn ưu tiên số 1, đọc thông tin số 2
     coordinator.lights = R1Lights(hass, entry, sink=sink)
     sink.khi_roi = coordinator.lights.ap_dung_lai        # phiên đèn đứt (loa khởi động lại, ADB rớt) thì áp lại
     await coordinator.lights.async_load()

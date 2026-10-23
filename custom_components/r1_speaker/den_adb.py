@@ -14,6 +14,7 @@ import asyncio
 import contextlib
 import logging
 import re
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -39,6 +40,8 @@ class AdbLights:
         self._khoa = {v: asyncio.Lock() for v in VUNG}
         self._script_ok = False
         self._script_ver: str | None = None
+        self._dang_ap = 0                      # số lần ap_dung đang chạy (ưu tiên số 1: việc đọc thông tin nhường)
+        self._xong_luc = 0.0
         #: Gọi khi một phiên đang chạy bị đứt ngoài ý muốn (loa khởi động lại, ADB rớt).
         self.khi_roi: Callable[[], None] | None = None
         self.loi: str | None = None
@@ -46,6 +49,14 @@ class AdbLights:
     @property
     def available(self) -> bool:
         return True
+
+    def dang_ap_dung(self, yen_s: float = 2.0) -> bool:
+        """Đèn đang được áp (hoặc vừa xong trong ``yen_s`` giây): việc ưu tiên thấp hơn phải chờ."""
+        return self._dang_ap > 0 or time.monotonic() - self._xong_luc < yen_s
+
+    def hieu_ung_chay(self) -> bool:
+        """Có hiệu ứng LẶP đang chạy trên loa (tốn CPU của loa 4 nhân 1 GHz): việc phụ phải nhẹ và thưa."""
+        return bool(self._streams)
 
     @property
     def ly_do(self) -> str:
@@ -87,6 +98,14 @@ class AdbLights:
             raise LightsError(str(exc)) from exc
         lenh = self._lenh(vung, hieu_ung, args)
         tinh = hieu_ung == TAT or EFFECTS[vung][hieu_ung].tinh
+        self._dang_ap += 1
+        try:
+            await self._ap_trong_khoa(vung, hieu_ung, lenh, tinh)
+        finally:
+            self._dang_ap -= 1
+            self._xong_luc = time.monotonic()
+
+    async def _ap_trong_khoa(self, vung: str, hieu_ung: str, lenh: str, tinh: bool) -> None:
         async with self._khoa[vung]:
             try:
                 await self._dam_bao_script()

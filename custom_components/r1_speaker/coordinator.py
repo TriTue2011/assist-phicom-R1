@@ -39,6 +39,8 @@ class R1Coordinator(DataUpdateCoordinator[R1State]):
     music: MusicKeeper
     talk: R1Talk
     lights: "R1Lights"
+    apps: "BoCai"
+    he_thong: "HeThongLoa"
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, client: R1Client) -> None:
         super().__init__(hass, _LOGGER, config_entry=entry, name=DOMAIN,

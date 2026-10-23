@@ -38,6 +38,12 @@ class MemoryLights:
             await asyncio.sleep(0)
         self.log.append(("ap", vung, hieu_ung, dict(params), master))
 
+    def dang_ap_dung(self, yen_s: float = 2.0) -> bool:
+        return False
+
+    def hieu_ung_chay(self) -> bool:
+        return False
+
     async def tat(self) -> None:
         self.log.append(("tat",))
 

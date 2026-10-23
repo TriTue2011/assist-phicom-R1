@@ -91,6 +91,21 @@
       },
       "settings": {
         "name": "Tóm tắt cài đặt"
+      },
+      "cpu": {
+        "name": "CPU của loa"
+      },
+      "ram": {
+        "name": "RAM của loa"
+      },
+      "bo_nho": {
+        "name": "Bộ nhớ trong của loa"
+      },
+      "wifi": {
+        "name": "Sóng WiFi của loa"
+      },
+      "thoi_gian_chay": {
+        "name": "Thời gian loa đã chạy"
       }
     },
     "media_player": {
@@ -118,6 +133,11 @@
       },
       "light_service": {
         "name": "Dịch vụ đèn"
+      }
+    },
+    "button": {
+      "reboot": {
+        "name": "Khởi động lại loa"
       }
     }
   },
@@ -275,6 +295,28 @@
         "entity_id": {
           "name": "Loa",
           "description": "Thực thể r1_speaker bất kỳ của loa."
+        }
+      }
+    },
+    "install_apps": {
+      "name": "Cài ứng dụng lên loa",
+      "description": "Cài các ứng dụng đi kèm tích hợp (trình phát, thiết bị, APK mic) lên loa qua ADB, theo thứ tự; loa mới tinh dùng đúng dịch vụ này. Trả kết quả từng ứng dụng.",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        },
+        "apps": {
+          "name": "Ứng dụng",
+          "description": "Danh sách mã: player, unisound, bodam. Bỏ trống = tất cả."
+        },
+        "force": {
+          "name": "Gỡ bản cũ khác chữ ký",
+          "description": "Khi loa đang có bản cùng gói nhưng ký khác: gỡ rồi cài lại (mất cấu hình của ứng dụng đó)."
+        },
+        "configure": {
+          "name": "Tự cấu hình APK mic",
+          "description": "Cài xong APK mic thì chạy lệnh cấu hình MỘT lần (mặc định bật)."
         }
       }
     }

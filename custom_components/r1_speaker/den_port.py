@@ -26,6 +26,12 @@ class LightsSink(Protocol):
     async def ap_dung(self, vung: str, hieu_ung: str, params: dict[str, Any], master: int = 100) -> None:
         """Chạy ``hieu_ung`` ở ``vung`` với ``params`` (đã chuẩn hoá). ``hieu_ung == "tat"`` = tắt vùng đó."""
 
+    def dang_ap_dung(self, yen_s: float = 2.0) -> bool:
+        """Đang áp đèn (hoặc vừa xong): việc ưu tiên thấp hơn (đọc thông tin hệ thống) phải chờ."""
+
+    def hieu_ung_chay(self) -> bool:
+        """Có hiệu ứng lặp đang chạy trên loa: việc phụ phải nhẹ và thưa."""
+
     async def tat(self) -> None:
         """Tắt cả hai vùng."""
 
@@ -41,6 +47,12 @@ class NullLights:
 
     async def ap_dung(self, vung: str, hieu_ung: str, params: dict[str, Any], master: int = 100) -> None:
         return None
+
+    def dang_ap_dung(self, yen_s: float = 2.0) -> bool:
+        return False
+
+    def hieu_ung_chay(self) -> bool:
+        return False
 
     async def tat(self) -> None:
         return None

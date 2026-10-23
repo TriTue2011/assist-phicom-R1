@@ -1,0 +1,46 @@
+{
+  "ghi_chu": "Danh sách ứng dụng cài lên loa qua ADB (xem cai_ung_dung.py, docs/CAI-UNG-DUNG.md). sha256 là của tệp SAU KHI ghép các phần; thứ tự cài theo thu_tu.",
+  "ung_dung": [
+    {
+      "id": "player",
+      "ten": "Trình phát nhạc (DLNA / AirPlay)",
+      "goi": "com.phicomm.speaker.player",
+      "tep": [
+        "autodlna.apk"
+      ],
+      "sha256": "db6def7f253fc1413fa1feec8674fd0a50f35fbb366da0a70f2144536f879bba",
+      "phien_ban": "0.2.5",
+      "thu_tu": 1,
+      "mac_dinh": true,
+      "mo_ta": "Bản cập nhật của ứng dụng hệ thống EchoService (cùng chữ ký Phicomm, dùng sharedUserId system). Phát nhạc DLNA, AirPlay, mạng."
+    },
+    {
+      "id": "unisound",
+      "ten": "Thiết bị và giọng nói (Unisound)",
+      "goi": "com.phicomm.speaker.device",
+      "tep": [
+        "unisound.apk.00",
+        "unisound.apk.01"
+      ],
+      "sha256": "5f2634bd68ea4b948d2058d16da6c2d281e7170ce1e29723dbfbef002b449c84",
+      "phien_ban": "25.3.1",
+      "thu_tu": 2,
+      "mac_dinh": true,
+      "mo_ta": "Ứng dụng thiết bị của hãng (gói com.phicomm.speaker.device). Có thể chiếm mic của loa: nếu mic về HA bị tranh, gỡ bằng `pm uninstall com.phicomm.speaker.device`."
+    },
+    {
+      "id": "bodam",
+      "ten": "APK mic bộ đàm (vn.r1.bodam)",
+      "goi": "vn.r1.bodam",
+      "tep": [
+        "vn-r1-bodam.apk"
+      ],
+      "sha256": "cf7037210c9f8c60d4933f2763bd1817e1fd0a8b2067bdeb0a19fefff1de7d2e",
+      "phien_ban": "1.2",
+      "thu_tu": 3,
+      "mac_dinh": true,
+      "sau_cai": "cau_hinh_bodam",
+      "mo_ta": "APK của tích hợp: đẩy tiếng mic về HA, âm lượng, nút giữa. Cài xong HA tự chạy lệnh cấu hình một lần."
+    }
+  ]
+}

@@ -177,6 +177,8 @@ class FakeAdbd:
 @pytest.fixture(autouse=True)
 def _nhanh(monkeypatch):
     monkeypatch.setattr(adb_client, "TIMEOUT_S", 1.5)
+    monkeypatch.setattr(adb_client, "IDLE_S", 0.2)
+    monkeypatch.setattr(adb_client, "THU_LAI_S", 0.05)
 
 
 @pytest.fixture
@@ -261,9 +263,11 @@ async def test_noi_thang_ghep_nhieu_luong_tren_mot_ket_noi_va_nha_khi_het(may):
     await s1.close()
     assert fa.dang_noi == 1                              # còn luồng viền
     await s2.close()
-    await asyncio.sleep(0.1)
-    assert fa.dang_noi == 0 and sorted(fa.dong_luong) == ["dai:day", "dai:vien"]
-    assert await d.shell("y") == "ra:y" and fa.so_ket_noi == 2   # nối lại khi cần
+    assert fa.dang_noi == 1                              # vừa hết luồng: còn giữ IDLE_S giây (lệnh sát nhau dùng lại kết nối)
+    assert await d.shell("y") == "ra:y" and fa.so_ket_noi == 1   # lệnh đến trong lúc giữ: KHÔNG nối lại
+    await asyncio.sleep(0.5)
+    assert fa.dang_noi == 0 and sorted(fa.dong_luong)[:2] == ["dai:day", "dai:vien"]   # rảnh đủ lâu: nhả cho client khác
+    assert await d.shell("z") == "ra:z" and fa.so_ket_noi == 2   # nối lại khi cần
 
 
 async def test_adbd_dang_ban_voi_client_khac_thi_bao_ro(may):
@@ -284,3 +288,28 @@ async def test_server_giu_ket_noi_hong_thi_ngat_va_noi_lai_roi_chay_duoc(may):
     assert await d.shell("echo hi") == "ra:echo hi"
     assert d.duong == "server" and not fs.offline
     assert [x.split(":")[1] for x in fs.nhat_ky if x.startswith("host:") and "transport" not in x] == ["disconnect", "connect"]
+
+
+async def test_reboot_gui_dich_vu_reboot_qua_ca_hai_duong(may):
+    fs, p1, fa, p2 = may
+    await _loa(p2, p1, "server").reboot()
+    assert "reboot:" in fs.lenh
+    d = _loa(p2, None, "direct")
+    await d.reboot()
+    assert "reboot:" in fa.lenh and d.duong is None
+
+
+async def test_adbd_im_lang_luc_dau_roi_tra_loi_thi_thu_lai_dung_mot_lan(may):
+    """Quan sát thật: mở kết nối NGAY sau khi đóng kết nối trước, adbd bỏ im; thử lại sau một lát thì chạy."""
+    _fs, _p1, fa, p2 = may
+    giu = await _loa(p2, None, "direct").open("dai:x")           # client khác đang giữ chỗ duy nhất
+    d = _loa(p2, None, "direct")
+
+    async def tha():
+        await asyncio.sleep(1.0)                                  # sau khi lần bắt tay thứ nhất đã hết giờ (1,5 s: chưa) ...
+        await giu.close()                                         # ... chỗ trống trước lần thử lại (khoảng 1,55 s)
+
+    t = asyncio.create_task(tha())
+    assert await d.shell("q") == "ra:q"                           # lần thử lại thành công
+    await t
+    assert fa.so_ket_noi >= 3

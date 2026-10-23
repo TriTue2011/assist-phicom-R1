@@ -91,6 +91,21 @@
       },
       "settings": {
         "name": "Settings summary"
+      },
+      "cpu": {
+        "name": "Speaker CPU"
+      },
+      "ram": {
+        "name": "Speaker RAM"
+      },
+      "bo_nho": {
+        "name": "Speaker storage"
+      },
+      "wifi": {
+        "name": "Speaker WiFi signal"
+      },
+      "thoi_gian_chay": {
+        "name": "Speaker uptime"
       }
     },
     "media_player": {
@@ -118,6 +133,11 @@
       },
       "light_service": {
         "name": "Light service"
+      }
+    },
+    "button": {
+      "reboot": {
+        "name": "Restart speaker"
       }
     }
   },
@@ -275,6 +295,28 @@
         "entity_id": {
           "name": "Speaker",
           "description": "Any r1_speaker entity of the speaker."
+        }
+      }
+    },
+    "install_apps": {
+      "name": "Install apps on the speaker",
+      "description": "Install the apps shipped with the integration (player, device, mic APK) on the speaker over ADB, in order; a brand-new speaker uses exactly this. Returns a result per app.",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        },
+        "apps": {
+          "name": "Apps",
+          "description": "List of ids: player, unisound, bodam. Empty = all."
+        },
+        "force": {
+          "name": "Remove old build with a different signature",
+          "description": "If the speaker has the same package signed differently: uninstall then reinstall (that app's settings are lost)."
+        },
+        "configure": {
+          "name": "Configure the mic APK",
+          "description": "After installing the mic APK, run its setup command once (default on)."
         }
       }
     }

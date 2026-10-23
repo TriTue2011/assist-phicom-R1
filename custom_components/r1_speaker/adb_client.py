@@ -22,6 +22,11 @@ _LOGGER = logging.getLogger(__name__)
 MODE_AUTO, MODE_SERVER, MODE_DIRECT = "auto", "server", "direct"
 DEFAULT_SERVER = "127.0.0.1:5037"
 TIMEOUT_S = 5.0
+#: Nối thẳng: giữ kết nối thêm ngần này giây sau luồng cuối cùng rồi mới nhả (adbd đôi khi im lặng với kết nối mở NGAY sau
+#: khi đóng; giữ thêm cũng tránh nối đi nối lại khi hai lệnh đến sát nhau).
+IDLE_S = 8.0
+#: Chờ trước khi thử lại một lần nếu adbd không trả lời bắt tay.
+THU_LAI_S = 1.5
 
 A_CNXN, A_AUTH, A_OPEN, A_OKAY, A_CLSE, A_WRTE = (
     0x4E584E43, 0x48545541, 0x4E45504F, 0x59414B4F, 0x45534C43, 0x45545257)
@@ -102,6 +107,7 @@ class _DirectTransport:
         self.streams: dict[int, "_MuxStream"] = {}
         self._next = 0
         self.chet = False
+        self._nha: asyncio.TimerHandle | None = None
         self._task = asyncio.get_running_loop().create_task(self._doc())
         self.khi_het_luong = None
 
@@ -138,6 +144,7 @@ class _DirectTransport:
             self._w.close()
 
     async def mo(self, service: str) -> "_MuxStream":
+        self.huy_nha()
         self._next += 1
         st = _MuxStream(self, self._next)
         self.streams[st.local] = st
@@ -154,14 +161,27 @@ class _DirectTransport:
 
     async def bo_luong(self, st: "_MuxStream") -> None:
         self.streams.pop(st.local, None)
-        if not self.streams:
-            self.chet = True
-            self._task.cancel()
-            self._w.close()
-            with contextlib.suppress(Exception):
-                await asyncio.wait_for(self._w.wait_closed(), 2)
-            if self.khi_het_luong is not None:
-                self.khi_het_luong()
+        if not self.streams and self._nha is None and not self.chet:
+            self._nha = asyncio.get_running_loop().call_later(IDLE_S, lambda: asyncio.get_running_loop().create_task(self.dong()))
+
+    def huy_nha(self) -> None:
+        """Có luồng mới: huỷ hẹn nhả kết nối."""
+        if self._nha is not None:
+            self._nha.cancel()
+            self._nha = None
+
+    async def dong(self) -> None:
+        """Nhả kết nối nếu vẫn không còn luồng nào."""
+        self._nha = None
+        if self.streams or self.chet:
+            return
+        self.chet = True
+        self._task.cancel()
+        self._w.close()
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(self._w.wait_closed(), 2)
+        if self.khi_het_luong is not None:
+            self.khi_het_luong()
 
 
 class _MuxStream(AdbStream):
@@ -310,7 +330,13 @@ class AdbDevice:
 
     async def _open_direct(self, service: str) -> AdbStream:
         async with self._khoa:                            # một lần nối tại một thời điểm
-            tr = await self._transport()
+            try:
+                tr = await self._transport()
+            except AdbError as exc:
+                if "không trả lời" not in str(exc):
+                    raise
+                await asyncio.sleep(THU_LAI_S)             # adbd còn đang dọn kết nối vừa đóng: thử lại đúng một lần
+                tr = await self._transport()
             return await tr.mo(service)
 
     # ── giao diện chung ────────────────────────────────────────
@@ -337,12 +363,23 @@ class AdbDevice:
             loi.append(f"nối thẳng: {exc or type(exc).__name__}")
             raise AdbError("; ".join(loi)) from exc
 
-    async def shell(self, cmd: str, *, limit: int = 1 << 20) -> str:
+    async def shell(self, cmd: str, *, limit: int = 1 << 20, timeout: float = 30) -> str:
         s = await self.open(f"shell:{cmd}")
         try:
-            return (await asyncio.wait_for(s.read_all(limit), 30)).decode("utf-8", "replace")
+            return (await asyncio.wait_for(s.read_all(limit), timeout)).decode("utf-8", "replace")
         finally:
             await s.close()
+
+    async def reboot(self) -> None:
+        """Khởi động lại loa (dịch vụ ``reboot:`` của adbd). Loa đóng kết nối ngay nên lỗi đọc sau lệnh là bình thường."""
+        s = await self.open("reboot:")
+        try:
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(s.read_all(), 5)
+        finally:
+            with contextlib.suppress(Exception):
+                await s.close()
+        self.duong = None
 
     async def push(self, data: bytes, remote: str, mode: int = 0o755) -> None:
         """Đẩy tệp bằng giao thức sync (SEND / DATA / DONE)."""
