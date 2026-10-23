@@ -217,3 +217,22 @@ async def test_do_sang_chung_duoc_nho_va_chan_gia_tri_sai(hass, r1):
     for sai in (-1, 101, True, 12.5):
         with pytest.raises(ServiceValidationError):
             await lights.async_set_master(sai)
+
+
+async def test_hieu_ung_vien_rieng_chon_chay_duoi_n_thi_apk_nhan_dung_id_n_va_tat_thi_ve_hieu_ung_dap(hass, r1):
+    e, port = await _them_co_dau_nhan(hass, r1)
+    reader, writer = await _noi_apk(e, port)
+    await _bao(writer, True)
+    await _bo_khung(reader)
+    await hass.services.async_call("r1_speaker", "set_light_function", {
+        "entity_id": CAI_DAT, "function": "cho", "enabled": True, "rim": True, "color": "#00ff00", "effect": "none",
+        "brightness": 100, "rim_kieu": 3}, blocking=True)
+    assert await _lay_id(reader, 1) == [3]                       # viền «Chạy đuổi 3» = ID firmware 3
+    assert await _doc_khung_hoac_none(reader) is None
+    await hass.services.async_call("r1_speaker", "set_light_function", {
+        "entity_id": CAI_DAT, "function": "cho", "rim_kieu": 0}, blocking=True)
+    assert await _lay_id(reader, 1) == [501]                     # bỏ viền riêng: về hiệu ứng đáy (xanh lá cố định)
+    with pytest.raises(Exception):
+        await hass.services.async_call("r1_speaker", "set_light_function", {
+            "entity_id": CAI_DAT, "function": "cho", "rim_kieu": 25}, blocking=True)
+    writer.close()

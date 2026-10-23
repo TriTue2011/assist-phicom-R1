@@ -22,5 +22,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/TriTue2011/assist-phicom-R1/issues",
   "requirements": [],
-  "version": "0.3.3"
+  "version": "0.3.4"
 }

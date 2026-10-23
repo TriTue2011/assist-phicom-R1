@@ -374,11 +374,30 @@ async def test_cai_dat_chi_tiet_chinh_duoc_o_the_va_thanh_lenh_dich_vu(hass, r1)
     assert " *" in _html(_mo_hinh(g), {"open": True, "tab": "audio"})
 
 
-def test_the_cai_dat_khong_con_sot_lai_ma_kieu_vien():
-    """Gỡ ô «Kiểu viền» từng để sót các <option> trần và </select> mồ côi (hiện danh sách «Không / Chạy đuổi 1…» ngoài mọi ô chọn)."""
+def test_o_hieu_ung_vien_la_mot_select_dung_nghia_khong_co_option_tran():
+    """Ô «Hiệu ứng viền» phải là MỘT <select> có nhãn; từng lỗi gỡ dở để lại <option> trần và </select> mồ côi (danh sách dài ngoài ô chọn)."""
     js = CARD.read_text(encoding="utf-8")
-    for cam in ("Chạy đuổi ", "rimKieu", "rim_kieu", "Array.from({ length: 24 }"):
-        assert cam not in js, cam
-    # mọi </select> phải có <select> mở tương ứng trong cùng tệp
-    assert js.count("<select") + js.count("'<select") >= 0
     assert js.count("</select>") <= js.count("<select"), "có </select> mồ côi"
+    assert "Hiệu ứng viền" in js and 'data-field' in js
+    # mọi chuỗi tạo <option> «Chạy đuổi» chỉ nằm trong khối dựng ô chọn có <select ...rim_kieu
+    dau = js.index("Hiệu ứng viền")
+    assert js.index("Chạy đuổi ") > dau and js.index('</select></div>', dau) > js.index("Chạy đuổi ")
+
+
+async def test_hieu_ung_vien_ket_xuat_dung_o_chon_co_nhan_va_hien_muc_dang_chon(hass, r1):
+    """Kết xuất thật: mỗi chức năng có MỘT <select> «Hiệu ứng viền» (Không + Chạy đuổi 1–24), gói đủ <option>, không có <option> trần."""
+    import re
+    await _them(hass, r1)
+    await hass.services.async_call("r1_speaker", "set_light_function", {
+        "entity_id": "sensor.r1_cai_dat", "function": "nghe", "rim_kieu": 3}, blocking=True)
+    await hass.async_block_till_done()
+    h = _html(_mo_hinh(_hass_gia(hass)), {"open": True, "tab": "light"})
+    for fn in ("cho", "nghe", "nghi", "phan_hoi", "dam_thoai", "loi", "tat_mic"):
+        khoi = re.search(r'<select data-fn="%s" data-field="rim_kieu">(.*?)</select>' % fn, h, re.S)
+        assert khoi, f"chức năng {fn} thiếu ô chọn Hiệu ứng viền"
+        assert len(re.findall(r"<option ", khoi.group(1))) == 25            # Không + 24 kiểu
+    nghe = re.search(r'<select data-fn="nghe" data-field="rim_kieu">(.*?)</select>', h, re.S).group(1)
+    assert '<option value="3" selected>Chạy đuổi 3</option>' in nghe        # hiện đúng mục đang chọn
+    ngoai = re.sub(r"<select.*?</select>", "", h, flags=re.S)
+    assert "Chạy đuổi" not in ngoai, "có <option> trần nằm ngoài ô chọn"
+    assert h.count("<select") == h.count("</select>")
