@@ -3,21 +3,21 @@
 Kho này gồm hai phần chạy cùng nhau để biến loa **Phicomm R1** thành một thiết bị của Home Assistant (HA):
 
 1. **Tích hợp HA `r1_speaker`** (`custom_components/r1_speaker/`): chỉnh EQ, âm lượng, DLNA/AirPlay của loa; phát tiếng của HA
-   (TTS, nhạc) ra loa; vệ tinh Assist; bộ đàm; cài đặt đèn; ba thẻ Lovelace (`r1-eq-card`, `r1-talk-card`, `r1-settings-card`).
+   (TTS, nhạc) ra loa; vệ tinh Assist; bộ đàm; cài đặt đèn; một thẻ Lovelace `r1-card` (đàm thoại, EQ, cài đặt).
 2. **APK `vn.r1.bodam`** (`apk/`): ứng dụng Android nhỏ cài lên loa, lấy tiếng từ micro của loa gửi về HA, **chỉ khi người dùng bật**.
    Nút giữa của loa bật/tắt mic (nhấn đôi bật/tắt Bluetooth).
 
 > **Đọc trước khi làm theo.** Đây là dự án thử nghiệm. Phần lớn mã đã được kiểm bằng **loa giả** (mock) trên máy phát triển; chỉ
-> một số điểm được kiểm trên loa thật. Mục [7. Trạng thái](#7-trạng-thái-đã-kiểm-trên-loa-thật-và-chỉ-kiểm-bằng-mock) liệt kê rõ,
-> không hứa hơn những gì đã đo. Cài APK lên loa là việc **khó đảo và chạm vào phần mềm gốc của loa**: chỉ làm khi bạn chủ động quyết định.
+> một số điểm được kiểm trên loa thật. Phần đã kiểm trên loa thật nằm trong [docs/PHAT-TRIEN.md](docs/PHAT-TRIEN.md); không hứa hơn những gì đã đo. Cài APK lên loa là việc **khó đảo và chạm vào phần mềm gốc của loa**: chỉ làm khi bạn chủ động quyết định.
 
 **Giấy phép: CHỦ MÁY CHỌN GIẤY PHÉP.** Kho chưa có tệp `LICENSE`; chủ kho phải chọn giấy phép trước khi công khai/phân phối.
 
 ## Mục lục
 
 1. [Yêu cầu](#1-yêu-cầu-phần-mềm) · 2. [Cài tích hợp HA](#2-cài-tích-hợp-ha) · 3. [Cài APK lên loa](#3-cài-apk-lên-loa-chỉ-khi-bạn-đã-quyết-định) ·
-4. [Nút giữa](#4-nút-giữa) · 5. [Đèn](#5-đèn) · 6. [Cấu hình mic về HA](#6-nối-mic-loa-về-ha) · 7. [Trạng thái](#7-trạng-thái-đã-kiểm-trên-loa-thật-và-chỉ-kiểm-bằng-mock) ·
-8. [Quyền riêng tư](#8-quyền-riêng-tư) · 9. [Chạy test](#9-chạy-test) · 10. [Cấu trúc kho](#10-cấu-trúc-kho) · 11. [Việc còn thiếu](#11-việc-còn-thiếu-đã-biết)
+4. [Nút giữa](#4-nút-giữa) · 5. [Đèn](#5-đèn) · 6. [Cấu hình mic về HA](#6-nối-mic-loa-về-ha) · 7. [Quyền riêng tư](#7-quyền-riêng-tư)
+
+Dành cho người phát triển (trạng thái đã kiểm, chạy test, cấu trúc kho, việc còn thiếu): [docs/PHAT-TRIEN.md](docs/PHAT-TRIEN.md).
 
 ## 1. Yêu cầu phần mềm
 
@@ -56,7 +56,7 @@ Kho này gồm hai phần chạy cùng nhau để biến loa **Phicomm R1** thà
 - Nếu báo «Không đọc được loa»: sai IP/cổng, hoặc cổng 8080 bị chặn. Tích hợp thử bằng một lần `get_info` khi bạn bấm Gửi.
 - Sau khi thêm: có thiết bị **Phicomm R1** với 5 thực thể EQ (`number.phicomm_r1_eq_60_hz` … `_14_khz`), `number.phicomm_r1_volume`,
   `media_player.r1_loa`, `assist_satellite.r1`, `sensor.r1_trang_thai_mic`…
-- Kéo thử một dải EQ: lệnh ghi dải EQ đã được xác nhận trên loa thật; các lệnh khác xem bảng ở mục 7.
+- Kéo thử một dải EQ: lệnh ghi dải EQ đã được xác nhận trên loa thật; các lệnh khác xem `docs/PHAT-TRIEN.md`.
 - Thẻ: tích hợp **tự đăng ký** tài nguyên `/r1_speaker/r1-card.js`; chỉ cần thêm thẻ `type: custom:r1-card`
   (thẻ gộp, 3 tab Đàm thoại / EQ / Cài đặt; tên loa và hàng tab luôn hiện, nội dung đóng sẵn). Chi tiết: `docs/HUONG-DAN-CAI-DAT.md` mục 2.
 - Phát tiếng ra loa (TTS/nhạc) cần thêm tích hợp **DLNA Digital Media Renderer** của HA cho loa — xem `docs/PHAT-RA-LOA.md`.
@@ -99,9 +99,7 @@ adb -s <IP-loa>:5555 shell /system/bin/pm uninstall vn.r1.bodam
 
 Chi tiết từng bước và kiểm tra sau cài: `docs/CAI-APK.md`.
 
-**Cấu hình APK** (host HA, cổng, khoá): APK có **một màn hình cài đặt** (`ManHinhChinh`) với các ô *Host HA*, *Port*, *Khoá*, khuếch đại dB,
-khoảng nhấn đôi (ms), keycode nút giữa và công tắc *chế độ kiểm phím*. **Loa R1 không có màn hình**, và bản NV245 **chưa có cách điền
-các ô này mà không cần màn hình** (xem mục 11). Đây là lỗ hổng lớn nhất khi muốn dùng APK; việc sửa đã được lập danh sách nhưng chưa làm.
+**Cấu hình APK** làm qua tích hợp (xem các bước ở trên): thẻ tạo sẵn lệnh có host, cổng và khoá; loa R1 không có màn hình nên không có ô nhập trên loa.
 
 ## 4. Nút giữa
 
@@ -142,32 +140,7 @@ bằng mắt**; mọi giá trị mặc định của bảng chức năng đều 
 5. `switch.r1_tat_mic` bật: HA **đóng kết nối** của loa và từ chối nối lại cho tới khi tắt công tắc (có test).
 
 
-## 7. Trạng thái: đã kiểm trên loa thật và chỉ kiểm bằng mock
-
-**Đã kiểm trên loa thật (do chủ dự án thực hiện, theo tài liệu và báo cáo đo):**
-
-- Cổng 8080 trả `get_info` và `get_eq_config`; cấu trúc dữ liệu EQ đã đọc thật (5 dải, giới hạn ±1500 mB).
-- Ghi thật và đọc lại: `set_eq_bandlevel` (dải 0) và `set_bass_enable`.
-- Mã phím nút giữa = 195 (đọc từ `/dev/input/event0`).
-- Đèn viền chỉ trắng; đèn đáy xanh lá và xanh dương (xem mắt) — mục 5.
-- Phần cứng/hệ điều hành (RK3229, Android 5.1.1, card âm thanh AK7755, shell uid 2000).
-
-**CHỈ kiểm bằng mock/loa giả (chưa thử trên loa thật hoặc HA thật cùng loa):**
-
-- Toàn bộ tích hợp HA: **316 ca test** với loa giả ở `127.0.0.1` (WebSocket giả, renderer UPnP giả, client TCP giả), xem mục 9.
-- **Âm lượng** đã xác nhận (nghe thật 22/10/2026): đặt qua APK bằng `AudioManager.setStreamVolume`, không qua cổng 8080. Các lệnh còn lại: bật/tắt EQ, cường độ bass, loudness, DLNA/AirPlay (viết theo tài liệu dịch ngược, **chưa ghi thử**; thực thể mang
-  thuộc tính `confirmed: false`, thẻ ghi «chưa xác nhận»). Preset EQ chỉ hiển thị.
-- Phát TTS/nhạc qua DLNA (`Set_DLNA_Open`, cổng của renderer, định dạng âm thanh nhận được).
-- **Đầu nhận mic của HA** (`mic_server.py`) với **client TCP giả** theo giao thức APK; **APK chưa từng nối vào HA thật**.
-- APK: build thành công (aapt/javac/d8/zipalign/apksigner mã thoát 0), **30 ca test Java thuần** (khung gói, khuếch đại dB, máy ghi với vận chuyển giả,
-  logic nút với đồng hồ giả) — báo cáo của người build; **mã nguồn không có trong kho nên người nhận không chạy lại được**. Khi đóng gói đã
-  đối chiếu bytecode của APK: khung giao thức, mã 195, `repeatCount==0`, manifest khớp báo cáo.
-- **Chưa kiểm trên loa thật**: cài APK; mic qua `AudioRecord` có ra tiếng không và ai đang giữ mic (ứng dụng giọng nói gốc của loa có thể giữ); độ trễ; nút giữa
-  có tới được app; Bluetooth bật/tắt; `pm hide`; mọi đèn do HA điều khiển; thẻ trong trình duyệt thật ngoài Chrome không đầu.
-- **Chưa có**: dịch vụ phát PCM thô ra loa (bộ đàm nói vào loa), từ đánh thức chạy trên loa (đèn đã có bằng hiệu ứng firmware; đàm thoại hai chiều đã có ở thẻ)
-  (việc này đang được làm, chưa hoàn thành).
-
-## 8. Quyền riêng tư
+## 7. Quyền riêng tư
 
 - **Mic chỉ gửi khi được bật.** APK không ghi âm ra bộ nhớ hay log, không tự khởi động cùng máy (không có receiver khởi động), không có wake-word, chỉ ghi
   khi bạn bật bằng nút trên màn hình, nút giữa, hoặc lệnh kiểm thử. Tắt là dừng ghi, gửi khung `end` và đóng kết nối.
@@ -180,39 +153,3 @@ bằng mắt**; mọi giá trị mặc định của bảng chức năng đều 
 - **Bản kiểm thử (`apk/nguon`, biến thể kiemthu) có receiver exported** (`KIEM_MIC`, `KIEM_DEN_NHAC`): bất kỳ app nào trên loa gửi được lệnh bật mic tới
   host bất kỳ. **Bản phát hành `apk/vn-r1-bodam.apk` không có chúng**, và cửa cấu hình bằng intent của `ManHinhChinh` chỉ nhận khi app CHƯA cấu hình.
 - Đừng đặt loa ở nơi người ngoài ra lệnh được cho nhà (mic + từ đánh thức); đừng dán URL bộ đàm (chứa khoá) ra ngoài.
-
-## 9. Chạy test
-
-```bash
-python3.13 -m venv .venv
-.venv/bin/pip install -r requirements-test.txt
-.venv/bin/python -m pytest                                  # toàn bộ; loa giả ở 127.0.0.1, KHÔNG chạm loa thật
-.venv/bin/python -m pytest tests/test_mic_server.py -q      # riêng đầu nhận mic (khoá sai, đứt giữa chừng, tắt mic, khung lẻ...)
-.venv/bin/python -m bandit -r custom_components -lll -q     # quét bảo mật mức cao
-```
-
-Mọi khoá/token/địa chỉ trong `tests/` là **chuỗi giả** (địa chỉ ví dụ ở dải `192.0.2.0/24`
-của RFC 5737 hoặc `127.0.0.1`); không có bí mật thật. Bộ test nặng khoảng 1,5 phút; xét **mã thoát** vì cấu hình có thể nén dòng tổng kết.
-
-## 10. Cấu trúc kho
-
-```
-custom_components/r1_speaker/   tích hợp HA (mã, translations/, www/ chứa 3 thẻ Lovelace)
-apk/                            vn-r1-bodam.apk + .sha256; nguon/ = mã nguồn APK + test Java + README-BUILD
-docs/                           HUONG-DAN-CAI-DAT.md, HOP-DONG-PHIA-LOA.md, DEN-LED.md, PHAT-RA-LOA.md, THIET-KE-MIC.md, BAI-HOC-TU-CAMERA.md
-tests/                          test pytest (loa giả)
-requirements-test.txt  pytest.ini  hacs.json
-```
-
-`docs/HUONG-DAN-CAI-DAT.md` là hướng dẫn HA đầy đủ (tuỳ chọn, thẻ, Assist, bộ đàm); `docs/HOP-DONG-PHIA-LOA.md` là hợp đồng giao thức HA ↔ loa. Hai tài liệu này đã được
-đồng bộ với README; nếu thấy mâu thuẫn thì README (mục 7) là bản trạng thái mới nhất.
-
-## 11. Việc còn thiếu đã biết
-
-- **Nút giữa chỉ chạy khi app ở tiền cảnh**, hoặc khi bật dịch vụ tiếp cận phím (mặc định tắt).
-- Cấu hình APK không cần màn hình chỉ làm được LẦN ĐẦU bằng `am start` (mục 3); đổi về sau phải `pm clear`.
-- APK ký bằng khoá debug; mic tự bật sau khi loa khởi động lại (đã viết, **chưa kiểm** bằng khởi động lại thật).
-- `mic_host` đóng hai vai (mục 6; `docs/HOP-DONG-PHIA-LOA.md` 2b).
-- Giấy phép: **CHỦ MÁY CHỌN GIẤY PHÉP** (chưa có `LICENSE`).
-- Chưa có: từ đánh thức phát hiện NGAY TRÊN loa (từ đánh thức đang chạy ở phía HA bằng openWakeWord khi mic gửi liên tục), dịch vụ đèn trên loa (xem `docs/DEN-LED.md`).
-- Các giá trị mặc định đánh dấu «CHƯA ĐO» trong tuỳ chọn (ngưỡng bộ đàm, +12 dB mic, cổng 18765, 8765…) là số đề xuất.
