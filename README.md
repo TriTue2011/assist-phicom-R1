@@ -82,23 +82,27 @@ cấu hình. **Chưa kiểm:** tự bật mic sau khi loa khởi động lại (
   chỉ mở mic rất ngắn, tiếng bị bỏ ở phía HA).
 - Shell trên loa là `uid=2000` (không root, không `su`).
 
-Các bước:
+Các bước (chạy trên máy tính cùng mạng với loa; cần ADB qua mạng của loa đang mở — xem `docs/CAI-APK.md`).
+Thay `<IP-loa>`, `<IP-HA>`, `<khoá>` bằng giá trị của bạn; khoá và cổng lấy ở thẻ Cài đặt → Kết nối → «Hiện lệnh cài APK» (chỉ quản trị viên):
 
-Cài APK và cấu hình mic: làm qua tích hợp (thẻ Cài đặt → Kết nối → «Hiện lệnh cài APK», chỉ quản trị viên).
+```bash
+adb connect <IP-loa>:5555
+adb -s <IP-loa>:5555 push apk/vn-r1-bodam.apk /data/local/tmp/
+adb -s <IP-loa>:5555 shell /system/bin/pm install -r /data/local/tmp/vn-r1-bodam.apk
+# Cấu hình LẦN ĐẦU (chỉ nhận khi app chưa cấu hình), rồi bật mic:
+adb -s <IP-loa>:5555 shell /system/bin/am start -n vn.r1.bodam/.ManHinhChinh --es host <IP-HA> --ei port 18765 --es khoa <khoá>
+adb -s <IP-loa>:5555 shell /system/bin/am start -n vn.r1.bodam/.ManHinhChinh --ez bat true
+```
 
-
-Muốn đổi cấu hình về sau: xoá dữ liệu app (qua thẻ Cài đặt) rồi cấu hình lại; app đã cấu hình thì bỏ qua lệnh đổi, (app đã cấu hình thì bỏ qua lệnh đổi, để app khác trên loa không chuyển được
-đích đến của tiếng mic).
-
-Tuỳ chọn, **chỉ khi chủ loa quyết định** — ẩn gói gốc của hãng cho khỏi tranh mic/nút: (không còn lệnh; làm qua quản trị viên).
-
-- Đây là **ẩn**, không xoá: gói gốc vẫn nằm trong hệ thống, làm ngược lại được.
-- Lệnh này **chưa được kiểm trong dự án này**; nếu shell không đủ quyền thì lệnh sẽ báo lỗi và không đổi gì.
+Dùng đường dẫn đầy đủ `/system/bin/pm` (lệnh `pm` trần bị chặn trên loa). Muốn đổi cấu hình về sau: `adb -s <IP-loa>:5555 shell /system/bin/pm clear vn.r1.bodam` rồi làm lại hai lệnh cấu hình; app đã cấu hình thì bỏ qua lệnh đổi từ bên ngoài, để app khác trên loa không đổi được đích tiếng mic.
 
 **Gỡ / hoàn tác:**
 
 ```bash
+adb -s <IP-loa>:5555 shell /system/bin/pm uninstall vn.r1.bodam
 ```
+
+Chi tiết từng bước, kiểm sha256 và kiểm tra sau cài: `docs/CAI-APK.md`.
 
 **Cấu hình APK** (host HA, cổng, khoá): APK có **một màn hình cài đặt** (`ManHinhChinh`) với các ô *Host HA*, *Port*, *Khoá*, khuếch đại dB,
 khoảng nhấn đôi (ms), keycode nút giữa và công tắc *chế độ kiểm phím*. **Loa R1 không có màn hình**, và bản NV245 **chưa có cách điền
