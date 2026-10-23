@@ -164,6 +164,11 @@ class R1OptionsFlow(OptionsFlowWithReload):
                     self.hass.config_entries.async_update_entry(
                         entry, data={**entry.data, CONF_MIC_LISTEN_KEY: secrets.token_urlsafe(24),
                                      CONF_MIC_CHUA_GHEP: True})
+                    # Chỉ DỮ LIỆU đổi (tuỳ chọn không đổi) nên HA không tự nạp lại mục: máy chủ nghe mic đang chạy phải
+                    # được nạp khoá mới tại chỗ, nếu không APK xin được khoá mới rồi bị chính HA từ chối hello.
+                    may_chu = getattr(getattr(entry, "runtime_data", None), "mic_server", None)
+                    if may_chu is not None:
+                        may_chu.dat_khoa(entry.data[CONF_MIC_LISTEN_KEY])
                 self._co_ban = {CONF_HOST: host, CONF_PORT: port, CONF_HA_URL: url.rstrip("/")}
                 if user_input.get(CONF_NANG_CAO):
                     return await self.async_step_nang_cao()

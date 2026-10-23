@@ -87,6 +87,14 @@ class R1MicServer:
         #: Gọi khi loa (đúng IP) gửi hello nhưng SAI khoá: APK đã mất khoá, cần được ghép lại.
         self.khi_sai_khoa: Callable[[], None] | None = None
 
+    @property
+    def khoa(self) -> str:
+        return self._key
+
+    def dat_khoa(self, key: str) -> None:
+        """Đổi khoá đang kiểm hello NGAY, không đóng cổng: phiên đang nối giữ nguyên, kết nối sau phải chào khoá mới."""
+        self._key = key or ""
+
     # ── Trạng thái ────────────────────────────────────────────────────────────
 
     @property

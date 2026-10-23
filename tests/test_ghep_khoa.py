@@ -119,3 +119,20 @@ async def test_khoa_tu_dat_bi_gui_sai_van_khong_mo_cua(hass, r1, hass_client_no_
     assert "mic_chua_ghep" not in e.data
     assert (await (await hass_client_no_auth()).post(URL)).status == 409
     writer.close()
+
+
+async def test_ghep_lai_nap_khoa_moi_vao_may_chu_dang_chay(hass, r1, hass_client_no_auth):
+    """Lỗi thật 23/10: «Ghép lại APK» đổi khoá trong cấu hình nhưng máy chủ nghe mic vẫn giữ khoá cũ, nên APK
+    xin được khoá mới ở cửa ghép rồi bị chính HA từ chối hello."""
+    e = await _them(hass, r1)
+    cu = e.data["mic_listen_key"]
+    assert e.runtime_data.mic_server.khoa == cu
+    res = await hass.config_entries.options.async_init(e.entry_id)
+    await hass.config_entries.options.async_configure(
+        res["flow_id"], {"host": "127.0.0.1", "port": r1.port, "ghep_lai_apk": True})
+    await hass.async_block_till_done()
+    moi = e.data["mic_listen_key"]
+    assert moi != cu
+    assert e.runtime_data.mic_server.khoa == moi               # máy chủ đang chạy đã dùng khoá mới
+    j = await (await (await hass_client_no_auth()).post(URL)).json()
+    assert j["key"] == e.runtime_data.mic_server.khoa          # khoá cửa ghép trao == khoá máy chủ kiểm
