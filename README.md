@@ -97,7 +97,7 @@ Dùng đường dẫn đầy đủ `/system/bin/pm` (lệnh `pm` trần bị ch�
 adb -s <IP-loa>:5555 shell /system/bin/pm uninstall vn.r1.bodam
 ```
 
-Chi tiết từng bước, kiểm sha256 và kiểm tra sau cài: `docs/CAI-APK.md`.
+Chi tiết từng bước và kiểm tra sau cài: `docs/CAI-APK.md`.
 
 **Cấu hình APK** (host HA, cổng, khoá): APK có **một màn hình cài đặt** (`ManHinhChinh`) với các ô *Host HA*, *Port*, *Khoá*, khuếch đại dB,
 khoảng nhấn đôi (ms), keycode nút giữa và công tắc *chế độ kiểm phím*. **Loa R1 không có màn hình**, và bản NV245 **chưa có cách điền
