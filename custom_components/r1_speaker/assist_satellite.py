@@ -50,6 +50,8 @@ RECHECK = 1.0
 PLAY_START_WAIT = 3.0
 PLAY_MAX = 120.0
 POLL = 0.2
+#: Dỡ tải: chờ vòng nghe dừng tối đa ngần này giây rồi bỏ (pipeline HA không trả lại thì không kẹt cả mục).
+DUNG_TOI_DA = 5.0
 #: Hết tiếng loa còn vang: giữ bỏ mic thêm ngần này giây.
 TAIL = 0.5
 _PLAYING = {"playing", "buffering"}
@@ -131,9 +133,17 @@ class R1Satellite(R1MicEntity, AssistSatelliteEntity):
         if self.talk.driver is self:
             self.talk.driver = None
         if self._vong is not None:
+            # Cho luồng tiếng KẾT THÚC trước (pipeline đang chờ tiếng thì tự thoát), rồi mới huỷ. Chỉ huỷ thì pipeline của
+            # HA (dò từ đánh thức qua Wyoming) có thể không trả lại: dỡ tải kẹt mãi, mục không nạp lại được sau khi lưu
+            # tuỳ chọn (23/10/2026, thấy bằng ``python -m asyncio ps`` trên HA thật). Chờ có hạn, quá hạn thì bỏ.
+            self._cut += 1
+            with contextlib.suppress(asyncio.QueueFull):
+                self._hang.put_nowait(None)
             self._vong.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._vong
+            xong, _ = await asyncio.wait({self._vong}, timeout=DUNG_TOI_DA)
+            if not xong:
+                _LOGGER.warning("%s: vòng nghe không dừng sau %.0f giây — bỏ chờ để dỡ tải được",
+                                self.entity_id, DUNG_TOI_DA)
         await super().async_will_remove_from_hass()
 
     @callback
