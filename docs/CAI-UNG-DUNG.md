@@ -47,7 +47,7 @@ Thực thể `button.r1_khoi_dong_lai` («Khởi động lại loa») gửi lệ
 
 1. Kết nối WiFi cho loa: [KET-NOI-WIFI.md](KET-NOI-WIFI.md).
 2. Thêm tích hợp trong HA với IP loa.
-3. Chạy `install_apps` (hoặc bấm Cài đặt ở thực thể «Ứng dụng: APK mic bộ đàm»), rồi bấm **Khởi động lại loa** một lần để các ứng dụng hệ thống nạp bản mới.
+3. Chạy `install_apps` (cài đủ ba ứng dụng rồi tự «Chuẩn bị loa»; hoặc bấm Cài đặt ở từng thực thể «Ứng dụng: …» rồi nút «Chuẩn bị loa (ẩn ứng dụng gốc)»), rồi bấm **Khởi động lại loa** một lần để các ứng dụng hệ thống nạp bản mới.
 
 **Điều kiện:** cổng ADB mạng của loa (`5555`) phải mở. Trên loa của chủ kho cổng này mở sẵn và còn sau khi khởi động lại; **chưa kiểm trên loa mới tinh** (nếu 5555 đóng, tích hợp báo lỗi ADB rõ ràng và không cài được gì).
 
@@ -62,11 +62,14 @@ Thực thể `button.r1_khoi_dong_lai` («Khởi động lại loa») gửi lệ
 | Mic về HA bị tranh sau khi cài `unisound` | `adb shell pm uninstall com.phicomm.speaker.device` (hoặc ngắt ứng dụng đó), rồi khởi động lại loa |
 
 
-## Ứng dụng rủi ro: `player` (autodlna.apk) và `unisound`
+## Công thức đúng: cài đủ rồi «Chuẩn bị loa» (ẩn ứng dụng gốc)
 
-Hai ứng dụng này ghi đè **ứng dụng hệ thống của hãng** (`com.phicomm.speaker.player`, `com.phicomm.speaker.device`) nên không còn nằm trong «cài mặc định» và
-không có nút «Cài đặt» trên thực thể (chỉ hiện phiên bản đã cài). Chủ máy ghi nhận (24/10/2026) loa vừa reset bị hỏng sau khi cài chúng: cổng điều khiển 8080
-không trả lời, ứng dụng không giữ qua lần khởi động lại, loa tự khởi động lại. Chưa xác định chính xác cái nào gây ra.
+Chương trình *Bo Cai R1* trên máy tính (đã chạy tốt trên loa vừa reset, 24/10/2026) làm: cài `player` (autodlna.apk), `unisound` (gói `com.phicomm.speaker.device`) và `bodam`;
+**ẩn** (`pm hide`) bảy ứng dụng gốc của hãng (`airskill`, `exceptionreporter`, `systemtool`, `device`, `otaservice`, `productiontest`, `bugreport`); **hiện lại** `ijetty` (máy chủ
+cổng 8080) và `netctl`; khởi chạy `EchoService`; ghi dấu bản; khởi động lại loa. Sau đó cổng 8080 trả lời `get_info` ngay (100 giây sau khi bật).
 
-Muốn cài vẫn được, nhưng **từng cái một**: `install_apps` với `apps: [player]` (hoặc `[unisound]`), khởi động lại loa, kiểm cổng 8080 (`get_info`) rồi mới cài cái kế.
-Cài hỏng thì gỡ bản cập nhật để về bản gốc: `adb shell pm uninstall com.phicomm.speaker.player` (hoặc `...device`).
+Cài các APK **mà không ẩn** thì loa hỏng (cổng 8080 không trả lời, ứng dụng mất, loa tự khởi động lại): các ứng dụng gốc nhiễu khi máy chủ của hãng không còn (`systemtool` tắt/bật
+Wi-Fi, `device` chờ đám mây…). Vì vậy tích hợp làm đúng như chương trình đó:
+- `install_apps` cài xong tự chạy «Chuẩn bị loa» (tắt bằng `prepare: false`); `unisound` được ẩn ngay sau khi cài.
+- Nút **«Chuẩn bị loa (ẩn ứng dụng gốc)»** và dịch vụ `r1_speaker.prepare_speaker` (`reboot: true` để khởi động lại luôn) chạy riêng bước ẩn/hiện, đảo được bằng `pm unhide`.
+- Sau cùng **khởi động lại loa** một lần.

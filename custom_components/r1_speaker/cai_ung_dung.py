@@ -51,7 +51,22 @@ class UngDung:
     mac_dinh: bool
     mo_ta: str = ""
     sau_cai: str | None = None
-    canh_bao: str = ""             # có chữ = ứng dụng rủi ro (ghi đè ứng dụng hệ thống): không cài mặc định, không có nút cài một chạm
+    canh_bao: str = ""             # có chữ = ghi đè ứng dụng hệ thống: hiện cảnh báo trong ghi chú bản phát hành
+    an_sau_cai: bool = False       # cài xong thì pm hide ngay (công thức của Bo Cai R1: device cài rồi ẩn)
+
+
+#: «Chuẩn bị loa»: quy trình đã chạy tốt bằng chương trình *Bo Cai R1* trên máy tính (24/10/2026, loa vừa reset: sau đó cổng 8080 trả lời, 100 giây sau khi bật).
+#: Ẩn (pm hide, đảo được bằng pm unhide) các ứng dụng gốc của hãng vốn gây nhiễu khi máy chủ của hãng không còn: systemtool tắt/bật Wi-Fi, otaservice, device chờ đám
+#: mây, bugreport/productiontest/airskill/exceptionreporter; giữ và hiện lại ijetty (máy chủ cổng 8080) và netctl.
+AN_KHI_CHUAN_BI = ("com.phicomm.speaker.airskill", "com.phicomm.speaker.exceptionreporter", "com.phicomm.speaker.systemtool",
+                   "com.phicomm.speaker.device", "com.phicomm.speaker.otaservice", "com.phicomm.speaker.productiontest",
+                   "com.phicomm.speaker.bugreport")
+HIEN_KHI_CHUAN_BI = ("com.phicomm.speaker.ijetty", "com.phicomm.speaker.netctl")
+#: Dọn trước khi cài (đúng như Bo Cai R1): tệp cập nhật OTA dở và dữ liệu của otaservice (OTA dở có thể làm loa vào chế độ phục hồi/khởi động lại), cho phép cài ngoài chợ.
+DON_TRUOC_KHI_CAI = ("rm -f /sdcard/otaprop.txt", "rm -f /sdcard/incremental*.zip",
+                     "pm clear com.phicomm.speaker.otaservice", "settings put secure install_non_market_apps 1")
+KHOI_CHAY_KHI_CHUAN_BI = ("am startservice -a android.intent.action.MAIN -c android.intent.category.LAUNCHER "
+                          "-n com.phicomm.speaker.player/.EchoService")
 
 
 @dataclass(frozen=True)
@@ -101,7 +116,7 @@ def doc_bo_cai(duong: Path = BO_CAI) -> list[UngDung]:
     for d in data["ung_dung"]:
         ud = UngDung(id=d["id"], ten=d["ten"], goi=d["goi"], tep=tuple(d["tep"]), sha256=d["sha256"].lower(),
                      phien_ban=str(d["phien_ban"]), thu_tu=int(d["thu_tu"]), mac_dinh=bool(d.get("mac_dinh", True)),
-                     mo_ta=d.get("mo_ta", ""), sau_cai=d.get("sau_cai"), canh_bao=d.get("canh_bao", ""))
+                     mo_ta=d.get("mo_ta", ""), sau_cai=d.get("sau_cai"), canh_bao=d.get("canh_bao", ""), an_sau_cai=bool(d.get("an_sau_cai", False)))
         if not _ID.match(ud.id) or ud.id in thay:
             raise ValueError(f"mã ứng dụng không hợp lệ hoặc trùng: {ud.id!r}")
         if not _GOI.match(ud.goi) or not _VERSION.match(ud.phien_ban) or not re.match(r"^[0-9a-f]{64}$", ud.sha256):
@@ -209,6 +224,9 @@ class BoCai:
                     viec = f"chạy «pm install {tep_loa}»"
                     ok, ma = self._ket_qua_pm(await self.dev.shell(f"pm install {tep_loa}", timeout=CAI_TOI_DA_S))
                     kq.buoc.append(f"pm install: {ma}")
+                if ok and ud.an_sau_cai:
+                    viec = f"chạy «pm hide {ud.goi}»"
+                    kq.buoc.append(f"pm hide {ud.goi}: {(await self.dev.shell(f'pm hide {ud.goi}', timeout=30)).strip()[-40:] or 'xong'}")
                 if ok and ud.sau_cai == "cau_hinh_bodam" and cau_hinh:
                     viec = "cấu hình ứng dụng vừa cài"
                     kq.buoc.append(await self._cau_hinh_bodam())
@@ -242,12 +260,46 @@ class BoCai:
                              f"--es khoa {khoa} --ez bat true", timeout=30)
         return "đã chạy lệnh cấu hình APK"
 
+    async def don_ota(self, kq: KetQua) -> None:
+        """Chạy ``DON_TRUOC_KHI_CAI``; lệnh nào báo lỗi (ví dụ tệp không có) chỉ ghi lại, không dừng. Lỗi ADB thì ném lên."""
+        for lenh in DON_TRUOC_KHI_CAI:
+            out = (await self.dev.shell(lenh, timeout=30)).strip()
+            kq.buoc.append(f"dọn «{lenh}»: {out.splitlines()[-1][:60] if out else 'xong'}")
+
+    async def chuan_bi_loa(self) -> KetQua:
+        """Ẩn các ứng dụng gốc gây nhiễu, hiện lại ijetty/netctl, khởi chạy EchoService. Không cài, không gỡ, không khởi động lại loa; ADB hỏng thì ``kq.ok`` False."""
+        kq = KetQua("chuan_bi", False, "")
+        async with self._khoa:
+            try:
+                await self.don_ota(kq)
+                for goi, an in [(g, True) for g in AN_KHI_CHUAN_BI] + [(g, False) for g in HIEN_KHI_CHUAN_BI]:
+                    out = (await self.dev.shell(f"pm {'hide' if an else 'unhide'} {goi}", timeout=30)).strip()
+                    xong = f"new hidden state: {'true' if an else 'false'}" in out
+                    kq.buoc.append(f"{'ẩn' if an else 'hiện'} {goi}: {'xong' if xong else (out.splitlines()[-1][:80] if out else 'không phản hồi')}")
+                kq.buoc.append("khởi chạy EchoService: " + ("xong" if "Starting service" in await self.dev.shell(KHOI_CHAY_KHI_CHUAN_BI, timeout=30) else "không rõ"))
+                self._nho.clear()
+                kq.ok, kq.thong_bao = True, "Đã chuẩn bị loa (nên khởi động lại loa rồi cài «APK mic bộ đàm»)"
+            except (AdbError, OSError, asyncio.TimeoutError) as exc:
+                kq.thong_bao = f"Lỗi ADB khi chuẩn bị loa (bước «{kq.buoc[-1] if kq.buoc else 'đầu tiên'}» xong trước đó): {exc or type(exc).__name__}"
+        (_LOGGER.info if kq.ok else _LOGGER.warning)("chuẩn bị loa: %s | %s", kq.thong_bao, "; ".join(kq.buoc))
+        return kq
+
     async def cai_nhieu(self, ma: list[str] | None = None, *, go_ban_cu: bool = False,
-                        cau_hinh: bool = True) -> list[KetQua]:
-        """Cài các ứng dụng (mặc định: những cái ``mac_dinh``) theo ``thu_tu``; một cái hỏng không chặn cái sau."""
+                        cau_hinh: bool = True, chuan_bi: bool = True) -> list[KetQua]:
+        """Cài các ứng dụng (mặc định: những cái ``mac_dinh``) theo ``thu_tu``; một cái hỏng không chặn cái sau. Cài xong ít nhất một cái thì chạy
+        «Chuẩn bị loa» (ẩn ứng dụng gốc): cài ứng dụng hệ thống mà không ẩn thì loa hỏng (24/10/2026), nên đây là mặc định."""
         chon = [self.tim(m) for m in ma] if ma else [u for u in self.ung_dung if u.mac_dinh]
-        return [await self.cai(u, go_ban_cu=go_ban_cu, cau_hinh=cau_hinh)
-                for u in sorted(chon, key=lambda u: u.thu_tu)]
+        if chuan_bi:                                       # dọn OTA TRƯỚC khi cài (cài lâu, OTA dở có thể khởi động lại loa giữa chừng)
+            truoc = KetQua("don_ota", False, "")
+            try:
+                async with self._khoa:
+                    await self.don_ota(truoc)
+            except (AdbError, OSError, asyncio.TimeoutError) as exc:
+                _LOGGER.warning("dọn OTA trước khi cài lỗi (bỏ qua, vẫn cài): %s", exc or type(exc).__name__)
+        ra = [await self.cai(u, go_ban_cu=go_ban_cu, cau_hinh=cau_hinh) for u in sorted(chon, key=lambda u: u.thu_tu)]
+        if chuan_bi and any(k.ok for k in ra):
+            ra.append(await self.chuan_bi_loa())
+        return ra
 
     def _bao(self) -> None:
         if self.khi_doi is not None:
@@ -274,7 +326,7 @@ def dang_ky_dich_vu(hass, ma_ung_dung: list[str]) -> None:  # noqa: ANN001 - tr�
         bo = entry.runtime_data.apps
         try:
             kq = await bo.cai_nhieu(call.data.get("apps") or None, go_ban_cu=call.data.get("force", False),
-                                    cau_hinh=call.data.get("configure", True))
+                                    cau_hinh=call.data.get("configure", True), chuan_bi=call.data.get("prepare", True))
         except ValueError as exc:
             raise ServiceValidationError(str(exc)) from exc
         ra = {"ket_qua": [{"id": k.id, "ok": k.ok, "thong_bao": k.thong_bao, "buoc": k.buoc} for k in kq]}
@@ -282,9 +334,25 @@ def dang_ky_dich_vu(hass, ma_ung_dung: list[str]) -> None:  # noqa: ANN001 - tr�
             raise HomeAssistantError("Không cài được ứng dụng nào: " + "; ".join(f"{k.id}: {k.thong_bao}" for k in kq))
         return ra
 
+    async def _chuan_bi(call: ServiceCall) -> dict:
+        rec = er.async_get(hass).async_get(call.data["entity_id"])
+        entry = hass.config_entries.async_get_entry(rec.config_entry_id) if rec else None
+        if entry is None or entry.domain != DOMAIN or getattr(entry, "runtime_data", None) is None:
+            raise ServiceValidationError(f"{call.data['entity_id']} không phải thực thể r1_speaker đã nạp")
+        bo = entry.runtime_data.apps
+        kq = await bo.chuan_bi_loa()
+        if not kq.ok:
+            raise HomeAssistantError(kq.thong_bao)
+        if call.data.get("reboot"):
+            await bo.dev.reboot()
+        return {"thong_bao": kq.thong_bao, "buoc": kq.buoc, "da_khoi_dong_lai": bool(call.data.get("reboot"))}
+
+    hass.services.async_register(DOMAIN, "prepare_speaker", _chuan_bi, supports_response=SupportsResponse.OPTIONAL,
+                                 schema=vol.Schema({vol.Required("entity_id"): cv.entity_id, vol.Optional("reboot"): cv.boolean}))
     hass.services.async_register(DOMAIN, "install_apps", _cai, supports_response=SupportsResponse.OPTIONAL,
                                  schema=vol.Schema({
                                      vol.Required("entity_id"): cv.entity_id,
                                      vol.Optional("apps"): [vol.In(ma_ung_dung)],
                                      vol.Optional("force"): cv.boolean,
-                                     vol.Optional("configure"): cv.boolean}))
+                                     vol.Optional("configure"): cv.boolean,
+                                     vol.Optional("prepare"): cv.boolean}))

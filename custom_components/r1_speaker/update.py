@@ -46,8 +46,7 @@ class R1AppUpdate(UpdateEntity):
         self._attr_title = ud.ten
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry.entry_id)})
         self._attr_release_summary = (f"{ud.canh_bao}\n\n{ud.mo_ta}" if ud.canh_bao else ud.mo_ta) or None
-        if ud.canh_bao:                                               # ứng dụng rủi ro: không mời cài một chạm, chỉ cài bằng dịch vụ install_apps có chỉ tên
-            self._attr_supported_features = UpdateEntityFeature(0)
+
 
     @property
     def _bo(self):
@@ -60,8 +59,8 @@ class R1AppUpdate(UpdateEntity):
     @property
     def latest_version(self) -> str:
         tt = self._tt
-        if tt is not None and tt.cai and (tt.an or self._ud.canh_bao):
-            return self.installed_version or self._ud.phien_ban      # gói bị ẩn / ứng dụng rủi ro: không mời «cập nhật» (xem installed_version)
+        if tt is not None and tt.cai and tt.an:
+            return self.installed_version or self._ud.phien_ban      # gói bị ẩn: không mời «cập nhật» (xem installed_version)
         return self._ud.phien_ban
 
     @property

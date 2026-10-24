@@ -53,6 +53,12 @@ class FakeDev:
             return "pkg: /data/local/tmp/x.apk\n" + (self.pm if self.pm == "Success" else f"Failure [{self.pm}]") + "\n"
         if cmd.startswith("pm uninstall"):
             return "Success\n"
+        if cmd.startswith("pm clear"):
+            return "Success\n"
+        if cmd.startswith("pm hide") or cmd.startswith("pm unhide"):
+            return f"Package {cmd.split()[-1]} new hidden state: {'true' if cmd.startswith('pm hide') else 'false'}\n"
+        if cmd.startswith("am startservice"):
+            return "Starting service: Intent { cmp=com.phicomm.speaker.player/.EchoService }\n"
         return ""
 
     async def push(self, data, remote, mode=0o755):
@@ -127,7 +133,7 @@ async def test_khac_chu_ky_bao_ro_va_chi_go_ban_cu_khi_duoc_phep():
     assert not any(c.startswith("pm uninstall") for c in dev.cmds)              # KHÔNG tự gỡ khi chưa cho phép
     dev2 = FakeDev(khac_chu_ky=True)
     kq2 = await BoCai(dev2, cau_hinh_bodam=lambda: None).cai(bo.tim("unisound"), go_ban_cu=True)
-    assert kq2.ok and [c.split()[1] for c in dev2.cmds if c.startswith("pm")] == ["install", "uninstall", "install"]
+    assert kq2.ok and [c.split()[1] for c in dev2.cmds if c.startswith("pm")] == ["install", "uninstall", "install", "hide"]
     assert "pm uninstall com.phicomm.speaker.device" in dev2.cmds
 
 
@@ -161,22 +167,64 @@ async def test_cai_nhieu_theo_thu_tu_mot_cai_hong_khong_chan_cai_sau():
 
     dev.shell = shell
     bo = BoCai(dev, cau_hinh_bodam=lambda: None)
-    kq = await bo.cai_nhieu(["player", "unisound", "bodam"])               # phải GHI TÊN: player và unisound không còn «mặc định»
-    assert [(k.id, k.ok) for k in kq] == [("player", True), ("unisound", False), ("bodam", True)]
+    kq = await bo.cai_nhieu()
+    assert [(k.id, k.ok) for k in kq] == [("player", True), ("unisound", False), ("bodam", True), ("chuan_bi", True)]
     assert "INSTALL_FAILED_DEXOPT" in kq[1].thong_bao
-    assert [k.id for k in await bo.cai_nhieu(["bodam", "player"])] == ["player", "bodam"]    # luôn theo thứ tự
+    assert [k.id for k in await bo.cai_nhieu(["bodam", "player"], chuan_bi=False)] == ["player", "bodam"]    # luôn theo thứ tự
     with pytest.raises(ValueError):
         await bo.cai_nhieu(["khong_co"])
 
 
-async def test_cai_mac_dinh_khong_dung_vao_ung_dung_he_thong_cua_hang():
-    """24/10/2026: loa vừa reset hỏng sau khi cài player (autodlna.apk) và unisound, vốn ghi đè ứng dụng HỆ THỐNG: không được cài ‘cả bộ’ nữa."""
+async def test_cai_du_ba_ung_dung_roi_chuan_bi_loa_giong_bo_cai_r1():
+    """Công thức đã chạy tốt trên loa vừa reset (Bo Cai R1, 24/10/2026): cài player, device(unisound), bodam rồi ẨN bảy ứng dụng gốc, hiện ijetty/netctl,
+    khởi chạy EchoService. Cài ứng dụng hệ thống mà không ẩn thì loa hỏng."""
+    from custom_components.r1_speaker.cai_ung_dung import AN_KHI_CHUAN_BI, HIEN_KHI_CHUAN_BI
     dev = FakeDev()
     bo = BoCai(dev, cau_hinh_bodam=lambda: None)
-    assert [u.id for u in bo.ung_dung if not u.mac_dinh] == ["player", "unisound"]
-    assert all(u.canh_bao for u in bo.ung_dung if not u.mac_dinh) and not any(u.canh_bao for u in bo.ung_dung if u.mac_dinh)
-    assert [k.id for k in await bo.cai_nhieu()] == ["bodam"]
-    assert not any("r1-player" in c or "r1-unisound" in c for c in dev.cmds)
+    kq = await bo.cai_nhieu()
+    assert [k.id for k in kq] == ["player", "unisound", "bodam", "chuan_bi"] and all(k.ok for k in kq)
+    lenh = dev.cmds
+    i_cuoi_cai = max(i for i, c in enumerate(lenh) if c.startswith("pm install"))
+    hide = [c for c in lenh if c.startswith("pm hide")]
+    assert [c.split()[-1] for c in hide[1:]] == list(AN_KHI_CHUAN_BI)                     # hide[0] là unisound tự ẩn ngay sau khi cài
+    assert hide[0] == "pm hide com.phicomm.speaker.device"
+    assert [c.split()[-1] for c in lenh if c.startswith("pm unhide")] == list(HIEN_KHI_CHUAN_BI)
+    assert any(c.startswith("am startservice") and "EchoService" in c for c in lenh)
+    i_don = lenh.index("pm clear com.phicomm.speaker.otaservice")
+    assert i_don < lenh.index("pm install -r /data/local/tmp/r1-player.apk")                  # dọn OTA TRƯỚC khi cài, như Bo Cai R1
+    assert "rm -f /sdcard/otaprop.txt" in lenh and "settings put secure install_non_market_apps 1" in lenh
+    assert not any("rm -rf" in c for c in lenh)
+    assert min(i for i, c in enumerate(lenh) if c.startswith("pm hide")) > lenh.index(f"pm install -r /data/local/tmp/r1-player.apk")   # ẩn SAU khi cài
+    assert i_cuoi_cai < max(i for i, c in enumerate(lenh) if c.startswith("pm hide"))
+    assert all("không phản hồi" not in b and "xong" in b for b in kq[-1].buoc if b.startswith(("ẩn", "hiện", "khởi chạy")))
+
+
+async def test_chuan_bi_loa_loi_adb_bao_ro_buoc_va_khong_nem():
+    dev = FakeDev()
+    goc = dev.shell
+    n = {"i": 0}
+
+    async def shell(cmd, **kw):
+        if cmd.startswith("pm hide"):
+            n["i"] += 1
+            if n["i"] == 3:
+                raise AdbError("adbd của loa từ chối ngay dịch vụ «shell:pm hide x»")
+        return await goc(cmd, **kw)
+
+    dev.shell = shell
+    kq = await BoCai(dev).chuan_bi_loa()
+    assert not kq.ok and "Lỗi ADB khi chuẩn bị loa" in kq.thong_bao and "từ chối" in kq.thong_bao and len(kq.buoc) == 6      # 4 bước dọn + 2 lần ẩn xong trước lần thứ 3 hỏng
+
+
+async def test_cai_mot_ung_dung_he_thong_co_canh_bao_va_van_co_nut_cai(hass, ha_cai):
+    e, bo, dev = ha_cai
+    from homeassistant.helpers.entity_component import async_update_entity
+    for khoa in ("trinh_phat", "unisound"):
+        eid = next(i for i in _ud_ids(hass) if khoa in i)
+        await async_update_entity(hass, eid)
+        st = hass.states.get(eid)
+        assert st.attributes["supported_features"] & 1                       # có nút cài (UpdateEntityFeature.INSTALL)
+        assert "ẩn" in st.attributes["release_summary"]
 
 
 async def test_loi_adb_thanh_ket_qua_co_thong_diep_va_khong_nem():
@@ -279,20 +327,6 @@ async def test_moi_ung_dung_co_mot_thuc_the_cap_nhat_va_cai_bang_nut(hass, ha_ca
         await hass.services.async_call("update", "install", {"entity_id": pl}, blocking=True)
 
 
-async def test_ung_dung_rui_ro_khong_co_nut_cai_mot_cham_va_hien_canh_bao(hass, ha_cai):
-    e, bo, dev = ha_cai
-    from homeassistant.helpers.entity_component import async_update_entity
-    for khoa in ("trinh_phat", "unisound"):
-        eid = next(i for i in _ud_ids(hass) if khoa in i)
-        await async_update_entity(hass, eid)
-        st = hass.states.get(eid)
-        assert st.attributes["supported_features"] == 0                   # không có UpdateEntityFeature.INSTALL
-        assert "CẢNH BÁO" in st.attributes["release_summary"]
-        with pytest.raises(HomeAssistantError):
-            await hass.services.async_call("update", "install", {"entity_id": eid}, blocking=True)
-    assert not any(c.startswith("pm install") for c in dev.cmds)
-
-
 async def test_thuc_the_goi_bi_an_khong_moi_cap_nhat_va_noi_ro_dang_an(hass, ha_cai):
     e, bo, dev = ha_cai
     dev.cai_san["com.phicomm.speaker.device"] = ("", "", "V3.2.5.2-", True)
@@ -308,7 +342,7 @@ async def test_dich_vu_install_apps_tra_ket_qua_tung_ung_dung(hass, ha_cai):
     e, bo, dev = ha_cai
     r = await hass.services.async_call("r1_speaker", "install_apps", {
         "entity_id": "sensor.r1_cai_dat", "apps": ["bodam", "player"]}, blocking=True, return_response=True)
-    assert [(k["id"], k["ok"]) for k in r["ket_qua"]] == [("player", True), ("bodam", True)]
+    assert [(k["id"], k["ok"]) for k in r["ket_qua"]] == [("player", True), ("bodam", True), ("chuan_bi", True)]
     dev.fail = "ADB hỏng"
     with pytest.raises(HomeAssistantError, match="Không cài được"):
         await hass.services.async_call("r1_speaker", "install_apps", {"entity_id": "sensor.r1_cai_dat"}, blocking=True)
@@ -365,3 +399,22 @@ async def test_loi_o_buoc_day_tep_noi_ro_dang_day_tep():
     dev.push = push
     kq = await BoCai(dev).cai(doc_bo_cai()[0])
     assert not kq.ok and "Lỗi ADB khi đẩy tệp lên loa" in kq.thong_bao and "sync:" in kq.thong_bao
+
+
+async def test_nut_va_dich_vu_chuan_bi_loa(hass, ha_cai):
+    e, bo, dev = ha_cai
+    eid = next(i for i in hass.states.async_entity_ids("button") if "chuan_bi" in i)
+    await hass.services.async_call("button", "press", {"entity_id": eid}, blocking=True)
+    assert sum(1 for c in dev.cmds if c.startswith("pm hide")) == 7 and sum(1 for c in dev.cmds if c.startswith("pm unhide")) == 2
+    goi = []
+
+    async def reboot():
+        goi.append(1)
+
+    dev.reboot = reboot
+    r = await hass.services.async_call("r1_speaker", "prepare_speaker", {"entity_id": "sensor.r1_cai_dat", "reboot": True},
+                                       blocking=True, return_response=True)
+    assert r["da_khoi_dong_lai"] is True and goi == [1] and len(r["buoc"]) == 14
+    dev.fail = "ADB hỏng"
+    with pytest.raises(HomeAssistantError, match="Lỗi ADB khi chuẩn bị loa"):
+        await hass.services.async_call("button", "press", {"entity_id": eid}, blocking=True)

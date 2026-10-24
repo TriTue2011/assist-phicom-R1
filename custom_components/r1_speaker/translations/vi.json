@@ -142,6 +142,9 @@
     "button": {
       "reboot": {
         "name": "Khởi động lại loa"
+      },
+      "chuan_bi": {
+        "name": "Chuẩn bị loa (ẩn ứng dụng gốc)"
       }
     }
   },
@@ -304,7 +307,7 @@
     },
     "install_apps": {
       "name": "Cài ứng dụng lên loa",
-      "description": "Cài ứng dụng đi kèm tích hợp lên loa qua ADB, theo thứ tự; trả kết quả từng ứng dụng. Bỏ trống danh sách thì chỉ cài APK mic (an toàn); trình phát và thiết bị ghi đè ứng dụng hệ thống của hãng nên phải ghi tên và cài từng cái một.",
+      "description": "Cài ứng dụng đi kèm tích hợp lên loa qua ADB, theo thứ tự (trình phát, thiết bị, APK mic), rồi tự «Chuẩn bị loa» (ẩn ứng dụng gốc gây nhiễu) như chương trình Bo Cai R1. Cài xong nên khởi động lại loa. Trả kết quả từng bước.",
       "fields": {
         "entity_id": {
           "name": "Loa",
@@ -312,7 +315,7 @@
         },
         "apps": {
           "name": "Ứng dụng",
-          "description": "Danh sách mã: bodam (mặc định), player, unisound. Bỏ trống = chỉ bodam. player và unisound có rủi ro: cài từng cái, khởi động lại loa rồi kiểm cổng 8080."
+          "description": "Danh sách mã: player, unisound, bodam. Bỏ trống = tất cả."
         },
         "force": {
           "name": "Gỡ bản cũ khác chữ ký",
@@ -321,6 +324,24 @@
         "configure": {
           "name": "Tự cấu hình APK mic",
           "description": "Cài xong APK mic thì chạy lệnh cấu hình MỘT lần (mặc định bật)."
+        },
+        "prepare": {
+          "name": "Chuẩn bị loa sau khi cài",
+          "description": "Mặc định bật: ẩn ứng dụng gốc gây nhiễu sau khi cài. Cài ứng dụng hệ thống mà không ẩn thì loa hỏng."
+        }
+      }
+    },
+    "prepare_speaker": {
+      "name": "Chuẩn bị loa (ẩn ứng dụng gốc)",
+      "description": "Chuẩn bị loa mới reset: ẩn các ứng dụng gốc của hãng gây nhiễu (systemtool, otaservice, device, bugreport…), hiện lại ijetty và netctl, khởi chạy EchoService. Đảo được bằng pm unhide. Không cài và không khởi động lại loa.",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        },
+        "reboot": {
+          "name": "Khởi động lại",
+          "description": "Khởi động lại loa ngay sau khi chuẩn bị."
         }
       }
     }

@@ -156,3 +156,18 @@ install_apps:
     configure:
       selector:
         boolean:
+    prepare:
+      selector:
+        boolean:
+
+prepare_speaker:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+    reboot:
+      required: false
+      selector:
+        boolean:

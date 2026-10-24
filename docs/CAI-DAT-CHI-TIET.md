@@ -63,6 +63,7 @@ nữa với IP khác, mỗi loa có khoá, cổng, phiên, đèn và thực th�
 | Bộ đàm | binary_sensor | Bật khi loa đã nối về HA (kênh phát sẵn sàng) | |
 | Từ đánh thức | binary_sensor | Bật thoáng chốc khi có trigger từ đánh thức | |
 | Dịch vụ đèn | binary_sensor | Đường ADB tới loa (chạy hiệu ứng đèn, cài ứng dụng, đọc thông tin) có dùng được không; thuộc tính `duong_adb` = `server` hoặc `direct` (mục 5) | tắt = lỗi ADB gần nhất, xem thuộc tính `loi` |
+| Chuẩn bị loa (ẩn ứng dụng gốc) | button | Ẩn (`pm hide`, đảo được) bảy ứng dụng gốc của hãng gây nhiễu, hiện lại `ijetty` và `netctl`, khởi chạy `EchoService`; dịch vụ tương ứng `prepare_speaker` (`reboot: true` để khởi động lại luôn). Làm sau khi cài ứng dụng, trước khi khởi động lại loa | cần ADB (mục 5) |
 | Khởi động lại loa | button | Gửi lệnh `reboot` cho loa qua ADB (loa lên lại sau khoảng nửa phút, APK tự nối về HA, HA áp lại đèn) | cần ADB (mục 5) |
 | Ứng dụng: *tên ứng dụng* | update | Một thực thể cho mỗi ứng dụng cài lên loa (trình phát, thiết bị, APK mic): phiên bản đã cài, bản đi kèm, nút **Cài đặt** (xem [CAI-UNG-DUNG.md](CAI-UNG-DUNG.md)) | đọc mỗi giờ |
 | CPU của loa | sensor | % CPU dùng, kèm số nhân, tần số, tải 1/5/15 phút và tiến trình nặng nhất ([THONG-TIN-HE-THONG.md](THONG-TIN-HE-THONG.md)) | 0–100 %, đọc qua ADB mỗi 60 giây |

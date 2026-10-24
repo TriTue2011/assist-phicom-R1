@@ -33,7 +33,7 @@
   <div class="the">
     <h2>Các bước</h2>
     <ol>
-      <li>Cắm điện loa, chờ đèn nhấp nháy — loa tự phát WiFi tên <b>Phicomm_R1_XXXX</b>.</li>
+      <li>Cắm điện loa, rồi <b>giữ nút trên loa 5–10 giây</b> (giống mục 1 của chương trình Bo Cai R1): đèn LED bắt đầu <b>nhấp nháy</b> và loa phát ra âm thanh — khi đó loa mới phát WiFi tên <b>Phicomm_R1_XXXX</b>. Loa đã có WiFi nhà mà chỉ cắm điện thì <b>không</b> phát mạng này.</li>
       <li>Nối điện thoại/máy tính vào WiFi đó (nên tắt dữ liệu di động và VPN để máy không đi đường khác).</li>
       <li>Điền tên + mật khẩu WiFi nhà ở dưới rồi bấm <b>Gửi cấu hình</b>.</li>
       <li>Chờ 10–20 giây: loa tự bắt WiFi nhà và tắt mạng Phicomm_R1_XXXX. Quay lại WiFi nhà rồi quét tìm loa.</li>
@@ -59,7 +59,7 @@
     <div id="nkt"></div>
   </div>
 
-  <p class="luu-y">Lưu ý: mở file này trực tiếp trong trình duyệt (không qua trang web trên mạng). Nếu trình duyệt chặn cách gửi thứ nhất, trang tự chuyển sang cách gửi thứ hai — cách này không đọc được phản hồi của loa, nên cứ chờ loa rời mạng Phicomm_R1_XXXX là biết đã nhận.</p>
+  <p class="luu-y">Lưu ý: mở file này trực tiếp trong trình duyệt (không qua trang web trên mạng). Nếu trình duyệt chặn cách gửi thứ nhất, trang tự chuyển sang cách gửi thứ hai — cách này không đọc được phản hồi của loa, nên cứ chờ loa rời mạng Phicomm_R1_XXXX là biết đã nhận. <b>Nếu sau 30 giây mạng Phicomm_R1_XXXX vẫn còn</b>, cách thứ hai chưa được loa chấp nhận (loa có thể đòi đúng kiểu JSON): hãy dùng chương trình <b>Bo Cai R1</b> trên máy tính, mục [1] (đã chạy tốt ngày 24/10/2026).</p>
 </div>
 
 <script>
@@ -115,7 +115,7 @@ document.getElementById('nut-gui').addEventListener('click', function() {
       ghi('Cách gửi JSON chuẩn bị chặn, đang thử cách gửi thứ hai…');
       goi(DIA_CHI, {method: 'POST', mode: 'no-cors', headers: {'Content-Type': 'text/plain;charset=utf-8'}, body: duLieu}, 10000)
         .then(function() {
-          ghi('Đã gửi (cách này trình duyệt không cho đọc phản hồi). Chờ 10–20 giây: nếu mạng Phicomm_R1_XXXX biến mất là loa đã nhận và đang bắt WiFi nhà.', 'ok');
+          ghi('Đã gửi bằng cách thứ hai (trình duyệt không cho đọc phản hồi). Chờ 30 giây: nếu mạng Phicomm_R1_XXXX biến mất là loa đã nhận. Nếu vẫn còn: loa không chấp nhận cách này, hãy dùng chương trình Bo Cai R1 trên máy tính (mục 1).', 'ok');
           nut.disabled = false;
         })
         .catch(function() {

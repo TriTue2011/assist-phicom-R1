@@ -142,6 +142,9 @@
     "button": {
       "reboot": {
         "name": "Restart speaker"
+      },
+      "chuan_bi": {
+        "name": "Prepare speaker (hide vendor apps)"
       }
     }
   },
@@ -304,7 +307,7 @@
     },
     "install_apps": {
       "name": "Install apps on the speaker",
-      "description": "Install the integration's bundled apps on the speaker over ADB, in order; returns a result per app. An empty list installs only the mic APK (safe); the player and device apps overwrite the vendor's SYSTEM apps, so name them and install one at a time.",
+      "description": "Install the bundled apps on the speaker over ADB, in order (player, device, mic APK), then run \"Prepare speaker\" (hide the interfering vendor apps) like the Bo Cai R1 program. Reboot the speaker afterwards. Returns a result per step.",
       "fields": {
         "entity_id": {
           "name": "Speaker",
@@ -312,7 +315,7 @@
         },
         "apps": {
           "name": "Apps",
-          "description": "App ids: bodam (default), player, unisound. Empty = bodam only. player and unisound are risky: install one at a time, reboot the speaker, then check port 8080."
+          "description": "App ids: player, unisound, bodam. Empty = all."
         },
         "force": {
           "name": "Remove old build with a different signature",
@@ -321,6 +324,24 @@
         "configure": {
           "name": "Configure the mic APK",
           "description": "After installing the mic APK, run its setup command once (default on)."
+        },
+        "prepare": {
+          "name": "Prepare after install",
+          "description": "On by default: hide the interfering vendor apps after installing. Installing system apps without hiding breaks the speaker."
+        }
+      }
+    },
+    "prepare_speaker": {
+      "name": "Prepare speaker (hide vendor apps)",
+      "description": "Prepare a freshly reset speaker: hide the vendor apps that interfere (systemtool, otaservice, device, bugreport…), unhide ijetty and netctl, start EchoService. Reversible with pm unhide. Does not install anything or reboot.",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        },
+        "reboot": {
+          "name": "Reboot",
+          "description": "Reboot the speaker right after preparing."
         }
       }
     }

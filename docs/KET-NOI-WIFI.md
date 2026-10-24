@@ -6,7 +6,7 @@ Dùng cho **loa mới tinh** hoặc loa **vừa reset về cài đặt gốc** (
 
 ## Các bước
 
-1. **Cắm điện loa**, chờ đèn **nhấp nháy** (loa chờ cấu hình). Loa tự phát WiFi tên **`Phicomm_R1_XXXX`** (XXXX là mã riêng của loa).
+1. **Cắm điện loa**, rồi **giữ nút trên loa 5–10 giây**: đèn **nhấp nháy** và loa phát ra âm thanh (loa chờ cấu hình). Lúc đó loa phát WiFi tên **`Phicomm_R1_XXXX`** (XXXX là mã riêng của loa). Đây là bước của chương trình *Bo Cai R1* (mục 1, đã chạy tốt 24/10/2026); chỉ cắm điện thì loa đã có WiFi nhà **không** phát mạng này.
 2. **Tải tệp HTML về** điện thoại hoặc máy tính (từ kho GitHub: mở tệp → *Download raw file*), **trước khi** đổi WiFi, vì khi nối vào WiFi của loa
    bạn sẽ không có Internet.
 3. **Nối điện thoại/máy tính vào WiFi `Phicomm_R1_XXXX`.** Nên **tắt dữ liệu di động và VPN** để máy không đi đường khác (điện thoại hay tự chuyển sang
@@ -38,5 +38,7 @@ Dùng cho **loa mới tinh** hoặc loa **vừa reset về cài đặt gốc** (
 
 **Bảo mật:** mật khẩu WiFi nhà đi qua HTTP thường tới loa trong mạng riêng `Phicomm_R1_XXXX` (chỉ máy bạn và loa). Hãy làm bước này ở nhà, không ở nơi đông người.
 Trang không lưu mật khẩu.
+
+**Nếu trang không được:** dùng chương trình *Bo Cai R1* trên máy tính, mục [1] «Cấu hình WiFi cho loa» (nối máy tính vào `Phicomm_R1_XXXX`, nhập SSID, loại mã hoá, mật khẩu; chương trình báo «Đã gửi cấu hình thành công»). Trình duyệt có thể chặn (CORS, mạng riêng) hoặc loa có thể đòi đúng kiểu JSON mà cách gửi dự phòng của trang không đáp ứng; công cụ trên máy tính không bị các giới hạn đó.
 
 **Chưa kiểm bởi tác giả của tài liệu này:** trang và địa chỉ `192.168.43.1:8989` do chủ kho cung cấp; tài liệu mô tả đúng nội dung trang, chưa chạy lại trên một loa vừa reset.
