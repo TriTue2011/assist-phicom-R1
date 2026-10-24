@@ -153,7 +153,7 @@
           "rotate_intercom_key": "Rotate the intercom URL key (old go2rtc lines stop working)",
           "nang_cao": "Edit advanced parameters (voice gate, noise, duplex)",
           "ghep_lai_apk": "Re-pair the speaker APK (new key; the APK fetches it by itself)",
-          "adb_server": "adb-server address (used when the mode is auto or server)",
+          "adb_server": "adb-server address (optional; leave EMPTY to connect straight to the speaker IP, port 5555)",
           "adb_mode": "How to reach the speaker over ADB: auto, server (via adb-server) or direct (straight to the speaker)"
         }
       },

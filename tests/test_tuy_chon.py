@@ -191,9 +191,9 @@ async def test_nhieu_loa_moi_loa_mot_cong_va_mot_khoa(hass, r1):
 
 
 async def test_tuy_chon_adb_luu_chi_khi_khac_goc_va_sink_dung_dung_dia_chi(hass, r1):
-    """Hai ô ADB: giá trị gốc (auto, 127.0.0.1:5037) không lưu; đổi thì lưu và sink đèn nhận đúng địa chỉ/chế độ."""
+    """Hai ô ADB: giá trị gốc (auto, địa chỉ adb-server TRỐNG = nối thẳng IP loa:5555) không lưu; đổi thì lưu và sink đèn nhận đúng địa chỉ/chế độ."""
     e = await _them(hass, r1)
-    assert e.runtime_data.lights.sink.dev.mode == "auto" and e.runtime_data.lights.sink.dev.server == "127.0.0.1:5037"
+    assert e.runtime_data.lights.sink.dev.mode == "auto" and e.runtime_data.lights.sink.dev.server == ""
     res = await hass.config_entries.options.async_init(e.entry_id)
     res = await hass.config_entries.options.async_configure(res["flow_id"], {
         "host": "127.0.0.1", "port": r1.port, "adb_server": "192.0.2.10:5037", "adb_mode": "direct"})
@@ -204,6 +204,6 @@ async def test_tuy_chon_adb_luu_chi_khi_khac_goc_va_sink_dung_dung_dia_chi(hass,
     assert dev.server == "192.0.2.10:5037" and dev.mode == "direct" and dev.port == 5555
     res = await hass.config_entries.options.async_init(e.entry_id)
     res = await hass.config_entries.options.async_configure(res["flow_id"], {
-        "host": "127.0.0.1", "port": r1.port, "adb_server": "127.0.0.1:5037", "adb_mode": "auto"})
+        "host": "127.0.0.1", "port": r1.port, "adb_server": "", "adb_mode": "auto"})
     await hass.async_block_till_done()
     assert "adb_server" not in e.options and "adb_mode" not in e.options        # về giá trị gốc: không lưu

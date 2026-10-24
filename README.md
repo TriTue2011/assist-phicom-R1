@@ -57,7 +57,7 @@ Sau đó: Cài đặt → Thiết bị & dịch vụ → **Thêm tích hợp** �
 
 Khoá và cổng nghe mic **do HA tự cấp** cho từng loa. Muốn thêm loa thứ hai: thêm tích hợp lần nữa với IP khác.
 
-**Tuỳ chọn** (Cấu hình tích hợp): IP/cổng loa; `ha_url` (địa chỉ HA mà loa gọi tới, dạng `http://<IP của HA>:8123`); **`adb_server`** (mặc định `127.0.0.1:5037`) và **`adb_mode`**
+**Tuỳ chọn** (Cấu hình tích hợp): IP/cổng loa; `ha_url` (địa chỉ HA mà loa gọi tới, dạng `http://<IP của HA>:8123`); **`adb_server`** (mặc định để trống = nối thẳng tới IP của loa, cổng 5555; chỉ điền khi thật sự có adb-server) và **`adb_mode`**
 (`auto` tự nhận diện, `server` chỉ qua adb-server, `direct` nối thẳng loa); *Ghép lại APK* (sinh khoá mới); thông số nâng cao (bộ đàm, khử tạp, song công).
 Từng cài đặt giải thích ở [docs/CAI-DAT-CHI-TIET.md](docs/CAI-DAT-CHI-TIET.md); cài đặt cụ thể và gỡ rối xem [docs/HUONG-DAN-CAI-DAT.md](docs/HUONG-DAN-CAI-DAT.md).
 

@@ -153,7 +153,7 @@
           "rotate_intercom_key": "Đổi khoá URL bộ đàm (các dòng go2rtc cũ sẽ ngừng chạy)",
           "nang_cao": "Chỉnh thông số nâng cao (cổng thoại, khử tạp, song công)",
           "ghep_lai_apk": "Ghép lại APK (sinh khoá mới; APK tự lấy, không phải copy)",
-          "adb_server": "Địa chỉ adb-server (dùng khi chế độ là tự nhận diện hoặc server)",
+          "adb_server": "Địa chỉ adb-server (tuỳ chọn; để TRỐNG = nối thẳng tới IP của loa, cổng 5555)",
           "adb_mode": "Cách nối ADB tới loa: auto (tự nhận diện), server (qua adb-server), direct (nối thẳng loa)"
         }
       },

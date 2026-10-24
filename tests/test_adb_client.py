@@ -336,3 +336,25 @@ async def test_nối_thang_lenh_pm_duoc_gui_bang_duong_dan_day_du(may):
     d = _loa(p2, None, "direct")
     assert await d.shell("pm install -r /data/local/tmp/r1-x.apk") == "ra:/system/bin/pm install -r /data/local/tmp/r1-x.apk"
     assert fa.lenh == ["shell:/system/bin/pm install -r /data/local/tmp/r1-x.apk"]
+
+
+def _cong_dong():
+    import socket
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+async def test_auto_server_vang_mat_khong_nhac_adb_server_trong_loi():
+    """Máy không có adb-server (lỗi 111 chỉ là «không có»): thông báo chỉ nói về đường nối thẳng, không đẩy người dùng đi tìm adb-server."""
+    d = AdbDevice("127.0.0.1", _cong_dong(), f"127.0.0.1:{_cong_dong()}", "auto")
+    with pytest.raises(AdbError) as e:
+        await d.shell("echo hi")
+    assert "adb-server" not in str(e.value) and "nối thẳng" in str(e.value)
+
+
+async def test_che_do_server_chon_tay_van_bao_loi_adb_server():
+    d = AdbDevice("127.0.0.1", _cong_dong(), f"127.0.0.1:{_cong_dong()}", "server")
+    with pytest.raises(AdbError) as e:
+        await d.shell("echo hi")
+    assert "adb-server" in str(e.value)

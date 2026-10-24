@@ -182,7 +182,10 @@ CONF_HA_URL = "ha_url"
 #: ADB tới loa để chạy hiệu ứng đèn (xem adb_client.py): địa chỉ adb-server, chế độ auto/server/direct.
 CONF_ADB_SERVER = "adb_server"
 CONF_ADB_MODE = "adb_mode"
-DEFAULT_ADB_SERVER = "127.0.0.1:5037"
+#: Trống = không dùng adb-server, nối thẳng tới IP của loa (cổng 5555). Chỉ điền khi thật sự có adb-server (chế độ server/auto).
+DEFAULT_ADB_SERVER = ""
+#: Địa chỉ dùng khi người dùng CHỌN chế độ «server» mà để trống ô địa chỉ.
+ADB_SERVER_LOCAL = "127.0.0.1:5037"
 DEFAULT_ADB_MODE = "auto"
 ADB_PORT = 5555
 

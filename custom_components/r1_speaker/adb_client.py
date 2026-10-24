@@ -363,7 +363,8 @@ class AdbDevice:
                 self.duong = MODE_SERVER
                 return s
             except (OSError, asyncio.TimeoutError, AdbError, asyncio.IncompleteReadError) as exc:
-                loi.append(f"adb-server: {exc or type(exc).__name__}")
+                if self.mode == MODE_SERVER or not isinstance(exc, ConnectionRefusedError):
+                    loi.append(f"adb-server: {exc or type(exc).__name__}")   # auto mà adb-server không tồn tại: không đáng nhắc, nối thẳng là đường chính
                 if self.mode == MODE_SERVER:
                     self.duong = None
                     raise AdbError(loi[-1]) from exc
