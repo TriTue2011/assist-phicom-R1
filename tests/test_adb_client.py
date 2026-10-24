@@ -313,3 +313,26 @@ async def test_adbd_im_lang_luc_dau_roi_tra_loi_thi_thu_lai_dung_mot_lan(may):
     assert await d.shell("q") == "ra:q"                           # lần thử lại thành công
     await t
     assert fa.so_ket_noi >= 3
+
+
+@pytest.mark.parametrize("vao,ra", [
+    ("pm install -r /data/local/tmp/r1-x.apk", "/system/bin/pm install -r /data/local/tmp/r1-x.apk"),
+    ("pm uninstall vn.r1.bodam", "/system/bin/pm uninstall vn.r1.bodam"),
+    ("  pm path a.b", "/system/bin/pm path a.b"),
+    ("pm", "/system/bin/pm"),
+    ("P=$(pm path a.b 2>/dev/null); echo $P", "P=$(pm path a.b 2>/dev/null); echo $P"),   # không đứng đầu lệnh thì loa không chặn
+    ("pmx --x", "pmx --x"),                                                              # không phải lệnh pm
+    ("am start -n a/.b", "am start -n a/.b"),
+    ("rm -f /data/local/tmp/r1-x.apk", "rm -f /data/local/tmp/r1-x.apk"),
+    ("sh /data/local/tmp/r1den.sh day sang", "sh /data/local/tmp/r1den.sh day sang"),
+])
+def test_chuan_hoa_shell_goi_pm_bang_duong_dan_day_du(vao, ra):
+    """Lỗi thật 24/10/2026: loa từ chối dịch vụ ``shell:pm …`` nên cài APK qua nối thẳng luôn hỏng sau khi đã đẩy tệp xong."""
+    assert adb_client.chuan_hoa_shell(vao) == ra
+
+
+async def test_nối_thang_lenh_pm_duoc_gui_bang_duong_dan_day_du(may):
+    _fs, _p1, fa, p2 = may
+    d = _loa(p2, None, "direct")
+    assert await d.shell("pm install -r /data/local/tmp/r1-x.apk") == "ra:/system/bin/pm install -r /data/local/tmp/r1-x.apk"
+    assert fa.lenh == ["shell:/system/bin/pm install -r /data/local/tmp/r1-x.apk"]

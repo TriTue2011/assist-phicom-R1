@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
 import struct
 import time
 from dataclasses import dataclass, field
@@ -21,6 +22,16 @@ _LOGGER = logging.getLogger(__name__)
 
 MODE_AUTO, MODE_SERVER, MODE_DIRECT = "auto", "server", "direct"
 DEFAULT_SERVER = "127.0.0.1:5037"
+
+#: adbd của loa TỪ CHỐI ngay (A_CLSE trước A_OKAY) mọi dịch vụ ``shell:`` có lệnh bắt đầu bằng ``pm`` (đo 24/10/2026 trên loa
+#: thật: ``pm``, ``pm path x``, ``pmx``, ``pminstall`` đều bị từ chối; `` pm``, ``/system/bin/pm``, ``sh -c "pm …"``, ``am …`` chạy được).
+#: Đường adb-server không dính vì ``adb shell`` dùng dịch vụ ``shell,v2``. Nên mọi lệnh ``pm`` đi nối thẳng phải gọi bằng đường dẫn đầy đủ.
+_PM_DAU_LENH = re.compile(r"^\s*pm(?=\s|$)")
+
+
+def chuan_hoa_shell(lenh: str) -> str:
+    """Đổi ``pm …`` thành ``/system/bin/pm …`` để adbd của loa không từ chối dịch vụ."""
+    return _PM_DAU_LENH.sub("/system/bin/pm", lenh, count=1)
 TIMEOUT_S = 5.0
 #: Nối thẳng: giữ kết nối thêm ngần này giây sau luồng cuối cùng rồi mới nhả (adbd đôi khi im lặng với kết nối mở NGAY sau
 #: khi đóng; giữ thêm cũng tránh nối đi nối lại khi hai lệnh đến sát nhau).
@@ -344,6 +355,8 @@ class AdbDevice:
     async def open(self, service: str) -> AdbStream:
         """Mở luồng tới ``service`` (``shell:<lệnh>`` / ``sync:``). Tự chọn đường theo ``mode``."""
         loi: list[str] = []
+        if service.startswith("shell:"):
+            service = "shell:" + chuan_hoa_shell(service[len("shell:"):])
         if self.mode in (MODE_AUTO, MODE_SERVER) and self.server:
             try:
                 s = await self._open_server(service)
