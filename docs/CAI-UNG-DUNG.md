@@ -26,7 +26,7 @@ Tệp APK nằm cùng thư mục (`apk/`); `unisound` được **chia hai phần
 action: r1_speaker.install_apps
 data:
   entity_id: sensor.r1_cai_dat
-  # apps: [player, unisound, bodam]   # bỏ trống = tất cả
+  # apps: [bodam]   # bỏ trống = chỉ những ứng dụng «mặc định» (hiện là bodam); player và unisound phải ghi tên và cài từng cái một
   # force: true                       # gỡ bản cũ nếu khác chữ ký (mất cấu hình của ứng dụng đó)
   # configure: false                  # không tự cấu hình APK mic sau khi cài
 ```
@@ -47,7 +47,7 @@ Thực thể `button.r1_khoi_dong_lai` («Khởi động lại loa») gửi lệ
 
 1. Kết nối WiFi cho loa: [KET-NOI-WIFI.md](KET-NOI-WIFI.md).
 2. Thêm tích hợp trong HA với IP loa.
-3. Chạy `install_apps` (hoặc bấm Cài đặt ở từng thực thể «Ứng dụng: …»), rồi bấm **Khởi động lại loa** một lần để các ứng dụng hệ thống nạp bản mới.
+3. Chạy `install_apps` (hoặc bấm Cài đặt ở thực thể «Ứng dụng: APK mic bộ đàm»), rồi bấm **Khởi động lại loa** một lần để các ứng dụng hệ thống nạp bản mới.
 
 **Điều kiện:** cổng ADB mạng của loa (`5555`) phải mở. Trên loa của chủ kho cổng này mở sẵn và còn sau khi khởi động lại; **chưa kiểm trên loa mới tinh** (nếu 5555 đóng, tích hợp báo lỗi ADB rõ ràng và không cài được gì).
 
@@ -60,3 +60,13 @@ Thực thể `button.r1_khoi_dong_lai` («Khởi động lại loa») gửi lệ
 | `sha256 … không khớp` | tệp APK trong tích hợp hỏng hoặc thiếu phần: cài lại tích hợp từ HACS |
 | Thực thể hiện «(đang ẩn)» | gói có trên loa nhưng bị ẩn (`pm hide`): `pm path` rỗng, tích hợp đọc `dumpsys package` (dòng `hidden=true`) | bình thường, không mời cập nhật; muốn cài đè vẫn gọi `install_apps` |
 | Mic về HA bị tranh sau khi cài `unisound` | `adb shell pm uninstall com.phicomm.speaker.device` (hoặc ngắt ứng dụng đó), rồi khởi động lại loa |
+
+
+## Ứng dụng rủi ro: `player` (autodlna.apk) và `unisound`
+
+Hai ứng dụng này ghi đè **ứng dụng hệ thống của hãng** (`com.phicomm.speaker.player`, `com.phicomm.speaker.device`) nên không còn nằm trong «cài mặc định» và
+không có nút «Cài đặt» trên thực thể (chỉ hiện phiên bản đã cài). Chủ máy ghi nhận (24/10/2026) loa vừa reset bị hỏng sau khi cài chúng: cổng điều khiển 8080
+không trả lời, ứng dụng không giữ qua lần khởi động lại, loa tự khởi động lại. Chưa xác định chính xác cái nào gây ra.
+
+Muốn cài vẫn được, nhưng **từng cái một**: `install_apps` với `apps: [player]` (hoặc `[unisound]`), khởi động lại loa, kiểm cổng 8080 (`get_info`) rồi mới cài cái kế.
+Cài hỏng thì gỡ bản cập nhật để về bản gốc: `adb shell pm uninstall com.phicomm.speaker.player` (hoặc `...device`).

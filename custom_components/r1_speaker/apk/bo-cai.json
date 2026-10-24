@@ -11,8 +11,9 @@
       "sha256": "db6def7f253fc1413fa1feec8674fd0a50f35fbb366da0a70f2144536f879bba",
       "phien_ban": "0.2.5",
       "thu_tu": 1,
-      "mac_dinh": true,
-      "mo_ta": "Bản cập nhật của ứng dụng hệ thống EchoService (cùng chữ ký Phicomm, dùng sharedUserId system). Phát nhạc DLNA, AirPlay, mạng."
+      "mac_dinh": false,
+      "mo_ta": "Bản cập nhật của ứng dụng hệ thống EchoService (cùng chữ ký Phicomm, dùng sharedUserId system). Phát nhạc DLNA, AirPlay, mạng.",
+      "canh_bao": "CẢNH BÁO: ghi đè ứng dụng HỆ THỐNG của hãng. Sau khi cài trên loa vừa reset, chủ máy ghi nhận loa hỏng (cổng điều khiển 8080 không trả lời, ứng dụng không giữ qua lần khởi động lại, loa tự khởi động lại). Không cài chung với cả bộ: cài MỘT cái, khởi động lại loa, kiểm cổng 8080 rồi mới cài cái kế. Cài hỏng thì gỡ bản cập nhật bằng `pm uninstall <gói>` để về bản gốc."
     },
     {
       "id": "unisound",
@@ -25,8 +26,9 @@
       "sha256": "5f2634bd68ea4b948d2058d16da6c2d281e7170ce1e29723dbfbef002b449c84",
       "phien_ban": "25.3.1",
       "thu_tu": 2,
-      "mac_dinh": true,
-      "mo_ta": "Ứng dụng thiết bị của hãng (gói com.phicomm.speaker.device). Có thể chiếm mic của loa: nếu mic về HA bị tranh, gỡ bằng `pm uninstall com.phicomm.speaker.device`."
+      "mac_dinh": false,
+      "mo_ta": "Ứng dụng thiết bị của hãng (gói com.phicomm.speaker.device). Có thể chiếm mic của loa: nếu mic về HA bị tranh, gỡ bằng `pm uninstall com.phicomm.speaker.device`.",
+      "canh_bao": "CẢNH BÁO: ghi đè ứng dụng HỆ THỐNG của hãng. Sau khi cài trên loa vừa reset, chủ máy ghi nhận loa hỏng (cổng điều khiển 8080 không trả lời, ứng dụng không giữ qua lần khởi động lại, loa tự khởi động lại). Không cài chung với cả bộ: cài MỘT cái, khởi động lại loa, kiểm cổng 8080 rồi mới cài cái kế. Cài hỏng thì gỡ bản cập nhật bằng `pm uninstall <gói>` để về bản gốc."
     },
     {
       "id": "bodam",

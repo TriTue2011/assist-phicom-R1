@@ -304,7 +304,7 @@
     },
     "install_apps": {
       "name": "Cài ứng dụng lên loa",
-      "description": "Cài các ứng dụng đi kèm tích hợp (trình phát, thiết bị, APK mic) lên loa qua ADB, theo thứ tự; loa mới tinh dùng đúng dịch vụ này. Trả kết quả từng ứng dụng.",
+      "description": "Cài ứng dụng đi kèm tích hợp lên loa qua ADB, theo thứ tự; trả kết quả từng ứng dụng. Bỏ trống danh sách thì chỉ cài APK mic (an toàn); trình phát và thiết bị ghi đè ứng dụng hệ thống của hãng nên phải ghi tên và cài từng cái một.",
       "fields": {
         "entity_id": {
           "name": "Loa",
@@ -312,7 +312,7 @@
         },
         "apps": {
           "name": "Ứng dụng",
-          "description": "Danh sách mã: player, unisound, bodam. Bỏ trống = tất cả."
+          "description": "Danh sách mã: bodam (mặc định), player, unisound. Bỏ trống = chỉ bodam. player và unisound có rủi ro: cài từng cái, khởi động lại loa rồi kiểm cổng 8080."
         },
         "force": {
           "name": "Gỡ bản cũ khác chữ ký",

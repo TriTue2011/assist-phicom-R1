@@ -106,7 +106,7 @@ Tích hợp mang theo các ứng dụng cần cho loa và **tự cài qua ADB** 
 | `unisound` | `com.phicomm.speaker.device` | 25.3.1 | ứng dụng thiết bị của hãng (**có thể chiếm mic**, xem gỡ rối) |
 | `bodam` | `vn.r1.bodam` | 1.2 | APK mic của tích hợp; cài xong HA **tự cấu hình** |
 
-* Mỗi ứng dụng là một thực thể **Cập nhật**: bấm **Cài đặt**. Hoặc dịch vụ `r1_speaker.install_apps` (cài nhiều cái một lượt, theo thứ tự, trả kết quả từng cái).
+* Mỗi ứng dụng là một thực thể **Cập nhật**. Chỉ **APK mic bộ đàm** có nút **Cài đặt**; **`player` (autodlna.apk) và `unisound`** ghi đè ứng dụng HỆ THỐNG của hãng nên **không** nằm trong «cài mặc định» và không có nút cài một chạm: loa vừa reset đã hỏng sau khi cài chúng (24/10/2026, chưa rõ cái nào). Muốn cài thì gọi `install_apps` với `apps: [player]` (hoặc `[unisound]`), từng cái một, khởi động lại loa rồi kiểm cổng 8080 (xem `docs/CAI-UNG-DUNG.md`). Hoặc dịch vụ `r1_speaker.install_apps` (cài nhiều cái một lượt, theo thứ tự, trả kết quả từng cái).
 * Tệp lớn được **chia phần** (GitHub giới hạn 25 MB khi tải lên) và **kiểm sha256** trước khi đẩy; sai thì không đẩy gì.
 * `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (loa đang có bản cùng gói ký khác): chỉ khi bạn đặt `force: true` tích hợp mới gỡ bản cũ rồi cài lại.
 * **Nút Khởi động lại loa** (`button.r1_khoi_dong_lai`) gửi lệnh `reboot` qua ADB.

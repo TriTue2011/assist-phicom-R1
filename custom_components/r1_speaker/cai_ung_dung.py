@@ -51,6 +51,7 @@ class UngDung:
     mac_dinh: bool
     mo_ta: str = ""
     sau_cai: str | None = None
+    canh_bao: str = ""             # có chữ = ứng dụng rủi ro (ghi đè ứng dụng hệ thống): không cài mặc định, không có nút cài một chạm
 
 
 @dataclass(frozen=True)
@@ -100,7 +101,7 @@ def doc_bo_cai(duong: Path = BO_CAI) -> list[UngDung]:
     for d in data["ung_dung"]:
         ud = UngDung(id=d["id"], ten=d["ten"], goi=d["goi"], tep=tuple(d["tep"]), sha256=d["sha256"].lower(),
                      phien_ban=str(d["phien_ban"]), thu_tu=int(d["thu_tu"]), mac_dinh=bool(d.get("mac_dinh", True)),
-                     mo_ta=d.get("mo_ta", ""), sau_cai=d.get("sau_cai"))
+                     mo_ta=d.get("mo_ta", ""), sau_cai=d.get("sau_cai"), canh_bao=d.get("canh_bao", ""))
         if not _ID.match(ud.id) or ud.id in thay:
             raise ValueError(f"mã ứng dụng không hợp lệ hoặc trùng: {ud.id!r}")
         if not _GOI.match(ud.goi) or not _VERSION.match(ud.phien_ban) or not re.match(r"^[0-9a-f]{64}$", ud.sha256):

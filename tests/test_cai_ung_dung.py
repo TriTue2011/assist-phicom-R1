@@ -161,12 +161,22 @@ async def test_cai_nhieu_theo_thu_tu_mot_cai_hong_khong_chan_cai_sau():
 
     dev.shell = shell
     bo = BoCai(dev, cau_hinh_bodam=lambda: None)
-    kq = await bo.cai_nhieu()
+    kq = await bo.cai_nhieu(["player", "unisound", "bodam"])               # phải GHI TÊN: player và unisound không còn «mặc định»
     assert [(k.id, k.ok) for k in kq] == [("player", True), ("unisound", False), ("bodam", True)]
     assert "INSTALL_FAILED_DEXOPT" in kq[1].thong_bao
     assert [k.id for k in await bo.cai_nhieu(["bodam", "player"])] == ["player", "bodam"]    # luôn theo thứ tự
     with pytest.raises(ValueError):
         await bo.cai_nhieu(["khong_co"])
+
+
+async def test_cai_mac_dinh_khong_dung_vao_ung_dung_he_thong_cua_hang():
+    """24/10/2026: loa vừa reset hỏng sau khi cài player (autodlna.apk) và unisound, vốn ghi đè ứng dụng HỆ THỐNG: không được cài ‘cả bộ’ nữa."""
+    dev = FakeDev()
+    bo = BoCai(dev, cau_hinh_bodam=lambda: None)
+    assert [u.id for u in bo.ung_dung if not u.mac_dinh] == ["player", "unisound"]
+    assert all(u.canh_bao for u in bo.ung_dung if not u.mac_dinh) and not any(u.canh_bao for u in bo.ung_dung if u.mac_dinh)
+    assert [k.id for k in await bo.cai_nhieu()] == ["bodam"]
+    assert not any("r1-player" in c or "r1-unisound" in c for c in dev.cmds)
 
 
 async def test_loi_adb_thanh_ket_qua_co_thong_diep_va_khong_nem():
@@ -246,16 +256,16 @@ async def test_moi_ung_dung_co_mot_thuc_the_cap_nhat_va_cai_bang_nut(hass, ha_ca
     e, bo, dev = ha_cai
     ids = _ud_ids(hass)
     assert len(ids) == 3, ids
-    pl = next(i for i in ids if "trinh_phat" in i)
+    pl = next(i for i in ids if "apk_mic" in i)
     from homeassistant.helpers.entity_component import async_update_entity
     await async_update_entity(hass, pl)
     st = hass.states.get(pl)
-    assert st.attributes["installed_version"] == "chưa cài" and st.attributes["latest_version"] == "0.2.5"
-    assert st.state == "on" and st.attributes["title"].startswith("Trình phát")
+    assert st.attributes["installed_version"] == "chưa cài" and st.attributes["latest_version"] == "1.2"
+    assert st.state == "on" and st.attributes["title"].startswith("APK mic")
     await hass.services.async_call("update", "install", {"entity_id": pl}, blocking=True)
-    assert any(c.startswith("pm install -r") and "r1-player" in c for c in dev.cmds)
-    dev.cai_san["com.phicomm.speaker.player"] = ("/data/app/p-1/base.apk",
-                                                 hashlib.md5(ghep_va_kiem(bo.tim("player"))).hexdigest(), "0.2.5")
+    assert any(c.startswith("pm install -r") and "r1-bodam" in c for c in dev.cmds)
+    dev.cai_san["vn.r1.bodam"] = ("/data/app/p-1/base.apk",
+                                                 hashlib.md5(ghep_va_kiem(bo.tim("bodam"))).hexdigest(), "1.2")
     bo._nho.clear()                                                          # bỏ bộ nhớ 30 giây của lần đọc trước
     await async_update_entity(hass, pl)
     assert hass.states.get(pl).state == "off"                              # đã cài đúng bản đi kèm: hết «có cập nhật»
@@ -267,6 +277,20 @@ async def test_moi_ung_dung_co_mot_thuc_the_cap_nhat_va_cai_bang_nut(hass, ha_ca
     await async_update_entity(hass, pl)
     with pytest.raises(HomeAssistantError, match="INSTALL_FAILED_X"):
         await hass.services.async_call("update", "install", {"entity_id": pl}, blocking=True)
+
+
+async def test_ung_dung_rui_ro_khong_co_nut_cai_mot_cham_va_hien_canh_bao(hass, ha_cai):
+    e, bo, dev = ha_cai
+    from homeassistant.helpers.entity_component import async_update_entity
+    for khoa in ("trinh_phat", "unisound"):
+        eid = next(i for i in _ud_ids(hass) if khoa in i)
+        await async_update_entity(hass, eid)
+        st = hass.states.get(eid)
+        assert st.attributes["supported_features"] == 0                   # không có UpdateEntityFeature.INSTALL
+        assert "CẢNH BÁO" in st.attributes["release_summary"]
+        with pytest.raises(HomeAssistantError):
+            await hass.services.async_call("update", "install", {"entity_id": eid}, blocking=True)
+    assert not any(c.startswith("pm install") for c in dev.cmds)
 
 
 async def test_thuc_the_goi_bi_an_khong_moi_cap_nhat_va_noi_ro_dang_an(hass, ha_cai):
