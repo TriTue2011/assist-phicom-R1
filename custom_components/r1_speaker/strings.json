@@ -328,6 +328,10 @@
         "prepare": {
           "name": "Prepare after install",
           "description": "On by default: hide the interfering vendor apps after installing. Installing system apps without hiding breaks the speaker."
+        },
+        "reinstall": {
+          "name": "Uninstall then reinstall",
+          "description": "Uninstall each app before installing it (system apps revert to stock, then are reinstalled). Off by default: installing over keeps the data."
         }
       }
     },
@@ -358,6 +362,12 @@
         "loi": "Error",
         "tat_mic": "Microphone muted"
       }
+    }
+  },
+  "issues": {
+    "cong_dieu_khien": {
+      "title": "R1 speaker control port not answering",
+      "description": "The control port {port} of the speaker {host} has not answered for several minutes. Common on a freshly reset speaker or one whose apps were installed by an older integration version (vendor apps not hidden). Fix: update the integration, call the \"Install apps on the speaker\" service (install_apps) with defaults (cleans pending OTA, reinstalls player, device and mic APK, then hides the vendor apps), then press \"Restart speaker\". Speaker without WiFi: see docs/KET-NOI-WIFI.md."
     }
   }
 }

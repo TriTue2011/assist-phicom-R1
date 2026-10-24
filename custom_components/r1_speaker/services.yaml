@@ -159,6 +159,9 @@ install_apps:
     prepare:
       selector:
         boolean:
+    reinstall:
+      selector:
+        boolean:
 
 prepare_speaker:
   fields:

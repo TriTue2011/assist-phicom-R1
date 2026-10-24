@@ -9,7 +9,7 @@ Danh sách nằm trong `custom_components/r1_speaker/apk/bo-cai.json` (dữ li�
 | Mã | Gói trên loa | Phiên bản | Là gì |
 |---|---|---|---|
 | `player` | `com.phicomm.speaker.player` | 0.2.5 | Trình phát nhạc DLNA / AirPlay / mạng. Bản cập nhật của ứng dụng hệ thống EchoService (cùng chữ ký Phicomm, `sharedUserId` system). |
-| `unisound` | `com.phicomm.speaker.device` | 25.3.1 | Ứng dụng thiết bị của hãng. **Có thể chiếm mic của loa**: nếu mic về HA bị tranh, gỡ bằng `pm uninstall com.phicomm.speaker.device` (xem *Gỡ rối*). |
+| `unisound` | `com.phicomm.speaker.device` | V3.2.5.2- | Ứng dụng thiết bị của hãng. **Có thể chiếm mic của loa**: nếu mic về HA bị tranh, gỡ bằng `pm uninstall com.phicomm.speaker.device` (xem *Gỡ rối*). |
 | `bodam` | `vn.r1.bodam` | 1.2 | APK của tích hợp: đẩy tiếng mic về HA, âm lượng, nút giữa. Cài xong HA **tự chạy lệnh cấu hình một lần** (đã có host HA, cổng và khoá nghe mic). |
 
 Tệp APK nằm cùng thư mục (`apk/`); `unisound` được **chia hai phần** (`unisound.apk.00`, `.01`) vì GitHub giới hạn 25 MB khi tải lên: tích hợp tự ghép và **kiểm sha256** trước khi đẩy
@@ -73,3 +73,14 @@ Wi-Fi, `device` chờ đám mây…). Vì vậy tích hợp làm đúng như ch�
 - `install_apps` cài xong tự chạy «Chuẩn bị loa» (tắt bằng `prepare: false`); `unisound` được ẩn ngay sau khi cài.
 - Nút **«Chuẩn bị loa (ẩn ứng dụng gốc)»** và dịch vụ `r1_speaker.prepare_speaker` (`reboot: true` để khởi động lại luôn) chạy riêng bước ẩn/hiện, đảo được bằng `pm unhide`.
 - Sau cùng **khởi động lại loa** một lần.
+
+
+## Sửa loa đã cài bằng bản tích hợp cũ (cổng 8080 không trả lời)
+
+Bản tích hợp cũ (trước 0.5.5) không chạy được lệnh `pm` trên loa này (loa từ chối), không dọn dữ liệu OTA và không ẩn các ứng dụng gốc, nên loa vừa reset hay loa đã cài
+theo cách đó có thể không mở/trả lời cổng điều khiển 8080. Sau khi cập nhật tích hợp (HACS) và khởi động lại Home Assistant:
+1. Gọi dịch vụ `r1_speaker.install_apps` với giá trị mặc định (hoặc bấm «Cài đặt» ở từng thực thể «Ứng dụng: …» rồi nút «Chuẩn bị loa»).
+   Muốn **gỡ rồi cài lại** thì thêm `reinstall: true` (ứng dụng hệ thống về bản gốc rồi cài lại; mất dữ liệu ứng dụng).
+   Cài **ghi đè** (`pm install -r`) giữ nguyên dữ liệu ứng dụng; gói `device` đang bị ẩn được hiện lại trước khi cài và ẩn lại sau đó; `bodam` khác chữ ký thì tự gỡ rồi cài.
+2. Bấm **Khởi động lại loa**, chờ 30–60 giây.
+3. Khi cổng 8080 im lặng liên tục khoảng 5 phút, Home Assistant hiện mục «Sửa chữa» với đúng các bước này; mục tự biến mất khi loa trả lời lại.

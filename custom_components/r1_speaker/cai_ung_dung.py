@@ -201,7 +201,7 @@ class BoCai:
         m = re.search(r"Failure \[([A-Z0-9_:. -]+)\]", out)
         return False, (m.group(1) if m else (out.strip().splitlines() or ["không có phản hồi"])[-1][:120])
 
-    async def cai(self, ud: UngDung, *, go_ban_cu: bool = False, cau_hinh: bool = True) -> KetQua:
+    async def cai(self, ud: UngDung, *, go_ban_cu: bool = False, cau_hinh: bool = True, go_truoc: bool = False) -> KetQua:
         """Cài một ứng dụng. Không ném lỗi ADB: trả ``KetQua`` có thông điệp và các bước đã làm."""
         kq = KetQua(ud.id, False, "")
         viec = "chuẩn bị"                       # việc đang làm: để thông báo lỗi chỉ đúng bước và đúng lệnh
@@ -216,6 +216,12 @@ class BoCai:
                 viec = f"đẩy tệp lên loa ({tep_loa})"
                 await self.dev.push(buf, tep_loa, 0o644)
                 kq.buoc.append("đã đẩy lên loa")
+                if ud.goi in AN_KHI_CHUAN_BI:       # gói đã bị ẩn (lần cài/chuẩn bị trước): hiện lại để cài ghi đè được, lát nữa «chuẩn bị» sẽ ẩn lại
+                    viec = f"chạy «pm unhide {ud.goi}»"
+                    kq.buoc.append(f"pm unhide {ud.goi}: {(await self.dev.shell(f'pm unhide {ud.goi}', timeout=30)).strip()[-40:] or 'xong'}")
+                if go_truoc:                        # «gỡ rồi cài lại»: ứng dụng hệ thống thì gỡ bản cập nhật về bản gốc; lỗi gỡ (chưa cài) thì bỏ qua như Bo Cai R1
+                    viec = f"chạy «pm uninstall {ud.goi}»"
+                    kq.buoc.append(f"pm uninstall {ud.goi}: {(await self.dev.shell(f'pm uninstall {ud.goi}', timeout=60)).strip()[-50:] or 'xong'}")
                 viec = f"chạy «pm install -r {tep_loa}»"
                 ok, ma = self._ket_qua_pm(await self.dev.shell(f"pm install -r {tep_loa}", timeout=CAI_TOI_DA_S))
                 kq.buoc.append(f"pm install -r: {ma}")
@@ -287,7 +293,7 @@ class BoCai:
         return kq
 
     async def cai_nhieu(self, ma: list[str] | None = None, *, go_ban_cu: bool = False,
-                        cau_hinh: bool = True, chuan_bi: bool = True) -> list[KetQua]:
+                        cau_hinh: bool = True, chuan_bi: bool = True, go_truoc: bool = False) -> list[KetQua]:
         """Cài các ứng dụng (mặc định: những cái ``mac_dinh``) theo ``thu_tu``; một cái hỏng không chặn cái sau. Cài xong ít nhất một cái thì chạy
         «Chuẩn bị loa» (ẩn ứng dụng gốc): cài ứng dụng hệ thống mà không ẩn thì loa hỏng (24/10/2026), nên đây là mặc định."""
         chon = [self.tim(m) for m in ma] if ma else [u for u in self.ung_dung if u.mac_dinh]
@@ -298,7 +304,7 @@ class BoCai:
                     await self.don_ota(truoc)
             except (AdbError, OSError, asyncio.TimeoutError) as exc:
                 _LOGGER.warning("dọn OTA trước khi cài lỗi (bỏ qua, vẫn cài): %s", exc or type(exc).__name__)
-        ra = [await self.cai(u, go_ban_cu=go_ban_cu, cau_hinh=cau_hinh) for u in sorted(chon, key=lambda u: u.thu_tu)]
+        ra = [await self.cai(u, go_ban_cu=go_ban_cu, cau_hinh=cau_hinh, go_truoc=go_truoc) for u in sorted(chon, key=lambda u: u.thu_tu)]
         if chuan_bi and any(k.ok for k in ra):
             ra.append(await self.chuan_bi_loa())
         return ra
@@ -328,7 +334,8 @@ def dang_ky_dich_vu(hass, ma_ung_dung: list[str]) -> None:  # noqa: ANN001 - tr�
         bo = entry.runtime_data.apps
         try:
             kq = await bo.cai_nhieu(call.data.get("apps") or None, go_ban_cu=call.data.get("force", False),
-                                    cau_hinh=call.data.get("configure", True), chuan_bi=call.data.get("prepare", True))
+                                    cau_hinh=call.data.get("configure", True), chuan_bi=call.data.get("prepare", True),
+                                    go_truoc=call.data.get("reinstall", False))
         except ValueError as exc:
             raise ServiceValidationError(str(exc)) from exc
         ra = {"ket_qua": [{"id": k.id, "ok": k.ok, "thong_bao": k.thong_bao, "buoc": k.buoc} for k in kq]}
@@ -357,4 +364,5 @@ def dang_ky_dich_vu(hass, ma_ung_dung: list[str]) -> None:  # noqa: ANN001 - tr�
                                      vol.Optional("apps"): [vol.In(ma_ung_dung)],
                                      vol.Optional("force"): cv.boolean,
                                      vol.Optional("configure"): cv.boolean,
-                                     vol.Optional("prepare"): cv.boolean}))
+                                     vol.Optional("prepare"): cv.boolean,
+                                     vol.Optional("reinstall"): cv.boolean}))

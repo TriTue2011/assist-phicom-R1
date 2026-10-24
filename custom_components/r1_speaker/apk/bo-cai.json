@@ -24,7 +24,7 @@
         "unisound.apk.01"
       ],
       "sha256": "5f2634bd68ea4b948d2058d16da6c2d281e7170ce1e29723dbfbef002b449c84",
-      "phien_ban": "25.3.1",
+      "phien_ban": "V3.2.5.2-",
       "thu_tu": 2,
       "mac_dinh": true,
       "mo_ta": "Ứng dụng thiết bị của hãng (gói com.phicomm.speaker.device). Có thể chiếm mic của loa: nếu mic về HA bị tranh, gỡ bằng `pm uninstall com.phicomm.speaker.device`.",

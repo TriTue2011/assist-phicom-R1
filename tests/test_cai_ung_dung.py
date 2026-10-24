@@ -76,7 +76,7 @@ def _bo(dev=None, cfg=("192.0.2.10", 18765, "KHOA-GIA-0123456789")):
 def test_danh_sach_dung_ba_ung_dung_va_tep_that_khop_sha256():
     ds = doc_bo_cai()
     assert [(u.id, u.goi, u.phien_ban) for u in ds] == [
-        ("player", "com.phicomm.speaker.player", "0.2.5"), ("unisound", "com.phicomm.speaker.device", "25.3.1"),
+        ("player", "com.phicomm.speaker.player", "0.2.5"), ("unisound", "com.phicomm.speaker.device", "V3.2.5.2-"),
         ("bodam", "vn.r1.bodam", "1.2")]
     for u in ds:
         assert hashlib.sha256(ghep_va_kiem(u)).hexdigest() == u.sha256       # tệp thật, kể cả ghép 2 phần của unisound
@@ -133,7 +133,7 @@ async def test_khac_chu_ky_bao_ro_va_chi_go_ban_cu_khi_duoc_phep():
     assert not any(c.startswith("pm uninstall") for c in dev.cmds)              # KHÔNG tự gỡ khi chưa cho phép
     dev2 = FakeDev(khac_chu_ky=True)
     kq2 = await BoCai(dev2, cau_hinh_bodam=lambda: None).cai(bo.tim("unisound"), go_ban_cu=True)
-    assert kq2.ok and [c.split()[1] for c in dev2.cmds if c.startswith("pm")] == ["install", "uninstall", "install", "hide"]
+    assert kq2.ok and [c.split()[1] for c in dev2.cmds if c.startswith("pm")] == ["unhide", "install", "uninstall", "install", "hide"]
     assert "pm uninstall com.phicomm.speaker.device" in dev2.cmds
 
 
@@ -188,7 +188,7 @@ async def test_cai_du_ba_ung_dung_roi_chuan_bi_loa_giong_bo_cai_r1():
     hide = [c for c in lenh if c.startswith("pm hide")]
     assert [c.split()[-1] for c in hide[1:]] == list(AN_KHI_CHUAN_BI)                     # hide[0] là unisound tự ẩn ngay sau khi cài
     assert hide[0] == "pm hide com.phicomm.speaker.device"
-    assert [c.split()[-1] for c in lenh if c.startswith("pm unhide")] == list(HIEN_KHI_CHUAN_BI)
+    assert [c.split()[-1] for c in lenh if c.startswith("pm unhide")] == ["com.phicomm.speaker.device", *HIEN_KHI_CHUAN_BI]    # device hiện lại TRƯỚC khi cài ghi đè
     assert any(c.startswith("am startservice") and "EchoService" in c for c in lenh)
     i_don = lenh.index("pm clear com.phicomm.speaker.otaservice")
     assert i_don < lenh.index("pm install -r /data/local/tmp/r1-player.apk")                  # dọn OTA TRƯỚC khi cài, như Bo Cai R1
@@ -335,7 +335,7 @@ async def test_thuc_the_goi_bi_an_khong_moi_cap_nhat_va_noi_ro_dang_an(hass, ha_
     await async_update_entity(hass, uni)
     st = hass.states.get(uni)
     assert st.attributes["installed_version"] == "V3.2.5.2- (đang ẩn)" and st.state == "off"      # không «Có bản cập nhật»
-    assert st.attributes["an"] is True and st.attributes["ban_di_kem"] == "25.3.1"
+    assert st.attributes["an"] is True and st.attributes["ban_di_kem"] == "V3.2.5.2-"
 
 
 async def test_dich_vu_install_apps_tra_ket_qua_tung_ung_dung(hass, ha_cai):
@@ -428,3 +428,53 @@ async def test_bodam_khac_chu_ky_tu_go_ban_cu_nhu_bo_cai_r1_con_unisound_van_can
     dev2 = FakeDev(khac_chu_ky=True)
     kq2 = await BoCai(dev2, cau_hinh_bodam=lambda: None).cai(bo.tim("unisound"))   # ứng dụng hệ thống của hãng: vẫn phải được phép mới gỡ
     assert not kq2.ok and not any(c.startswith("pm uninstall") for c in dev2.cmds)
+
+
+async def test_cai_ghi_de_len_loa_da_cai_va_da_an_device_hien_lai_roi_cai_roi_an_lai():
+    """Người cài bằng bản tích hợp cũ (hoặc đã chạy Bo Cai R1) có gói device đang ẨN: cài ghi đè phải hiện lại trước khi cài, rồi ẩn lại."""
+    dev = FakeDev(cai_san={"com.phicomm.speaker.device": ("", "", "V3.2.5.2-", True)})
+    bo = BoCai(dev, cau_hinh_bodam=lambda: None)
+    kq = await bo.cai(bo.tim("unisound"))
+    assert kq.ok
+    thu_tu = [c for c in dev.cmds if "com.phicomm.speaker.device" in c or c.startswith("pm install")]
+    assert thu_tu[0] == "pm unhide com.phicomm.speaker.device" and thu_tu[1].startswith("pm install -r") and thu_tu[2] == "pm hide com.phicomm.speaker.device"
+
+
+async def test_cong_dieu_khien_im_lang_lau_thi_hien_muc_sua_chua_va_tu_het_khi_loa_tra_loi(hass, ha_cai):
+    from homeassistant.helpers import issue_registry as ir
+    from custom_components.r1_speaker.client import R1Error, R1State
+    from custom_components.r1_speaker.coordinator import LAN_HONG_DE_BAO
+    from homeassistant.helpers.update_coordinator import UpdateFailed
+    e, bo, dev = ha_cai
+    co = e.runtime_data
+    goc = co.client.async_fetch
+    iid = f"cong_dieu_khien_{e.entry_id}"
+
+    async def hong():
+        raise R1Error("8080 im lặng")
+
+    co.client.async_fetch = hong
+    co._lan_hong = 0
+    for _ in range(LAN_HONG_DE_BAO - 1):
+        with pytest.raises(UpdateFailed):
+            await co._async_update_data()
+    assert ir.async_get(hass).async_get_issue("r1_speaker", iid) is None                 # chưa đủ lâu: loa khởi động lại không báo
+    with pytest.raises(UpdateFailed):
+        await co._async_update_data()
+    assert ir.async_get(hass).async_get_issue("r1_speaker", iid) is not None
+    co.client.async_fetch = goc
+    await co._async_update_data()
+    assert ir.async_get(hass).async_get_issue("r1_speaker", iid) is None and co._lan_hong == 0
+
+
+async def test_go_roi_cai_lai_thu_tu_hien_go_cai_an_va_bo_qua_loi_go():
+    dev = FakeDev(cai_san={"com.phicomm.speaker.device": ("", "", "V3.2.5.2-", True)})
+    bo = BoCai(dev, cau_hinh_bodam=lambda: None)
+    kq = await bo.cai(bo.tim("unisound"), go_truoc=True)
+    assert kq.ok
+    pm = [c for c in dev.cmds if c.startswith("pm ")]
+    assert [c.split()[1] for c in pm] == ["unhide", "uninstall", "install", "hide"]
+    kq2 = await bo.cai(bo.tim("bodam"), go_truoc=True)                          # bodam: gỡ rồi cài (không có unhide/hide)
+    assert kq2.ok and [c.split()[1] for c in dev.cmds if c.startswith("pm ") and ("bodam" in c or "r1-bodam" in c)][-2:] == ["uninstall", "install"]
+    r = await bo.cai_nhieu(["player"], go_truoc=True, chuan_bi=False)
+    assert r[0].ok and any(c == "pm uninstall com.phicomm.speaker.player" for c in dev.cmds)

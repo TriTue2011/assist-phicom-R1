@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .client import R1Client, R1Error, R1State, with_overrides
@@ -25,6 +26,9 @@ if TYPE_CHECKING:
     from .den import R1Lights
 
 _LOGGER = logging.getLogger(__name__)
+
+#: Số lần đọc 8080 hỏng LIÊN TIẾP trước khi hiện mục «Sửa chữa» (SCAN_INTERVAL 10 giây: khoảng 5 phút; loa khởi động lại không kích hoạt).
+LAN_HONG_DE_BAO = 30
 
 type R1ConfigEntry = ConfigEntry[R1Coordinator]
 
@@ -49,8 +53,16 @@ class R1Coordinator(DataUpdateCoordinator[R1State]):
 
     async def _async_update_data(self) -> R1State:
         try:
-            return await self.client.async_fetch()
+            tt = await self.client.async_fetch()
+            self._lan_hong = 0
+            ir.async_delete_issue(self.hass, DOMAIN, f"cong_dieu_khien_{self.config_entry.entry_id}")
+            return tt
         except R1Error as exc:
+            self._lan_hong = getattr(self, "_lan_hong", 0) + 1
+            if self._lan_hong == LAN_HONG_DE_BAO:
+                ir.async_create_issue(self.hass, DOMAIN, f"cong_dieu_khien_{self.config_entry.entry_id}", is_fixable=False,
+                                      severity=ir.IssueSeverity.WARNING, translation_key="cong_dieu_khien",
+                                      translation_placeholders={"host": self.client.host, "port": str(self.client.port)})
             # Chỉ log lần đầu mất kết nối: DataUpdateCoordinator tự log khi hồi phục.
             if self.last_update_success:
                 _LOGGER.warning("Loa R1 %s không đọc được: %s", self.client.host, exc)

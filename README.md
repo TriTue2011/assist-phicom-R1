@@ -105,7 +105,7 @@ Tích hợp mang theo các ứng dụng cần cho loa và **tự cài qua ADB** 
 | Mã | Gói | Phiên bản | Là gì |
 |---|---|---|---|
 | `player` | `com.phicomm.speaker.player` | 0.2.5 | trình phát DLNA / AirPlay (bản cập nhật của EchoService) |
-| `unisound` | `com.phicomm.speaker.device` | 25.3.1 | ứng dụng thiết bị của hãng (**có thể chiếm mic**, xem gỡ rối) |
+| `unisound` | `com.phicomm.speaker.device` | V3.2.5.2- | ứng dụng thiết bị của hãng (**có thể chiếm mic**, xem gỡ rối) |
 | `bodam` | `vn.r1.bodam` | 1.2 | APK mic của tích hợp; cài xong HA **tự cấu hình** |
 
 * Mỗi ứng dụng là một thực thể **Cập nhật** (bấm **Cài đặt**). `player` và `unisound` ghi đè ứng dụng HỆ THỐNG của hãng nên cài xong **phải ẩn các ứng dụng gốc** (giống chương trình *Bo Cai R1*): `install_apps` tự làm bước «Chuẩn bị loa», hoặc bấm nút **«Chuẩn bị loa (ẩn ứng dụng gốc)»**, rồi khởi động lại loa. Cài mà không ẩn thì loa hỏng (xem `docs/CAI-UNG-DUNG.md`).
