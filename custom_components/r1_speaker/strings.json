@@ -174,7 +174,7 @@
           "agc_silence_db": "AGC: below this level counts as silence, no boost (dBFS)",
           "limiter_enable": "Mic peak limiter",
           "limiter_ceiling": "Limiter: ceiling (fraction of full scale, 0.89 ≈ -1 dBFS)",
-          "duplex_vad_threshold": "Duplex call: voice (VAD) threshold, probability 0-1",
+          "duplex_vad_threshold": "Duplex call: voice (VAD) threshold, probability 0-1 (0 = no filtering)",
           "duplex_preroll_s": "Duplex call: audio kept before speech (s)",
           "duplex_hangover_s": "Duplex call: audio kept after speech (s)",
           "duplex_max_s": "Duplex call: max session length (s)",

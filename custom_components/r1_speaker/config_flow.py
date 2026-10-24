@@ -255,7 +255,7 @@ class R1OptionsFlow(OptionsFlowWithReload):
             **{vol.Required(k, default=v.get(k, cur)): typ for k, (cur, typ) in dsp.items()},
             vol.Required(CONF_DUPLEX_VAD_THRESHOLD,
                          default=v.get(CONF_DUPLEX_VAD_THRESHOLD, duplex.vad_threshold)):
-                vol.All(vol.Coerce(float), vol.Range(min=0.05, max=0.95)),
+                vol.All(vol.Coerce(float), vol.Range(min=0, max=0.95)),
             vol.Required(CONF_DUPLEX_PREROLL,
                          default=v.get(CONF_DUPLEX_PREROLL, duplex.preroll_s)):
                 vol.All(vol.Coerce(float), vol.Range(min=0, max=2)),

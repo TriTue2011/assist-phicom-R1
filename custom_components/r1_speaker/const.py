@@ -73,9 +73,11 @@ CONF_DUPLEX_MAX_S = "duplex_max_s"
 CONF_DUPLEX_DUCK = "duplex_duck"
 CONF_DUPLEX_DUCK_DB = "duplex_duck_db"
 #: Ngưỡng xác suất tiếng người của microVAD (``pymicro_vad`` — cùng VAD Assist của HA dùng):
-#: khung 10 ms có xác suất >= ngưỡng thì coi là có tiếng người. 0.5 là điểm giữa thang xác
-#: suất; CHƯA ĐO trên mic của loa R1.
-DEFAULT_DUPLEX_VAD_THRESHOLD = 0.5
+#: khung 10 ms có xác suất >= ngưỡng thì coi là có tiếng người. 0 = KHÔNG LỌC: mọi tiếng từ mic loa đi thẳng
+#: lên điện thoại (mặc định từ 24/10/2026: chủ máy đo thật thấy lọc cứng làm mất ~1 giây sau mỗi 3–4 giây, kể cả
+#: ngưỡng 0,05, trong khi nút «Nghe» không qua lọc thì liền mạch). Muốn lọc: đặt 0,2–0,5 (CHƯA ĐO trên mic loa R1);
+#: lọc tạp âm không mất tiếng thì dùng «Khử tạp» thay vì VAD.
+DEFAULT_DUPLEX_VAD_THRESHOLD = 0.0
 #: Đệm TRƯỚC tiếng người (giây): giữ sẵn chừng này tiếng ngay trước câu để không cắt đầu câu.
 #: CHƯA ĐO trên loa R1; 0.3 mượn số preroll của bộ đàm nửa công.
 DEFAULT_DUPLEX_PREROLL = 0.3

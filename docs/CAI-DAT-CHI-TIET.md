@@ -162,7 +162,7 @@ Chặn tiếng quá to làm vỡ tiếng.
 
 | Khoá | Nhãn | Khoảng | Mặc định | Chỉnh thế nào |
 |---|---|---|---|---|
-| `duplex_vad_threshold` | Ngưỡng tiếng người VAD (xác suất 0–1) | 0,05…0,95 | 0,5 | Cao: chặt hơn (bớt nhạc/tiếng ồn lọt qua, dễ bỏ sót giọng nhỏ). Thấp: lọt nhiều hơn |
+| `duplex_vad_threshold` | Ngưỡng tiếng người VAD (xác suất 0–1; **0 = không lọc**) | 0…0,95 | **0** | 0: mọi tiếng mic loa đi thẳng lên điện thoại như nút «Nghe» (mặc định từ 24/10/2026: đo thật thấy lọc cứng làm mất ~1 giây sau mỗi 3–4 giây). 0,2–0,5: chỉ tiếng người qua cổng (bớt nhạc/tiếng ồn, dễ cắt giọng nhỏ và gây giật). Muốn bớt tạp âm mà không mất tiếng thì dùng «Khử tạp» (mục 4) thay vì VAD |
 | `duplex_preroll_s` | Giữ tiếng trước câu nói (giây) | 0…2 | 0,3 | Giữ đầu câu để không mất chữ đầu |
 | `duplex_hangover_s` | Giữ tiếng sau câu nói (giây) | 0…5 | 0,5 | Kéo dài sau câu để không cụt đuôi |
 | `duplex_max_s` | Thời gian tối đa của phiên (giây) | 60…86400 | 1800 | Phiên tự đóng khi quá thời gian này (an toàn khi quên tắt) |

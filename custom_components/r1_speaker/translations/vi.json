@@ -174,7 +174,7 @@
           "agc_silence_db": "AGC: dưới mức này coi là im lặng, không tăng (dBFS)",
           "limiter_enable": "Hạn đỉnh mic",
           "limiter_ceiling": "Hạn đỉnh: trần (tỉ lệ biên độ tối đa, 0,89 ≈ -1 dBFS)",
-          "duplex_vad_threshold": "Đàm thoại song công: ngưỡng tiếng người (VAD), xác suất 0-1",
+          "duplex_vad_threshold": "Đàm thoại song công: ngưỡng tiếng người (VAD), xác suất 0-1 (0 = không lọc)",
           "duplex_preroll_s": "Đàm thoại song công: giữ tiếng trước câu nói (giây)",
           "duplex_hangover_s": "Đàm thoại song công: giữ tiếng sau câu nói (giây)",
           "duplex_max_s": "Đàm thoại song công: thời gian tối đa của phiên (giây)",

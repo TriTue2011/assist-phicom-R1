@@ -86,7 +86,9 @@ class VadGate:
 
     def __init__(self, settings: DuplexSettings, vad=None) -> None:
         self.s = settings
-        self._vad = vad if vad is not None else _vad_that()
+        #: Ngưỡng 0 = không lọc: chuyển mọi khung, KHÔNG nạp và không gọi VAD (đỡ CPU trong vòng lặp sự kiện của HA).
+        self._loc = settings.vad_threshold > 0
+        self._vad = (vad if vad is not None else _vad_that()) if self._loc else None
         self._du = b""                       # phần dư chưa đủ một khung 10 ms
         self._dem: deque[bytes] = deque()    # đệm trước: các khung chưa phải tiếng người
         self._dem_toi_da = max(0, round(settings.preroll_s * 100))
@@ -99,7 +101,7 @@ class VadGate:
         self._du, self._dem, self._duoi = b"", deque(), 0
         self.seen = self.passed = 0
         reset = getattr(self._vad, "reset", None)
-        if reset is not None:
+        if reset is not None and self._vad is not None:
             reset()
 
     def _la_tieng_nguoi(self, khung: bytes) -> bool:
@@ -114,7 +116,10 @@ class VadGate:
         for i in range(0, n, VAD_FRAME):
             khung = buf[i:i + VAD_FRAME]
             self.seen += 1
-            if self._la_tieng_nguoi(khung):
+            if not self._loc:
+                self.passed += 1
+                ra.append(khung)
+            elif self._la_tieng_nguoi(khung):
                 self.passed += len(self._dem) + 1
                 ra.extend(self._dem)
                 self._dem.clear()

@@ -32,7 +32,7 @@ BANG: tuple[tuple[str, str, str, float, float, float, Any], ...] = (
     ("agc", c.CONF_AGC_SILENCE_DB, "so", -90, -20, 1, c.DEFAULT_AGC_SILENCE_DB),
     ("han_dinh", c.CONF_LIMITER_ENABLE, "bat", 0, 1, 1, c.DEFAULT_LIMITER_ENABLE),
     ("han_dinh", c.CONF_LIMITER_CEILING, "so", 0.1, 1.0, 0.01, c.DEFAULT_LIMITER_CEILING),
-    ("song_cong", c.CONF_DUPLEX_VAD_THRESHOLD, "so", 0.05, 0.95, 0.05, c.DEFAULT_DUPLEX_VAD_THRESHOLD),
+    ("song_cong", c.CONF_DUPLEX_VAD_THRESHOLD, "so", 0, 0.95, 0.05, c.DEFAULT_DUPLEX_VAD_THRESHOLD),
     ("song_cong", c.CONF_DUPLEX_PREROLL, "so", 0, 2, 0.1, c.DEFAULT_DUPLEX_PREROLL),
     ("song_cong", c.CONF_DUPLEX_HANGOVER, "so", 0, 5, 0.1, c.DEFAULT_DUPLEX_HANGOVER),
     ("song_cong", c.CONF_DUPLEX_MAX_S, "so", 60, 86400, 60, c.DEFAULT_DUPLEX_MAX_S),

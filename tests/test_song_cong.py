@@ -92,7 +92,7 @@ def tao_phien(hass, play_port, settings=None):
     mic = R1Mic("127.0.0.1", 8765)
     talk = R1Talk(hass, mic, None)
     playback = R1Playback("127.0.0.1", play_port)
-    d = R1Duplex(hass, talk, mic, playback, settings or DuplexSettings(),
+    d = R1Duplex(hass, talk, mic, playback, settings or DuplexSettings(vad_threshold=0.5),
                  vad_factory=VadGia)
     return d, mic, talk
 
@@ -112,8 +112,33 @@ def test_vad_gate_chi_chuyen_tieng_nguoi_kem_dem_truoc_sau():
     assert g.seen == 12 and g.passed == 7
 
 
+def test_vad_gate_nguong_0_khong_loc_chuyen_moi_khung_va_khong_goi_vad():
+    """Ngưỡng 0 = KHÔNG lọc tiếng người (chủ máy 24/10: lọc cứng làm tiếng bị mất ~1 giây sau mỗi 3–4 giây vì khung nền bị bỏ):
+    mọi khung đi qua nguyên vẹn, kể cả nền/im lặng, và VAD không được gọi (cũng không cần nạp)."""
+    class VadCam:
+        def process_10ms(self, khung):
+            raise AssertionError("VAD không được gọi khi ngưỡng = 0")
+
+    g = VadGate(DuplexSettings(vad_threshold=0.0, preroll_s=0.3, hangover_s=0.5), VadCam())
+    khung_vao = [khung10(v) for v in (0, 3, 100, 5000, 0, 0, 1)]
+    ra = []
+    for k in khung_vao:
+        ra += g.feed(k)
+    assert ra == khung_vao and g.seen == 7 and g.passed == 7
+    k = khung10(7)
+    assert g.feed(k[:100]) == [] and g.feed(k[100:]) == [k]          # khúc lẻ vẫn ghép đúng
+    g2 = VadGate(DuplexSettings(vad_threshold=0.0))                     # không tiêm VAD: không nạp microVAD thật, không lỗi
+    assert g2.feed(khung10(0) * 20) == [khung10(0)] * 20
+
+
+def test_mac_dinh_khong_loc_tieng_nguoi_va_nguong_0_5_van_loc():
+    assert const.DEFAULT_DUPLEX_VAD_THRESHOLD == 0.0 and DuplexSettings().vad_threshold == 0.0
+    g = VadGate(DuplexSettings(vad_threshold=0.5, preroll_s=0.0, hangover_s=0.0), VadGia())
+    assert g.feed(khung10(100)) == [] and g.feed(khung10(5000)) == [khung10(5000)]
+
+
 def test_vad_gate_nhan_khuc_le_giu_phan_du():
-    g = VadGate(DuplexSettings(preroll_s=0.0, hangover_s=0.0), VadGia())
+    g = VadGate(DuplexSettings(vad_threshold=0.5, preroll_s=0.0, hangover_s=0.0), VadGia())
     k = khung10(5000)
     assert g.feed(k[:100]) == []                          # chưa đủ một khung 10 ms
     assert g.feed(k[100:]) == [k]
@@ -121,7 +146,7 @@ def test_vad_gate_nhan_khuc_le_giu_phan_du():
 
 
 def test_vad_that_im_lang_khong_qua_cong():
-    g = VadGate(DuplexSettings())                         # microVAD THẬT của HA
+    g = VadGate(DuplexSettings(vad_threshold=0.5))        # microVAD THẬT của HA (ngưỡng 0 = không lọc nên đặt 0,5 để kiểm lọc)
     assert g.feed(khung10(0) * 20) == []
     assert g.seen == 20 and g.passed == 0
     g.reset()
@@ -141,7 +166,7 @@ def test_duplex_settings_doc_tu_options_va_mac_dinh_chua_do():
 
 async def test_phien_song_cong_hai_chieu_chay_song_song(hass, play_server):
     d, mic, talk = tao_phien(hass, play_server.port,
-                             DuplexSettings(preroll_s=0.0, hangover_s=0.0))
+                             DuplexSettings(vad_threshold=0.5, preroll_s=0.0, hangover_s=0.0))
     nhan: list[bytes] = []
     d.add_audio_listener(nhan.append)
     mic.note_inbound(True)                                # APK đã nối vào đầu nhận NV244
@@ -168,7 +193,7 @@ async def test_phien_song_cong_hai_chieu_chay_song_song(hass, play_server):
 async def test_phien_khong_dong_theo_im_lang(hass, play_server):
     """Khác cổng thoại nửa công: im lặng lâu KHÔNG đóng phiên (chỉ HA/hạn tối đa mới đóng)."""
     d, mic, talk = tao_phien(hass, play_server.port,
-                             DuplexSettings(max_s=60.0, preroll_s=0.0, hangover_s=0.0))
+                             DuplexSettings(vad_threshold=0.5, max_s=60.0, preroll_s=0.0, hangover_s=0.0))
     mic.note_inbound(True)
     await d.async_start()
     mic.feed_inbound(khung10(100) * 50)                   # 0.5 giây toàn tiếng nền
@@ -179,7 +204,7 @@ async def test_phien_khong_dong_theo_im_lang(hass, play_server):
 
 
 async def test_het_gio_toi_da_dong_phien(hass, play_server):
-    d, mic, talk = tao_phien(hass, play_server.port, DuplexSettings(max_s=0.2))
+    d, mic, talk = tao_phien(hass, play_server.port, DuplexSettings(vad_threshold=0.5, max_s=0.2))
     mic.note_inbound(True)
     await d.async_start()
     await cho(lambda: not d.active)
@@ -189,7 +214,7 @@ async def test_het_gio_toi_da_dong_phien(hass, play_server):
 
 async def test_mat_ket_noi_dong_sach_va_mo_lai_duoc(hass, play_server):
     d, mic, talk = tao_phien(hass, play_server.port,
-                             DuplexSettings(preroll_s=0.0, hangover_s=0.0))
+                             DuplexSettings(vad_threshold=0.5, preroll_s=0.0, hangover_s=0.0))
     nhan: list[bytes] = []
     d.add_audio_listener(nhan.append)
     mic.note_inbound(True)
@@ -224,13 +249,13 @@ async def test_tranh_cho_voi_assist_va_bo_dam(hass, play_server):
 async def test_mo_phien_thieu_cau_hinh_bao_loi_ro(hass):
     mic = R1Mic("", 8765)                                 # chưa cấu hình mic
     talk = R1Talk(hass, mic, None)
-    d = R1Duplex(hass, talk, mic, R1Playback("127.0.0.1", 9), DuplexSettings(),
+    d = R1Duplex(hass, talk, mic, R1Playback("127.0.0.1", 9), DuplexSettings(vad_threshold=0.5),
                  vad_factory=VadGia)
     with pytest.raises(HomeAssistantError, match="mic_host"):
         await d.async_start()
     mic2 = R1Mic("127.0.0.1", 8765)
     d2 = R1Duplex(hass, R1Talk(hass, mic2, None), mic2, R1Playback("", 0),
-                  DuplexSettings(), vad_factory=VadGia)
+                  DuplexSettings(vad_threshold=0.5), vad_factory=VadGia)
     with pytest.raises(HomeAssistantError, match="play_port"):
         await d2.async_start()
 
@@ -242,7 +267,7 @@ async def test_vong_khong_hu_vo_han(hass, play_server):
     (không còn dấu tiếng người) → VAD chặn, số khung chuyển KHÔNG tăng thêm, phiên không
     tự khuếch đại."""
     d, mic, talk = tao_phien(hass, play_server.port,
-                             DuplexSettings(preroll_s=0.0, hangover_s=0.0))
+                             DuplexSettings(vad_threshold=0.5, preroll_s=0.0, hangover_s=0.0))
     nhan: list[bytes] = []
     d.add_audio_listener(nhan.append)
     mic.note_inbound(True)
@@ -269,7 +294,7 @@ def _chunk_nho_co_dau_nguoi() -> bytes:
 async def test_cat_vong_tuy_chon_mac_dinh_tat(hass, play_server):
     # Mặc định TẮT: khung nhỏ có tiếng người vẫn qua khi HA đang phát (chấp nhận vọng).
     d, mic, talk = tao_phien(hass, play_server.port,
-                             DuplexSettings(preroll_s=0.0, hangover_s=0.0, duck=False))
+                             DuplexSettings(vad_threshold=0.5, preroll_s=0.0, hangover_s=0.0, duck=False))
     nhan: list[bytes] = []
     d.add_audio_listener(nhan.append)
     mic.note_inbound(True)
@@ -283,7 +308,7 @@ async def test_cat_vong_tuy_chon_mac_dinh_tat(hass, play_server):
 
     # BẬT cắt vọng: cùng khung nhỏ bị bỏ cả; khung TO (tiếng người thật gần mic) vẫn qua.
     d2, mic2, _ = tao_phien(hass, play_server.port,
-                            DuplexSettings(preroll_s=0.0, hangover_s=0.0,
+                            DuplexSettings(vad_threshold=0.5, preroll_s=0.0, hangover_s=0.0,
                                            duck=True, duck_db=-45.0))
     nhan2: list[bytes] = []
     d2.add_audio_listener(nhan2.append)
@@ -360,7 +385,7 @@ async def test_tat_mic_giua_phien_song_cong_dong_phien_va_ngat_loa(hass, play_se
     (mat_ket_noi), tiếng không còn tới điện thoại. Ca biên thêm khi đóng gói R1."""
     from custom_components.r1_speaker.mic_server import R1MicServer
     d, mic, talk = tao_phien(hass, play_server.port,
-                             DuplexSettings(preroll_s=0.0, hangover_s=0.0))
+                             DuplexSettings(vad_threshold=0.5, preroll_s=0.0, hangover_s=0.0))
     server = R1MicServer(mic, 0, "khoa-gia", "127.0.0.1")
     await server.start()
     try:
