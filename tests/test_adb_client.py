@@ -1,6 +1,7 @@
 """Máy khách ADB: hai đường (adb-server / nối thẳng) và tự nhận diện, thử với máy chủ giả."""
 
 import asyncio
+import re
 import struct
 
 import pytest
@@ -147,6 +148,10 @@ class FakeAdbd:
                     nxt += 1
                     dich = d.rstrip(b"\x00").decode()
                     self.lenh.append(dich)
+                    if re.match(r"shell:pm(\s|$)", dich):          # adbd của loa thật: đóng NGAY dịch vụ shell có lệnh bắt đầu bằng pm
+                        self._gui(w, A_CLSE, 0, a0)
+                        await w.drain()
+                        continue
                     luong[a0] = {"remote": nxt, "dich": dich, "sync": b""}
                     self._gui(w, A_OKAY, nxt, a0)
                     if dich.startswith("shell:"):
@@ -358,3 +363,34 @@ async def test_che_do_server_chon_tay_van_bao_loi_adb_server():
     with pytest.raises(AdbError) as e:
         await d.shell("echo hi")
     assert "adb-server" in str(e.value)
+
+
+async def test_loa_tu_choi_thi_thong_bao_chi_ra_lenh_bi_tu_choi(may, monkeypatch):
+    """Lỗi cũ chỉ nói «loa từ chối dịch vụ shell» nên phải đo cả buổi mới biết là lệnh pm; giờ thông báo nêu đúng lệnh."""
+    _fs, _p1, fa, p2 = may
+    monkeypatch.setattr(adb_client, "chuan_hoa_shell", lambda lenh: lenh)           # tắt chuẩn hoá để thấy lỗi thô
+    d = _loa(p2, None, "direct")
+    with pytest.raises(AdbError) as e:
+        await d.shell("pm path vn.r1.bodam")
+    assert "từ chối" in str(e.value) and "shell:pm path vn.r1.bodam" in str(e.value)
+
+
+async def test_bo_loc_pm_cua_adbd_that_khong_chan_lenh_da_chuan_hoa(may):
+    _fs, _p1, fa, p2 = may
+    d = _loa(p2, None, "direct")
+    assert (await d.shell("pm path vn.r1.bodam")).startswith("ra:/system/bin/pm path")
+
+
+async def test_mo_luong_bi_tu_choi_van_nha_ket_noi_cho_client_khac(may, monkeypatch):
+    """adbd của loa chỉ phục vụ MỘT kết nối: sau khi loa từ chối một dịch vụ (không còn luồng nào), kết nối phải được nhả
+    (trước đây giữ mãi nên adb của người dùng không nối được)."""
+    _fs, _p1, fa, p2 = may
+    monkeypatch.setattr(adb_client, "chuan_hoa_shell", lambda lenh: lenh)
+    d = _loa(p2, None, "direct")
+    with pytest.raises(AdbError):
+        await d.shell("pm path vn.r1.bodam")
+    for _ in range(40):
+        if fa.dang_noi == 0:
+            break
+        await asyncio.sleep(0.05)
+    assert fa.dang_noi == 0

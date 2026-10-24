@@ -186,30 +186,37 @@ class BoCai:
     async def cai(self, ud: UngDung, *, go_ban_cu: bool = False, cau_hinh: bool = True) -> KetQua:
         """Cài một ứng dụng. Không ném lỗi ADB: trả ``KetQua`` có thông điệp và các bước đã làm."""
         kq = KetQua(ud.id, False, "")
+        viec = "chuẩn bị"                       # việc đang làm: để thông báo lỗi chỉ đúng bước và đúng lệnh
         async with self._khoa:
             self.dang_cai = ud.id
             self._bao()
             tep_loa = f"{TMP}/r1-{ud.id}.apk"
             try:
+                viec = "ghép và kiểm sha256 tệp APK"
                 buf = await asyncio.get_running_loop().run_in_executor(None, ghep_va_kiem, ud, self.thu_muc)
                 kq.buoc.append(f"đã kiểm sha256 ({len(buf) // 1024} KB)")
+                viec = f"đẩy tệp lên loa ({tep_loa})"
                 await self.dev.push(buf, tep_loa, 0o644)
                 kq.buoc.append("đã đẩy lên loa")
+                viec = f"chạy «pm install -r {tep_loa}»"
                 ok, ma = self._ket_qua_pm(await self.dev.shell(f"pm install -r {tep_loa}", timeout=CAI_TOI_DA_S))
                 kq.buoc.append(f"pm install -r: {ma}")
                 if not ok and ma == "INSTALL_FAILED_UPDATE_INCOMPATIBLE" and go_ban_cu:
                     kq.buoc.append("khác chữ ký: gỡ bản cũ (mất cấu hình của ứng dụng đó)")
+                    viec = f"chạy «pm uninstall {ud.goi}»"
                     await self.dev.shell(f"pm uninstall {ud.goi}", timeout=60)
+                    viec = f"chạy «pm install {tep_loa}»"
                     ok, ma = self._ket_qua_pm(await self.dev.shell(f"pm install {tep_loa}", timeout=CAI_TOI_DA_S))
                     kq.buoc.append(f"pm install: {ma}")
                 if ok and ud.sau_cai == "cau_hinh_bodam" and cau_hinh:
+                    viec = "cấu hình ứng dụng vừa cài"
                     kq.buoc.append(await self._cau_hinh_bodam())
                 kq.ok = ok
                 kq.thong_bao = "Đã cài" if ok else f"Cài thất bại: {ma}"
             except ValueError as exc:
                 kq.thong_bao = str(exc)
             except (AdbError, OSError, asyncio.TimeoutError) as exc:
-                kq.thong_bao = f"Lỗi ADB: {exc or type(exc).__name__}"
+                kq.thong_bao = f"Lỗi ADB khi {viec}: {exc or type(exc).__name__}"
             finally:
                 try:
                     await self.dev.shell(f"rm -f {tep_loa}", timeout=20)
@@ -218,7 +225,7 @@ class BoCai:
                 self._nho.pop(ud.id, None)
                 self.dang_cai = None
                 self._bao()
-        _LOGGER.info("cài %s: %s (%s)", ud.id, kq.thong_bao, "; ".join(kq.buoc))
+        (_LOGGER.info if kq.ok else _LOGGER.warning)("cài %s: %s | các bước đã xong: %s", ud.id, kq.thong_bao, "; ".join(kq.buoc) or "chưa có")
         return kq
 
     async def _cau_hinh_bodam(self) -> str:

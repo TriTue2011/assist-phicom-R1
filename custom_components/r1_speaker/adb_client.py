@@ -163,11 +163,14 @@ class _DirectTransport:
             await self.gui(A_OPEN, st.local, 0, service.encode() + b"\x00")
             await asyncio.wait_for(st.san_sang.wait(), TIMEOUT_S)
         except BaseException:
-            self.streams.pop(st.local, None)
+            await self.bo_luong(st)                       # mở hỏng cũng phải lên lịch nhả kết nối (adbd chỉ phục vụ MỘT kết nối TCP)
             raise
         if st.da_dong and st.remote == 0:
-            self.streams.pop(st.local, None)
-            raise AdbError(f"loa từ chối dịch vụ {service.split(':')[0]}")
+            await self.bo_luong(st)
+            lenh = service if len(service) <= 120 else service[:117] + "…"
+            if self.chet:
+                raise AdbError(f"kết nối TCP tới loa bị đóng khi mở «{lenh}»")
+            raise AdbError(f"adbd của loa từ chối ngay dịch vụ «{lenh}»")
         return st
 
     async def bo_luong(self, st: "_MuxStream") -> None:

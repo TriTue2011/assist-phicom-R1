@@ -313,3 +313,31 @@ async def test_nut_khoi_dong_lai_loa_goi_adb_reboot_va_bao_loi_ro(hass, ha_cai):
     dev.fail = "adbd của loa không trả lời"
     with pytest.raises(HomeAssistantError, match="adbd của loa"):
         await hass.services.async_call("button", "press", {"entity_id": nut[0]}, blocking=True)
+
+
+async def test_loi_o_buoc_pm_install_thi_thong_bao_neu_dung_buoc_va_lenh(caplog):
+    """Lỗi thật 24/10/2026: thông báo chỉ có «loa từ chối dịch vụ shell», không biết bước nào, lệnh nào."""
+    dev = FakeDev()
+    goc = dev.shell
+
+    async def shell(cmd, **kw):
+        if cmd.startswith("pm install"):
+            raise AdbError("adbd của loa từ chối ngay dịch vụ «shell:pm install -r x»")
+        return await goc(cmd, **kw)
+
+    dev.shell = shell
+    with caplog.at_level("WARNING"):
+        kq = await BoCai(dev).cai(doc_bo_cai()[0])
+    assert not kq.ok and "Lỗi ADB khi chạy «pm install -r /data/local/tmp/r1-" in kq.thong_bao and "từ chối" in kq.thong_bao
+    assert any("các bước đã xong" in r.message and "đã đẩy lên loa" in r.message for r in caplog.records if r.levelname == "WARNING")
+
+
+async def test_loi_o_buoc_day_tep_noi_ro_dang_day_tep():
+    dev = FakeDev()
+
+    async def push(data, remote, mode=0o755):
+        raise AdbError("kết nối TCP tới loa bị đóng khi mở «sync:»")
+
+    dev.push = push
+    kq = await BoCai(dev).cai(doc_bo_cai()[0])
+    assert not kq.ok and "Lỗi ADB khi đẩy tệp lên loa" in kq.thong_bao and "sync:" in kq.thong_bao
