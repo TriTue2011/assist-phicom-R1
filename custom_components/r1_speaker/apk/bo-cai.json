@@ -43,7 +43,8 @@
       "thu_tu": 3,
       "mac_dinh": true,
       "sau_cai": "cau_hinh_bodam",
-      "mo_ta": "APK của tích hợp: đẩy tiếng mic về HA, âm lượng, nút giữa. Cài xong HA tự chạy lệnh cấu hình một lần."
+      "mo_ta": "APK của tích hợp: đẩy tiếng mic về HA, âm lượng, nút giữa. Cài xong HA tự chạy lệnh cấu hình một lần.",
+      "tu_go_neu_khac_chu_ky": true
     }
   ]
 }

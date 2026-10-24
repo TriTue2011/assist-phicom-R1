@@ -418,3 +418,13 @@ async def test_nut_va_dich_vu_chuan_bi_loa(hass, ha_cai):
     dev.fail = "ADB hỏng"
     with pytest.raises(HomeAssistantError, match="Lỗi ADB khi chuẩn bị loa"):
         await hass.services.async_call("button", "press", {"entity_id": eid}, blocking=True)
+
+
+async def test_bodam_khac_chu_ky_tu_go_ban_cu_nhu_bo_cai_r1_con_unisound_van_can_cho_phep():
+    dev = FakeDev(khac_chu_ky=True)
+    bo = BoCai(dev, cau_hinh_bodam=lambda: None)
+    kq = await bo.cai(bo.tim("bodam"))                                             # KHÔNG truyền go_ban_cu
+    assert kq.ok and [c.split()[1] for c in dev.cmds if c.startswith("pm") and "bodam" in c or c.startswith("pm install")] == ["install", "uninstall", "install"]
+    dev2 = FakeDev(khac_chu_ky=True)
+    kq2 = await BoCai(dev2, cau_hinh_bodam=lambda: None).cai(bo.tim("unisound"))   # ứng dụng hệ thống của hãng: vẫn phải được phép mới gỡ
+    assert not kq2.ok and not any(c.startswith("pm uninstall") for c in dev2.cmds)

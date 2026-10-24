@@ -53,6 +53,7 @@ class UngDung:
     sau_cai: str | None = None
     canh_bao: str = ""             # có chữ = ghi đè ứng dụng hệ thống: hiện cảnh báo trong ghi chú bản phát hành
     an_sau_cai: bool = False       # cài xong thì pm hide ngay (công thức của Bo Cai R1: device cài rồi ẩn)
+    tu_go_neu_khac_chu_ky: bool = False   # khác chữ ký thì tự gỡ bản cũ rồi cài (Bo Cai R1 làm với bodam; HA tự cấu hình lại bodam sau khi cài nên không mất gì)
 
 
 #: «Chuẩn bị loa»: quy trình đã chạy tốt bằng chương trình *Bo Cai R1* trên máy tính (24/10/2026, loa vừa reset: sau đó cổng 8080 trả lời, 100 giây sau khi bật).
@@ -116,7 +117,8 @@ def doc_bo_cai(duong: Path = BO_CAI) -> list[UngDung]:
     for d in data["ung_dung"]:
         ud = UngDung(id=d["id"], ten=d["ten"], goi=d["goi"], tep=tuple(d["tep"]), sha256=d["sha256"].lower(),
                      phien_ban=str(d["phien_ban"]), thu_tu=int(d["thu_tu"]), mac_dinh=bool(d.get("mac_dinh", True)),
-                     mo_ta=d.get("mo_ta", ""), sau_cai=d.get("sau_cai"), canh_bao=d.get("canh_bao", ""), an_sau_cai=bool(d.get("an_sau_cai", False)))
+                     mo_ta=d.get("mo_ta", ""), sau_cai=d.get("sau_cai"), canh_bao=d.get("canh_bao", ""), an_sau_cai=bool(d.get("an_sau_cai", False)),
+                     tu_go_neu_khac_chu_ky=bool(d.get("tu_go_neu_khac_chu_ky", False)))
         if not _ID.match(ud.id) or ud.id in thay:
             raise ValueError(f"mã ứng dụng không hợp lệ hoặc trùng: {ud.id!r}")
         if not _GOI.match(ud.goi) or not _VERSION.match(ud.phien_ban) or not re.match(r"^[0-9a-f]{64}$", ud.sha256):
@@ -217,7 +219,7 @@ class BoCai:
                 viec = f"chạy «pm install -r {tep_loa}»"
                 ok, ma = self._ket_qua_pm(await self.dev.shell(f"pm install -r {tep_loa}", timeout=CAI_TOI_DA_S))
                 kq.buoc.append(f"pm install -r: {ma}")
-                if not ok and ma == "INSTALL_FAILED_UPDATE_INCOMPATIBLE" and go_ban_cu:
+                if not ok and ma == "INSTALL_FAILED_UPDATE_INCOMPATIBLE" and (go_ban_cu or ud.tu_go_neu_khac_chu_ky):
                     kq.buoc.append("khác chữ ký: gỡ bản cũ (mất cấu hình của ứng dụng đó)")
                     viec = f"chạy «pm uninstall {ud.goi}»"
                     await self.dev.shell(f"pm uninstall {ud.goi}", timeout=60)

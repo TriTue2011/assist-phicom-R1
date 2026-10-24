@@ -24,6 +24,7 @@ Dùng cho **loa mới tinh** hoặc loa **vừa reset về cài đặt gốc** (
 
 * Địa chỉ loa ở chế độ chờ cấu hình: `http://192.168.43.1:8989/`; lệnh cấu hình: `POST http://192.168.43.1:8989/api/configwifi`.
 * Thân gửi đi là JSON: `{"ssid": "<tên WiFi>", "secure": "WPA" | "WEP" | "INSECURE", "password": "<mật khẩu>", "mac": ""}`.
+* **Khác biệt với chương trình máy tính** (đã đọc bytecode của chương trình): chương trình kiểm bằng kết nối TCP tới cổng 8989 rồi POST với `Content-Type: application/json`; trình duyệt không kiểm được TCP và không gửi được `application/json` mà không bị chặn (CORS) nên trang buộc phải dùng cách dự phòng `text/plain`. Loa đổi WiFi ngay khi nhận nên lỗi/timeout khi gửi **chưa chắc là thất bại**.
 * Trang thử **cách 1** (JSON chuẩn, đọc được phản hồi của loa). Nếu trình duyệt chặn (CORS), trang tự chuyển **cách 2** (`no-cors`, gửi văn bản thuần chứa cùng JSON):
   cách này **không đọc được phản hồi**, nên hãy chờ mạng `Phicomm_R1_XXXX` biến mất để biết loa đã nhận.
 
@@ -39,6 +40,6 @@ Dùng cho **loa mới tinh** hoặc loa **vừa reset về cài đặt gốc** (
 **Bảo mật:** mật khẩu WiFi nhà đi qua HTTP thường tới loa trong mạng riêng `Phicomm_R1_XXXX` (chỉ máy bạn và loa). Hãy làm bước này ở nhà, không ở nơi đông người.
 Trang không lưu mật khẩu.
 
-**Nếu trang không được:** dùng chương trình *Bo Cai R1* trên máy tính, mục [1] «Cấu hình WiFi cho loa» (nối máy tính vào `Phicomm_R1_XXXX`, nhập SSID, loại mã hoá, mật khẩu; chương trình báo «Đã gửi cấu hình thành công»). Trình duyệt có thể chặn (CORS, mạng riêng) hoặc loa có thể đòi đúng kiểu JSON mà cách gửi dự phòng của trang không đáp ứng; công cụ trên máy tính không bị các giới hạn đó.
+**Nếu trang không được:** dùng tập lệnh **`gui-wifi-r1.py`** ở gốc kho (`python gui-wifi-r1.py "Tên WiFi" "Mật khẩu"`, chỉ cần Python; gửi đúng như chương trình: kiểm TCP `192.168.43.1:8989`, rồi POST JSON `Content-Type: application/json`), hoặc chương trình *Bo Cai R1* trên máy tính, mục [1] «Cấu hình WiFi cho loa» (nối máy tính vào `Phicomm_R1_XXXX`, nhập SSID, loại mã hoá, mật khẩu; chương trình báo «Đã gửi cấu hình thành công»). Trình duyệt có thể chặn (CORS, mạng riêng) hoặc loa có thể đòi đúng kiểu JSON mà cách gửi dự phòng của trang không đáp ứng; công cụ trên máy tính không bị các giới hạn đó.
 
 **Chưa kiểm bởi tác giả của tài liệu này:** trang và địa chỉ `192.168.43.1:8989` do chủ kho cung cấp; tài liệu mô tả đúng nội dung trang, chưa chạy lại trên một loa vừa reset.

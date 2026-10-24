@@ -78,6 +78,8 @@ Loa mới (hoặc vừa reset) chưa biết WiFi nhà: nó **tự phát WiFi `Ph
 5. Điền **tên WiFi**, **mật khẩu**, **loại mã hoá** (WPA/WPA2 hầu hết các nhà; WEP; hoặc không mật khẩu) → **Gửi cấu hình**.
 6. Chờ **10–20 giây**: mạng `Phicomm_R1_XXXX` biến mất là loa đã nhận và đang vào WiFi nhà. Nối thiết bị lại WiFi nhà, tìm IP loa trong router, **đặt IP tĩnh**.
 
+**Nhớ giữ nút trên loa 5–10 giây** cho đèn nhấp nháy rồi loa mới phát `Phicomm_R1_XXXX` (chỉ cắm điện thì loa đã có WiFi nhà không phát mạng này). Trình duyệt có thể chặn việc gửi: khi đó dùng **`python gui-wifi-r1.py "Tên WiFi" "Mật khẩu"`** (gửi đúng như chương trình *Bo Cai R1*, kiểu JSON) hoặc mục [1] của chương trình đó.
+
 Chi tiết cách trang làm việc, bảng gỡ rối và lưu ý bảo mật: **[docs/KET-NOI-WIFI.md](docs/KET-NOI-WIFI.md)**. Chưa chạy lại bước này trên một loa vừa reset trong lúc viết tài liệu.
 
 ## 5. Đèn

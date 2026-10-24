@@ -89,7 +89,7 @@ document.getElementById('nut-kiem-tra').addEventListener('click', function() {
   goi(GOC, {method: 'GET', mode: 'no-cors'}, 3000).then(function() {
     ghi('Tới được loa ở 192.168.43.1:8989. Sẵn sàng gửi cấu hình.', 'ok');
   }).catch(function() {
-    ghi('Chưa tới được loa. Kiểm tra: đã nối vào WiFi Phicomm_R1_XXXX chưa, loa có đang nhấp nháy chờ cấu hình không, đã tắt VPN/dữ liệu di động chưa.', 'loi');
+    ghi('Không xác nhận được từ trình duyệt. (Chương trình máy tính kiểm bằng kết nối TCP, trình duyệt không làm được; loa có thể không trả lời yêu cầu thử này.) Hãy chắc: đã nối WiFi Phicomm_R1_XXXX, đã giữ nút trên loa 5–10 giây cho đèn nhấp nháy, đã tắt VPN/dữ liệu di động. Vẫn có thể bấm Gửi cấu hình.', 'loi');
   });
 });
 
@@ -119,7 +119,7 @@ document.getElementById('nut-gui').addEventListener('click', function() {
           nut.disabled = false;
         })
         .catch(function() {
-          ghi('Gửi thất bại. Kiểm tra lại: còn đang nối WiFi của loa không, tắt VPN/dữ liệu di động, rồi bấm Kiểm tra kết nối tới loa trước.', 'loi');
+          ghi('Lỗi/timeout khi gửi. Có thể loa đã nhận cấu hình và đang chuyển mạng (loa đổi WiFi ngay khi nhận nên không kịp trả lời): chờ 10–20 giây, nếu mạng Phicomm_R1_XXXX biến mất là đã nhận. Nếu vẫn còn sau 30 giây: kiểm tra còn nối WiFi của loa, tắt VPN/dữ liệu di động, hoặc dùng chương trình Bo Cai R1 / tập lệnh gui-wifi-r1.py (gửi đúng kiểu JSON như chương trình).', 'loi');
           nut.disabled = false;
         });
     });
