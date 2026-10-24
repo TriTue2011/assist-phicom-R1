@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import secrets
 from typing import Any
 
@@ -11,8 +12,9 @@ from homeassistant.config_entries import (ConfigEntry, ConfigFlow, ConfigFlowRes
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .adb_client import AdbDevice, AdbError
 from .client import R1Client, R1Error
-from .const import CONF_MIC_CHUA_GHEP
+from .const import ADB_PORT, CONF_MIC_CHUA_GHEP
 from .cong_vao import kiem_tra_ha_url, xoa_canh_bao_khoa
 from .const import (CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, CONF_AGC_TARGET_DB,
                     CONF_DUPLEX_DUCK, CONF_DUPLEX_DUCK_DB, CONF_DUPLEX_HANGOVER,
@@ -40,6 +42,21 @@ CONF_NANG_CAO = "nang_cao"
 CONF_GHEP_LAI = "ghep_lai_apk"
 
 
+async def _thu_adb(host: str) -> bool:
+    """ADB của loa (cổng 5555) có trả lời không. Loa mới reset chưa có ứng dụng phục vụ cổng điều khiển (8080) nhưng vẫn trả lời ADB:
+    khi đó vẫn phải thêm được tích hợp để cài các ứng dụng đó qua ADB."""
+    dev = AdbDevice(host, ADB_PORT, "", "direct")
+    try:
+        return (await dev.shell("echo r1", timeout=8)).strip() == "r1"
+    except (AdbError, OSError, asyncio.TimeoutError):
+        return False
+    finally:
+        try:
+            await dev.close()                 # nhả kết nối ngay: adbd chỉ phục vụ một kết nối, tích hợp sắp cần nó
+        except Exception:                     # noqa: BLE001 - dọn dẹp, không để che kết quả
+            pass
+
+
 class R1ConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
@@ -47,6 +64,16 @@ class R1ConfigFlow(ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> "R1OptionsFlow":
         return R1OptionsFlow()
+
+    async def async_step_chua_co_dich_vu(self, user_input: dict[str, Any] | None = None
+                                         ) -> ConfigFlowResult:
+        """Loa trả lời ADB nhưng chưa trả lời cổng điều khiển (loa mới reset hoặc vừa khởi động): cho thêm để cài ứng dụng qua ADB."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title=f"Phicomm R1 ({self._host})", data={CONF_HOST: self._host, CONF_PORT: self._port})
+        return self.async_show_form(
+            step_id="chua_co_dich_vu", data_schema=vol.Schema({}),
+            description_placeholders={"host": self._host, "port": str(self._port), "adb_port": str(ADB_PORT)})
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None
                               ) -> ConfigFlowResult:
@@ -58,6 +85,9 @@ class R1ConfigFlow(ConfigFlow, domain=DOMAIN):
             try:
                 await R1Client(async_get_clientsession(self.hass), host, port).async_fetch()
             except R1Error:
+                if await _thu_adb(host):                       # loa mới reset: ADB sống, cổng điều khiển chưa có
+                    self._host, self._port = host, port
+                    return await self.async_step_chua_co_dich_vu()
                 errors["base"] = "cannot_connect"
             else:
                 return self.async_create_entry(
@@ -147,7 +177,8 @@ class R1OptionsFlow(OptionsFlowWithReload):
                 try:
                     await R1Client(async_get_clientsession(self.hass), host, port).async_fetch()
                 except R1Error:
-                    errors["base"] = "cannot_connect"
+                    if not await _thu_adb(host):               # loa mới reset (ADB sống, cổng điều khiển chưa có) vẫn lưu được
+                        errors["base"] = "cannot_connect"
             url = (user_input.get(CONF_HA_URL) or "").strip()
             if not errors and url:
                 loi = await kiem_tra_ha_url(

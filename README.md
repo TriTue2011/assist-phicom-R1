@@ -57,6 +57,8 @@ Sau đó: Cài đặt → Thiết bị & dịch vụ → **Thêm tích hợp** �
 
 Khoá và cổng nghe mic **do HA tự cấp** cho từng loa. Muốn thêm loa thứ hai: thêm tích hợp lần nữa với IP khác.
 
+**Loa mới reset:** nếu cổng điều khiển 8080 chưa có nhưng ADB (5555) trả lời, bước thêm tích hợp vẫn cho thêm («Loa chưa có dịch vụ điều khiển»); sau đó vào thiết bị «Phicomm R1» → «Ứng dụng: …» → Cài đặt để cài ứng dụng qua ADB, điều khiển và EQ tự hiện khi loa có dịch vụ này.
+
 **Tuỳ chọn** (Cấu hình tích hợp): IP/cổng loa; `ha_url` (địa chỉ HA mà loa gọi tới, dạng `http://<IP của HA>:8123`); **`adb_server`** (mặc định để trống = nối thẳng tới IP của loa, cổng 5555; chỉ điền khi thật sự có adb-server) và **`adb_mode`**
 (`auto` tự nhận diện, `server` chỉ qua adb-server, `direct` nối thẳng loa); *Ghép lại APK* (sinh khoá mới); thông số nâng cao (bộ đàm, khử tạp, song công).
 Từng cài đặt giải thích ở [docs/CAI-DAT-CHI-TIET.md](docs/CAI-DAT-CHI-TIET.md); cài đặt cụ thể và gỡ rối xem [docs/HUONG-DAN-CAI-DAT.md](docs/HUONG-DAN-CAI-DAT.md).

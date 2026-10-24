@@ -196,5 +196,41 @@ async def test_config_flow_loa_khong_tra_loi(hass, r1):
     assert res["errors"] == {"base": "cannot_connect"}
 
 
+async def test_config_flow_loa_moi_reset_adb_song_cong_dieu_khien_chua_co_van_them_duoc(hass, r1, monkeypatch):
+    """Yêu cầu chủ máy: phải cài đặt được loa kể cả khi reset ban đầu (cổng 8080 chưa có, ADB 5555 sống)."""
+    from custom_components.r1_speaker import config_flow
+
+    async def adb_song(host):
+        return True
+
+    monkeypatch.setattr(config_flow, "_thu_adb", adb_song)
+    r1.mode = "garbage_info"
+    res = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    res = await hass.config_entries.flow.async_configure(res["flow_id"], {"host": "127.0.0.1", "port": r1.port})
+    assert res["type"] is FlowResultType.FORM and res["step_id"] == "chua_co_dich_vu" and not res.get("errors")
+    assert res["description_placeholders"]["adb_port"] == "5555"
+    res = await hass.config_entries.flow.async_configure(res["flow_id"], {})
+    assert res["type"] is FlowResultType.CREATE_ENTRY
+    assert res["data"] == {"host": "127.0.0.1", "port": r1.port}
+
+
+async def test_config_flow_ca_dieu_khien_lan_adb_khong_tra_loi_van_bao_loi(hass, r1, monkeypatch):
+    from custom_components.r1_speaker import config_flow
+
+    async def adb_chet(host):
+        return False
+
+    monkeypatch.setattr(config_flow, "_thu_adb", adb_chet)
+    r1.mode = "garbage_info"
+    res = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    res = await hass.config_entries.flow.async_configure(res["flow_id"], {"host": "127.0.0.1", "port": r1.port})
+    assert res["type"] is FlowResultType.FORM and res["errors"] == {"base": "cannot_connect"}
+
+
+async def test_thu_adb_that_khong_co_adbd_thi_false():
+    from custom_components.r1_speaker import config_flow
+    assert await config_flow._thu_adb("127.0.0.1") is False          # không có adbd cổng 5555 trên máy thử
+
+
 def test_mac_dinh_theo_hop_dong():
     assert const.DEFAULT_HOST == ""

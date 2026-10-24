@@ -8,10 +8,14 @@
           "host": "IP address",
           "port": "Port"
         }
+      },
+      "chua_co_dich_vu": {
+        "title": "Speaker has no control service yet",
+        "description": "The speaker {host} answers ADB (port {adb_port}) but not the control port {port}. This usually means it was just reset or is still booting.\n\nPress Submit to add it. Then open the \"Phicomm R1\" device → the \"Ứng dụng: …\" entries → Install to push the apps over ADB; control and EQ appear once the speaker runs that service."
       }
     },
     "error": {
-      "cannot_connect": "Could not read the speaker (no connection or unexpected reply).",
+      "cannot_connect": "Could not reach the speaker: neither the control port nor ADB (5555) answers. Check the IP, that the speaker is on and on the same network as HA.",
       "invalid_host": "Host must not be empty."
     },
     "abort": {

@@ -8,10 +8,14 @@
           "host": "Địa chỉ IP",
           "port": "Cổng"
         }
+      },
+      "chua_co_dich_vu": {
+        "title": "Loa chưa có dịch vụ điều khiển",
+        "description": "Loa {host} trả lời ADB (cổng {adb_port}) nhưng chưa trả lời cổng điều khiển {port}. Thường là loa mới reset hoặc vừa khởi động.\n\nBấm Gửi để thêm. Sau đó vào thiết bị «Phicomm R1» → các mục «Ứng dụng: …» → Cài đặt để cài ứng dụng qua ADB; điều khiển và EQ sẽ tự hiện khi loa có dịch vụ này."
       }
     },
     "error": {
-      "cannot_connect": "Không đọc được loa (không kết nối được hoặc phản hồi sai định dạng).",
+      "cannot_connect": "Không đọc được loa: cổng điều khiển và cả ADB (5555) đều không trả lời. Kiểm tra IP, loa đã bật chưa và có cùng mạng với HA không.",
       "invalid_host": "Địa chỉ không được để trống."
     },
     "abort": {
