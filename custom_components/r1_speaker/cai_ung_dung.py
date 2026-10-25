@@ -153,6 +153,15 @@ class BoCai:
         self.dang_cai: str | None = None
         self.khi_doi: Callable[[], None] | None = None
 
+    def bodam(self) -> UngDung | None:
+        """Ứng dụng cần cấu hình sau khi cài (khai ở ``bo-cai.json`` bằng ``sau_cai``), ``None`` nếu danh sách không có."""
+        return next((u for u in self.ung_dung if u.sau_cai == "cau_hinh_bodam"), None)
+
+    async def cau_hinh_lai(self) -> str:
+        """Chạy lại lệnh cấu hình APK (cho APK đã cài ngoài tích hợp). Giữ khoá cài để không đụng một lượt cài đang chạy."""
+        async with self._khoa:
+            return await self._cau_hinh_bodam()
+
     def tim(self, ma: str) -> UngDung:
         for u in self.ung_dung:
             if u.id == ma:

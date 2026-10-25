@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# r1den.sh <vung: day|vien> <hieu_ung> [khoa=gia_tri ...]   (r1den-v1)
+# r1den.sh <vung: day|vien> <hieu_ung> [khoa=gia_tri ...]   (r1den-v2)
 #
 # Hiệu ứng đèn R1 chạy NGAY TRÊN LOA (ghi thẳng /sys/class/leds/multi_leds0/led_color, quyền shell của adb).
 # Chạy TIỀN CẢNH trong phiên adb đang mở: phiên đóng (HUP/TERM/INT) thì tắt đèn rồi thoát. Hiệu ứng tĩnh
@@ -15,13 +15,13 @@ BASE=7fff; RIM=7fffff8000
 
 # ── thông số (mặc định = giá trị đã được chủ máy xác nhận bằng mắt) ──
 MAU=ffffff; DS=100; TD=100; DO_SAU=0; TY_LE=50; NGHI=660; SO_CHOP=3; BANG=nhieu_mau
-BAO_HOA=100; CHIEU=xuoi; SO_DAI=1; DAI_DUOI=5; KIEU=nhieu_mau
+BAO_HOA=100; CHIEU=xuoi; SO_DAI=1; DAI_DUOI=5; KIEU=nhieu_mau; SO_CHOI=1; KIEU_DAI=ca_vong; DO_RONG=5
 for a in "$@"; do
   case $a in
     mau=*) MAU=${a#mau=};; do_sang=*) DS=${a#do_sang=};; toc_do=*) TD=${a#toc_do=};;
     do_sau=*) DO_SAU=${a#do_sau=};; ty_le_bat=*) TY_LE=${a#ty_le_bat=};; nghi_ms=*) NGHI=${a#nghi_ms=};;
     so_chop=*) SO_CHOP=${a#so_chop=};; bang_mau=*) BANG=${a#bang_mau=};; bao_hoa=*) BAO_HOA=${a#bao_hoa=};;
-    chieu=*) CHIEU=${a#chieu=};; so_dai=*) SO_DAI=${a#so_dai=};; dai_duoi=*) DAI_DUOI=${a#dai_duoi=};;
+    chieu=*) CHIEU=${a#chieu=};; so_dai=*) SO_DAI=${a#so_dai=};; dai_duoi=*) DAI_DUOI=${a#dai_duoi=};; so_choi=*) SO_CHOI=${a#so_choi=};; kieu_dai=*) KIEU_DAI=${a#kieu_dai=};; do_rong=*) DO_RONG=${a#do_rong=};;
     kieu_mau=*) KIEU=${a#kieu_mau=};;
   esac
 done
@@ -33,7 +33,7 @@ kep() {
   eval "$1=$v"
 }
 kep DS 0 100 100; kep TD 25 400 100; kep DO_SAU 0 80 0; kep TY_LE 10 90 50; kep NGHI 100 3000 660
-kep SO_CHOP 1 6 3; kep BAO_HOA 30 100 100; kep SO_DAI 1 3 1; kep DAI_DUOI 1 10 5
+kep SO_CHOP 1 6 3; kep BAO_HOA 30 100 100; kep SO_DAI 1 5 1; kep DAI_DUOI 1 10 5; kep SO_CHOI 1 4 1; kep DO_RONG 3 8 5
 case $MAU in [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;; *) MAU=ffffff;; esac
 case $CHIEU in xuoi|nguoc) ;; *) CHIEU=xuoi;; esac
 case $BANG in nhieu_mau|am|lanh) ;; *) BANG=nhieu_mau;; esac
@@ -116,19 +116,26 @@ case "$VUNG:$HU" in
      [ $DIR = 1 ] && idx=$((k%6+1)) || idx=$((6-k%6))
      eval "c=\${$idx}"; sc $c $DS; dat $BASE $SC; nghi 500; k=$((k+1))
    done ;;
- day:cau_vong_xoay) # mỗi đèn một màu, dải xoay một đèn mỗi khung
+ day:cau_vong_xoay) # ca_vong: mỗi đèn một màu, cả vòng xoay, SO_DAI vòng lặp; dai_ngan: SO_DAI dải cầu vồng ngắn (DO_RONG đèn) chạy quanh, đèn còn lại tối
    k=0
    while :; do
      i=0; while [ $i -lt 15 ]; do
-       hsv $(( (i*360*SO_DAI/15) + DIR*k*24*SO_DAI )) $BAO_HOA $DS; mb $i; dat $M $SC; i=$((i+1))
+       if [ $KIEU_DAI = dai_ngan ]; then
+         d=15; j=0; while [ $j -lt $SO_DAI ]; do x=$(( (DIR*(k-i) - j*15/SO_DAI) % 15 + 15 )); x=$(( x % 15 )); [ $x -lt $d ] && d=$x; j=$((j+1)); done
+         mb $i
+         if [ $d -lt $DO_RONG ]; then hsv $(( d*300/DO_RONG )) $BAO_HOA $DS; dat $M $SC; else dat $M 000000; fi
+       else
+         hsv $(( (i*360*SO_DAI/15) + DIR*k*24*SO_DAI )) $BAO_HOA $DS; mb $i; dat $M $SC
+       fi
+       i=$((i+1))
      done
      k=$(( (k+1)%15 )); nghi 70
    done ;;
- day:sao_choi) # đầu sáng nhất, đuôi tối dần; nhiều màu (đỏ -> tím) hoặc đơn sắc
+ day:sao_choi) # đầu sáng nhất, đuôi tối dần; SO_CHOI sao chổi cách đều nhau quanh 15 đèn; nhiều màu (đỏ -> tím) hoặc đơn sắc
    k=0
    while :; do
      i=0; while [ $i -lt 15 ]; do
-       d=$(( (DIR*(k-i) % 15 + 15) % 15 )); mb $i
+       d=15; j=0; while [ $j -lt $SO_CHOI ]; do x=$(( (DIR*(k-i) - j*15/SO_CHOI) % 15 + 15 )); x=$(( x % 15 )); [ $x -lt $d ] && d=$x; j=$((j+1)); done; mb $i
        if [ $d -lt $DAI_DUOI ]; then
          lv=$(( DS * (DAI_DUOI-d)*(DAI_DUOI-d) / (DAI_DUOI*DAI_DUOI) ))
          if [ $KIEU = don_sac ]; then sc $MAU $lv; else hsv $((d*270/DAI_DUOI)) 100 $lv; fi

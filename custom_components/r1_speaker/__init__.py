@@ -38,6 +38,7 @@ from .den import R1Lights, dang_ky_dich_vu as dang_ky_dich_vu_den
 from .adb_client import AdbDevice
 from .cai_ung_dung import BoCai
 from .he_thong import HeThongLoa
+from .tu_ket_noi import TuKetNoi
 from .den_adb import AdbLights
 from .dam_thoai import R1Talk
 from .giu_nhac import MusicKeeper
@@ -256,6 +257,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
         return (lenh_apk._host_ha(hass, entry), cong, khoa) if khoa else None
     coordinator.apps = BoCai(adb_dev, danh_sach=await hass.async_add_executor_job(cai_ung_dung.doc_bo_cai),
                              cau_hinh_bodam=_cau_hinh_apk)
+    # APK cài NGOÀI tích hợp (máy tính, adb tay) chưa biết HA ở đâu: HA tự cấu hình khi thấy APK đã cài mà chưa nối về.
+    coordinator.tu_ket_noi = TuKetNoi(coordinator.apps, coordinator.mic_server)
+    entry.async_create_background_task(hass, coordinator.tu_ket_noi.chay(), "r1_speaker tự kết nối APK")
     coordinator.he_thong = HeThongLoa(hass, entry, adb_dev, sink)        # đèn ưu tiên số 1, đọc thông tin số 2
     coordinator.lights = R1Lights(hass, entry, sink=sink)
     sink.khi_roi = coordinator.lights.ap_dung_lai        # phiên đèn đứt (loa khởi động lại, ADB rớt) thì áp lại

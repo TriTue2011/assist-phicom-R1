@@ -182,7 +182,7 @@ Cả vòng đáy đổi 12 sắc độ, mỗi sắc 0,4 giây ở tốc độ 10
 
 #### `cau_vong_xoay` — Cầu vồng xoay
 
-Mỗi đèn một màu, cả dải xoay vòng.
+Cả vòng: mỗi đèn một màu, xoay vòng. Dải ngắn: vài dải cầu vồng chạy quanh đáy, đèn còn lại tối.
 
 | Thông số | Ý nghĩa | Giá trị |
 |---|---|---|
@@ -190,7 +190,9 @@ Mỗi đèn một màu, cả dải xoay vòng.
 | `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
 | `chieu` | Chiều | `xuoi` (Xuôi), `nguoc` (Ngược); mặc định `xuoi` |
 | `bao_hoa` | Độ bão hoà màu | 30–100 %, mặc định 100 |
-| `so_dai` | Số dải cầu vồng quanh đáy | 1–3, mặc định 1 |
+| `kieu_dai` | Kiểu dải | `ca_vong` (Cả vòng 15 màu), `dai_ngan` (Dải ngắn chạy quanh); mặc định `ca_vong` |
+| `so_dai` | Số dải: số vòng cầu vồng lặp lại (cả vòng) hoặc số dải ngắn chạy cùng lúc | 1–5, mặc định 1 |
+| `do_rong` | Độ rộng mỗi dải (chỉ khi `kieu_dai` = `dai_ngan`) | 3–8 đèn, mặc định 5 |
 
 #### `sao_choi` — Sao chổi
 
@@ -202,6 +204,7 @@ Mỗi đèn một màu, cả dải xoay vòng.
 | `toc_do` | Tốc độ | 25–400 %, mặc định 100 |
 | `chieu` | Chiều | `xuoi` (Xuôi), `nguoc` (Ngược); mặc định `xuoi` |
 | `dai_duoi` | Độ dài đuôi | 2–8 đèn, mặc định 5 |
+| `so_choi` | Số sao chổi chạy cùng lúc, cách đều nhau quanh đáy | 1–4, mặc định 1 |
 | `kieu_mau` | Kiểu màu | `nhieu_mau` (Nhiều màu (đỏ đến tím)), `don_sac` (Đơn sắc); mặc định `nhieu_mau` |
 | `mau` | Màu *(chỉ khi `kieu_mau` = `don_sac`)* | màu `#rrggbb`, mặc định `#00ffff` |
 

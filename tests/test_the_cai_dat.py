@@ -230,7 +230,7 @@ async def test_muc_thu_rieng_trang_thai_chi_trong_the_va_chi_nut_thu_moi_goi_dic
     assert _node("c.reduceUi(i.ui,{type:'thu_effect',effect:'tho'})", ui=ui)["thu"]["params"] == {}
     # mục Thử hiện đúng form của hiệu ứng đang chọn, không gọi gì cho tới khi bấm Thử
     h = _html(m, {"open": True, "tab": "light", "thu": ui["thu"]})
-    assert h.count("data-thu-param") == 6 and '<option value="sao_choi" selected>' in h
+    assert h.count("data-thu-param") == 7 and '<option value="sao_choi" selected>' in h
     sid = m["settings"]["entity"]
     call = _node("c.makeCall(i.m,i.a)", m=m, a={"type": "thu_run", "zone": e["zone"], "effect": e["effect"], "params": e["params"], "secs": e["secs"]})
     assert call == ["r1_speaker", "preview_light", {"entity_id": sid, "zone": "day", "effect": "sao_choi",
