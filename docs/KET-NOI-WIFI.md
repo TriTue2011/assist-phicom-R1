@@ -18,7 +18,7 @@ Dùng cho **loa mới tinh** hoặc loa **vừa reset về cài đặt gốc** (
 7. Bấm **«Gửi cấu hình»**. Chờ **10–20 giây**: loa tự bắt WiFi nhà và **tắt** mạng `Phicomm_R1_XXXX`. Khi mạng đó biến mất là loa đã nhận.
 8. **Nối điện thoại/máy tính lại vào WiFi nhà.** Tìm IP của loa trong bảng DHCP của router (thiết bị tên Phicomm/R1), rồi **đặt IP tĩnh hoặc giữ chỗ DHCP** cho
    loa để địa chỉ không đổi.
-9. Sang HA: thêm tích hợp **Phicomm R1 Speaker** với IP đó (xem [README](../README.md) mục *Loa mới: từ đầu đến dùng được*).
+9. Sang HA: thêm tích hợp **Phicomm R1 Speaker** với IP đó (xem [README](../README.md) mục *Cài đặt nhanh*).
 
 ## Cách trang làm việc (để bạn tự kiểm)
 

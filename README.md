@@ -12,60 +12,49 @@ Kho này biến loa **Phicomm R1** thành một thiết bị đầy đủ của 
 
 **Giấy phép: CHỦ KHO CHỌN GIẤY PHÉP.** Kho chưa có tệp `LICENSE`; chủ kho phải chọn giấy phép trước khi công khai hoặc phân phối.
 
+## Cài đặt nhanh (chỉ cần HACS)
+
+Không cần cài `adb` hay chạy lệnh nào trên máy tính: tích hợp tự nói chuyện với loa qua mạng.
+
+1. **Cho loa vào WiFi nhà** (chỉ với loa mới hoặc vừa reset): làm theo [mục 4](#4-kết-nối-wifi-cho-loa-mới-hoặc-vừa-reset). Đặt **IP tĩnh** cho loa trong router.
+2. **HACS → ⋮ → Custom repositories** → dán địa chỉ kho này, loại **Integration** → cài **Phicomm R1 Speaker** → **khởi động lại Home Assistant**.
+3. **Cài đặt → Thiết bị & dịch vụ → Thêm tích hợp → Phicomm R1 Speaker** → nhập **IP của loa** (cổng điều khiển để mặc định `8080`).
+4. Mở thiết bị **Phicomm R1** → ở ba thực thể **«Ứng dụng: …»** (trình phát, thiết bị và giọng nói, mic) bấm **Cài đặt** lần lượt.
+   Tích hợp tự **ẩn các ứng dụng gốc** của hãng và tự cấu hình APK mic, bạn không phải làm gì thêm.
+5. Bấm nút **Khởi động lại loa**, đợi **1–2 phút** (cổng điều khiển trên loa lên sau khoảng 100 giây).
+6. **Kiểm:** nói gần loa, `sensor.r1_trang_thai_mic` phải chuyển **«gui»**. Rồi thêm thẻ `type: custom:r1-card` vào bảng điều khiển (3 tab: Đàm thoại, EQ, Cài đặt).
+
+> Loa vừa reset: cổng ADB mạng `5555` của loa phải mở thì bước 4 mới chạy được (chưa kiểm trên loa vừa reset). Mở rồi mà báo bận thì tắt mọi công cụ `adb` khác: loa chỉ nhận **một** kết nối ADB.
+
+### Tường lửa và Docker
+
+Loa gọi ngược về Home Assistant ở **cổng 18765** (mỗi loa thêm một cổng kế tiếp: 18766…). Cổng này phải thông từ loa tới máy chạy Home Assistant:
+
+- **Máy có tường lửa** (ví dụ `ufw`): mở cổng.
+  ```
+  ufw allow 18765 comment "R1 Speaker Port"
+  ```
+- **Home Assistant chạy bằng Docker:** dùng `network_mode: host`, hoặc công bố cổng trong compose (`ports: - "18765:18765"`). Docker **tự mở** cổng khi công bố, **không cần** thêm luật `ufw`.
+- Home Assistant OS / Supervised: không cần làm gì thêm.
+
+### Gỡ rối nhanh
+
+| Thấy | Làm |
+|---|---|
+| Nhật ký `8080 ConnectionRefused` hoặc `TimeoutError` lặp lại, loa chập chờn | Chưa ẩn ứng dụng gốc: bấm **«Chuẩn bị loa (ẩn ứng dụng gốc)»**, rồi **Khởi động lại loa** |
+| `ADB … đang bận phục vụ một client ADB khác` | Tắt công cụ `adb` khác (`adb disconnect`, `adb kill-server`) rồi thử lại |
+| Thẻ Đàm thoại báo «Chưa có kênh phát về loa», mic chỉ «nghe», không lên «gui» | Mở cổng 18765 (mục trên), tích **«Ghép lại APK»** trong Tuỳ chọn, khởi động lại loa |
+| Sau khi cài, mic không tự chạy lại sau khởi động | APK chưa từng được mở một lần: bấm **Cài đặt** lại ở «Ứng dụng: …» (mic) rồi khởi động lại loa |
+
+Chi tiết: [mục 11 (gỡ rối)](#11-gỡ-rối), [docs/CAI-UNG-DUNG.md](docs/CAI-UNG-DUNG.md), [docs/HUONG-DAN-CAI-DAT.md](docs/HUONG-DAN-CAI-DAT.md).
+
 ## Mục lục
 
-1. [Yêu cầu](#1-yêu-cầu) · 2. [**Loa mới tinh: từ đầu đến dùng được**](#2-loa-mới-tinh-từ-đầu-đến-dùng-được) · 3. [Cài tích hợp HA](#3-cài-tích-hợp-ha) ·
-4. [Kết nối WiFi cho loa](#4-kết-nối-wifi-cho-loa-mới-hoặc-vừa-reset) · 5. [Đèn](#5-đèn) · 6. [Ứng dụng trên loa](#6-ứng-dụng-trên-loa-cài-qua-adb) ·
-7. [Thông tin hệ thống](#7-thông-tin-hệ-thống-của-loa) · 8. [Nút giữa](#8-nút-giữa) · 9. [Mic về HA](#9-nối-mic-loa-về-ha) · 10. [Từ đánh thức](#10-từ-đánh-thức-và-chỉnh-mic) ·
-11. [Gỡ rối](#11-gỡ-rối) · 12. [Quyền riêng tư và bảo mật](#12-quyền-riêng-tư-và-bảo-mật) · 13. [Phát triển và kiểm thử](#13-phát-triển-và-kiểm-thử)
+Cài đặt nhanh ở trên · [4. WiFi cho loa](#4-kết-nối-wifi-cho-loa-mới-hoặc-vừa-reset) · [5. Đèn](#5-đèn) · [6. Ứng dụng trên loa](#6-ứng-dụng-trên-loa-cài-từ-ha) ·
+[7. Thông tin hệ thống](#7-thông-tin-hệ-thống-của-loa) · [8. Nút giữa](#8-nút-giữa) · [9. Mic về HA](#9-nối-mic-loa-về-ha) · [10. Từ đánh thức](#10-từ-đánh-thức-và-chỉnh-mic) ·
+[11. Gỡ rối](#11-gỡ-rối) · [12. Quyền riêng tư và bảo mật](#12-quyền-riêng-tư-và-bảo-mật) · [13. Phát triển và kiểm thử](#13-phát-triển-và-kiểm-thử)
 
-## 1. Yêu cầu
-
-| Thứ | Ghi chú |
-|---|---|
-| Home Assistant **2026.2 trở lên** | thử trên **2026.2.3**; `hacs.json` ghi tối thiểu 2026.2.0. Chưa thử bản cũ hơn. |
-| Loa Phicomm R1 cùng mạng LAN với HA | đặt **IP tĩnh hoặc giữ chỗ DHCP** cho loa. Cổng điều khiển/EQ mặc định **8080**. |
-| **ADB tới loa** (cổng mạng `5555` của loa) | **đèn, cài ứng dụng, đọc thông tin và khởi động lại đều đi qua ADB.** Tích hợp tự nói ADB: dùng `adb-server` nếu có, **không có thì nối thẳng loa** (tự nhận diện). Không cần cài `adb` trên máy bạn. |
-| `adb` (Android platform-tools) trên máy bạn | chỉ cần nếu muốn cài APK bằng tay hoặc gỡ rối ngoài HA. |
-
-**Chỉ cần để kiểm thử hoặc tự build lại APK (không cần để dùng):** Python **3.13** và `requirements-test.txt` (chạy test và `bandit`), `chromium` hoặc `google-chrome` (test thẻ trong trình duyệt không đầu), `node`, JDK **17** + Android SDK **platform 22** + **build-tools 30.0.3** (build APK).
-
-## 2. Loa mới tinh: từ đầu đến dùng được
-
-Trình tự cho loa **mới hoặc vừa reset**:
-
-1. **Kết nối WiFi cho loa** bằng tệp `Trang kết nối WiFi cho loa R1.html` (mục 4, chi tiết ở [docs/KET-NOI-WIFI.md](docs/KET-NOI-WIFI.md)). Xong, tìm **IP của loa** trong router và đặt IP tĩnh/giữ chỗ DHCP.
-2. **Cài tích hợp trong HA** (HACS hoặc chép thư mục, mục 3) rồi **thêm loa** với IP đó.
-3. **Cài ứng dụng lên loa** ngay từ HA (không cần máy tính): vào thiết bị **Phicomm R1** → các thực thể **«Ứng dụng: …»** → bấm **Cài đặt**, hoặc gọi dịch vụ `r1_speaker.install_apps`
-   (mục 6, [docs/CAI-UNG-DUNG.md](docs/CAI-UNG-DUNG.md)). APK mic `vn.r1.bodam` cài xong **được HA tự cấu hình** (host HA, cổng, khoá nghe mic); không cần chạy lệnh nào.
-4. Bấm nút **Khởi động lại loa** một lần (để các ứng dụng hệ thống nạp bản mới). Sau khoảng nửa phút `sensor.r1_trang_thai_mic` phải lên `nghe`/`gui` (APK đã nối về HA).
-5. Mở thẻ `r1-card` → **Cài đặt → Ánh sáng**: dùng mục **Thử đèn** để thử hiệu ứng, rồi chỉnh đèn theo từng chức năng (mục 5).
-6. Chọn pipeline Assist cho loa (thực thể **Trợ lý**), nói từ đánh thức (mục 10).
-
-**Điều kiện và điều CHƯA kiểm với loa mới tinh:** cả bước 3 lẫn đèn cần **cổng ADB mạng `5555` của loa mở**. Trên loa của chủ kho cổng này mở sẵn và còn sau khi khởi động lại; **chưa kiểm trên một loa vừa reset**.
-Nếu cổng đóng, tích hợp báo lỗi ADB rõ ràng và không làm gì; khi đó bật ADB mạng theo cách của chương trình *Bo Cai R1* (xem `ghep-bo-cai-r1.bat`) rồi thử lại.
-
-## 3. Cài tích hợp HA
-
-**Qua HACS (khuyến nghị):** thêm kho này làm *Custom repository* (loại *Integration*), cài **Phicomm R1 Speaker**, khởi động lại HA.
-**Bằng tay:** chép thư mục `custom_components/r1_speaker` vào `<thư mục cấu hình HA>/custom_components/` (giữ nguyên `www/`, `translations/`, `apk/`), khởi động lại HA.
-
-Sau đó: Cài đặt → Thiết bị & dịch vụ → **Thêm tích hợp** → **Phicomm R1 Speaker**:
-
-- **Địa chỉ IP của loa** (không có giá trị mặc định; ví dụ `192.0.2.10` là địa chỉ ví dụ);
-- **Cổng điều khiển/EQ**: mặc định `8080`.
-
-Khoá và cổng nghe mic **do HA tự cấp** cho từng loa. Muốn thêm loa thứ hai: thêm tích hợp lần nữa với IP khác.
-
-**Loa mới reset:** nếu cổng điều khiển 8080 chưa có nhưng ADB (5555) trả lời, bước thêm tích hợp vẫn cho thêm («Loa chưa có dịch vụ điều khiển»); sau đó vào thiết bị «Phicomm R1» → «Ứng dụng: …» → Cài đặt để cài ứng dụng qua ADB, điều khiển và EQ tự hiện khi loa có dịch vụ này.
-
-**Tuỳ chọn** (Cấu hình tích hợp): IP/cổng loa; `ha_url` (địa chỉ HA mà loa gọi tới, dạng `http://<IP của HA>:8123`); **`adb_server`** (mặc định để trống = nối thẳng tới IP của loa, cổng 5555; chỉ điền khi thật sự có adb-server) và **`adb_mode`**
-(`auto` tự nhận diện, `server` chỉ qua adb-server, `direct` nối thẳng loa); *Ghép lại APK* (sinh khoá mới); thông số nâng cao (bộ đàm, khử tạp, song công).
-Từng cài đặt giải thích ở [docs/CAI-DAT-CHI-TIET.md](docs/CAI-DAT-CHI-TIET.md); cài đặt cụ thể và gỡ rối xem [docs/HUONG-DAN-CAI-DAT.md](docs/HUONG-DAN-CAI-DAT.md).
-
-**Kiểm nhanh:** có thiết bị **Phicomm R1** với 5 thực thể EQ, `number.phicomm_r1_volume`, `media_player.r1_loa`, `assist_satellite.r1`, `sensor.r1_trang_thai_mic`, các cảm biến hệ thống,
-nút **Khởi động lại loa** và các thực thể **Ứng dụng**. Thẻ: tích hợp **tự đăng ký** tài nguyên; chỉ cần thêm thẻ `type: custom:r1-card` (3 tab Đàm thoại / EQ / Cài đặt).
-Phát tiếng ra loa (TTS/nhạc) cần thêm tích hợp **DLNA Digital Media Renderer** của HA cho loa: xem [docs/PHAT-RA-LOA.md](docs/PHAT-RA-LOA.md).
+**Yêu cầu:** Home Assistant **2026.2 trở lên**; loa R1 cùng mạng LAN (IP tĩnh); ADB mạng của loa (cổng `5555`). Để chạy test hoặc build APK mới cần thêm Python 3.13, `node`, JDK 17 và Android SDK ([mục 13](#13-phát-triển-và-kiểm-thử)), người dùng bình thường **không cần**.
 
 ## 4. Kết nối WiFi cho loa mới hoặc vừa reset
 
@@ -98,26 +87,23 @@ Không cần APK, không cần máy chủ quyền shell, **không bắt buộc c
 
 Chi tiết, danh mục thông số đầy đủ, dịch vụ, gỡ rối: **[docs/DEN-LED.md](docs/DEN-LED.md)**. **Đã xem bằng mắt trên loa thật** với bản nguyên mẫu của script: cả 13 hiệu ứng; bản cuối chạy sạch lỗi shell trên loa, **chưa xem lại bằng mắt từng thông số**.
 
-## 6. Ứng dụng trên loa (cài qua ADB)
+## 6. Ứng dụng trên loa (cài từ HA)
 
-Tích hợp mang theo các ứng dụng cần cho loa và **tự cài qua ADB** (`custom_components/r1_speaker/apk/`, danh sách `bo-cai.json`):
+Tích hợp mang sẵn 3 ứng dụng (`custom_components/r1_speaker/apk/`, danh sách `bo-cai.json`) và cài qua ADB ngay từ HA. Mỗi ứng dụng là một thực thể **Cập nhật** (bấm **Cài đặt**), hoặc gọi dịch vụ `r1_speaker.install_apps`.
 
-| Mã | Gói | Phiên bản | Là gì |
-|---|---|---|---|
-| `player` | `com.phicomm.speaker.player` | 0.2.5 | trình phát DLNA / AirPlay (bản cập nhật của EchoService) |
-| `unisound` | `com.phicomm.speaker.device` | V3.2.5.2- | ứng dụng thiết bị của hãng (**có thể chiếm mic**, xem gỡ rối) |
-| `bodam` | `vn.r1.bodam` | 1.2 | APK mic của tích hợp; cài xong HA **tự cấu hình** |
+| Mã | Gói | Là gì |
+|---|---|---|
+| `player` | `com.phicomm.speaker.player` | trình phát DLNA / AirPlay |
+| `unisound` | `com.phicomm.speaker.device` | ứng dụng thiết bị của hãng (**có thể chiếm mic**, xem gỡ rối) |
+| `bodam` | `vn.r1.bodam` | APK mic của tích hợp; cài xong HA **tự cấu hình** |
 
-* Mỗi ứng dụng là một thực thể **Cập nhật** (bấm **Cài đặt**). `player` và `unisound` ghi đè ứng dụng HỆ THỐNG của hãng nên cài xong **phải ẩn các ứng dụng gốc** (giống chương trình *Bo Cai R1*): `install_apps` tự làm bước «Chuẩn bị loa», hoặc bấm nút **«Chuẩn bị loa (ẩn ứng dụng gốc)»**, rồi khởi động lại loa. Cài mà không ẩn thì loa hỏng (xem `docs/CAI-UNG-DUNG.md`).
-* Tệp lớn được **chia phần** (GitHub giới hạn 25 MB khi tải lên) và **kiểm sha256** trước khi đẩy; sai thì không đẩy gì.
-* `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (loa đang có bản cùng gói ký khác): chỉ khi bạn đặt `force: true` tích hợp mới gỡ bản cũ rồi cài lại.
-* **Nút Khởi động lại loa** (`button.r1_khoi_dong_lai`) gửi lệnh `reboot` qua ADB.
+- Cài xong tích hợp tự **«Chuẩn bị loa»**: ẩn các ứng dụng gốc gây nhiễu (giống chương trình *Bo Cai R1*). Cũng có nút **«Chuẩn bị loa (ẩn ứng dụng gốc)»** nếu cần chạy riêng. Cài mà không ẩn thì loa chập chờn (cổng 8080 không trả lời, tự khởi động lại).
+- Tệp được kiểm **sha256** trước khi đẩy; sai thì không đẩy gì.
+- `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (loa đang có bản ký khác): chỉ khi đặt `force: true` tích hợp mới gỡ bản cũ rồi cài lại.
+- Nút **Khởi động lại loa** (`button.r1_khoi_dong_lai`) gửi lệnh `reboot` qua ADB.
 
-Chi tiết và gỡ rối: **[docs/CAI-UNG-DUNG.md](docs/CAI-UNG-DUNG.md)**. Cài APK `vn.r1.bodam` **bằng tay** (cách cũ, khi không dùng bộ cài): `adb install`, xem [docs/CAI-APK.md](docs/CAI-APK.md).
-**Đã kiểm trên loa thật:** cài đè APK mic 1.2, tự chạy sau khởi động lại loa, tự nối lại HA. **Chưa kiểm trên loa thật:** bấm «Cài đặt» cho `unisound` từ HA, toàn bộ trình tự trên loa mới tinh.
-**Gói bị ẩn:** trên loa của chủ kho, `com.phicomm.speaker.device` **đã có** (ứng dụng hệ thống `/system/app/Unisound` V3.1.6.2, kèm bản cập nhật V3.2.5.2 trong `/data`, đang bị **ẩn**; `pm path` trả rỗng với gói ẩn).
-Bộ dò đọc bản ghi `dumpsys package` nên thực thể «Ứng dụng: Thiết bị và giọng nói» hiện **«V3.2.5.2- (đang ẩn)»** và **không mời cập nhật**. Số phiên bản `25.3.1` trong `bo-cai.json` chưa được đối chiếu với tệp.
-Tệp `autodlna.apk` đi kèm trùng từng byte với `base.apk` của trình phát đang chạy trên loa của chủ kho, nên thực thể trình phát hiện đúng «Mới nhất».
+Chi tiết: [docs/CAI-UNG-DUNG.md](docs/CAI-UNG-DUNG.md). Cài APK bằng tay (cách cũ, không cần nữa): [docs/CAI-APK.md](docs/CAI-APK.md).
+**Đã kiểm trên loa thật:** cài đè APK mic 1.2, tự chạy sau khởi động lại, tự nối lại HA. **Chưa kiểm trên loa thật:** bấm «Cài đặt» cho `unisound` từ HA, và toàn bộ trình tự trên loa vừa reset.
 
 ## 7. Thông tin hệ thống của loa
 
