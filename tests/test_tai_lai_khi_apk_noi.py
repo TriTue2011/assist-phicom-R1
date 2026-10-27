@@ -49,7 +49,8 @@ async def test_nap_lai_khong_ket_khi_pipeline_ha_khong_tra_lai(hass, r1):
     e.add_to_hass(hass)
     with mock.patch("homeassistant.components.assist_satellite.entity.AssistSatelliteEntity."
                     "async_accept_pipeline_from_satellite", new=treo), \
-            mock.patch.object(sat_mod, "DUNG_TOI_DA", 0.5):
+            mock.patch.object(sat_mod, "DUNG_TOI_DA", 0.5), \
+            mock.patch.object(sat_mod.R1Satellite, "_thieu_tu_danh_thuc", return_value=None):
         assert await hass.config_entries.async_setup(e.entry_id)
         await hass.async_block_till_done()
         reader, writer = await _noi_apk(e, port)

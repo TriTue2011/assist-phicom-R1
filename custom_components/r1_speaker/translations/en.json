@@ -368,6 +368,10 @@
     "cong_dieu_khien": {
       "title": "R1 speaker control port not answering",
       "description": "The control port {port} of the speaker {host} has not answered for several minutes. Common on a freshly reset speaker or one whose apps were installed by an older integration version (vendor apps not hidden). Fix: update the integration, call the \"Install apps on the speaker\" service (install_apps) with defaults (cleans pending OTA, reinstalls player, device and mic APK, then hides the vendor apps), then press \"Restart speaker\". Speaker without WiFi: see docs/KET-NOI-WIFI.md."
+    },
+    "thieu_tu_danh_thuc": {
+      "title": "R1 Assist has no wake word engine",
+      "description": "The Assist pipeline used by {entity} has no wake word engine, so the satellite is not listening and no turn is started. Fix: install a wake word engine (for example openWakeWord via Wyoming), pick a wake word for the pipeline in Settings → Voice assistants and assign that pipeline to the speaker's Assistant entity; or turn Assist off. This issue disappears once configured."
     }
   }
 }

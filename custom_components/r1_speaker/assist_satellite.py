@@ -21,8 +21,9 @@ import asyncio
 import contextlib
 import logging
 
-from homeassistant.components import tts
-from homeassistant.components.assist_pipeline import PipelineEvent, PipelineEventType, PipelineStage
+from homeassistant.components import tts, wake_word
+from homeassistant.components.assist_pipeline import (
+    PipelineEvent, PipelineEventType, PipelineStage, async_get_pipeline)
 from homeassistant.components.assist_satellite import (
     AssistSatelliteAnnouncement,
     AssistSatelliteConfiguration,
@@ -31,7 +32,7 @@ from homeassistant.components.assist_satellite import (
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import entity_registry as er, issue_registry as ir
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import den
@@ -54,6 +55,19 @@ POLL = 0.2
 DUNG_TOI_DA = 5.0
 #: Hết tiếng loa còn vang: giữ bỏ mic thêm ngần này giây.
 TAIL = 0.5
+#: Pipeline HA kết thúc bằng sự kiện ERROR (không ném ngoại lệ) thì nghỉ trước lượt kế tiếp: lần đầu ngần này
+#: giây, gấp đôi mỗi lần lỗi liên tiếp, tối đa ``LOI_NGHI_TOI_DA``. Thiếu khoảng nghỉ này, một pipeline lỗi tức
+#: thì (vd chưa có engine từ đánh thức) làm vòng nghe quay hàng nghìn vòng/giây và bật đèn «lỗi» mỗi vòng.
+LOI_NGHI_DAU = 2.0
+LOI_NGHI_TOI_DA = 60.0
+#: Mã lỗi pipeline HA báo khi thiếu engine/nhà cung cấp từ đánh thức (cấu hình, không phải lỗi tạm).
+LOI_THIEU_TU_DANH_THUC = ("wake-engine-missing", "wake-provider-missing")
+#: Chưa có engine từ đánh thức thì KHÔNG mở pipeline (chắc chắn lỗi); kiểm lại cấu hình sau ngần này giây.
+KIEM_LAI_CAU_HINH = 10.0
+#: Chốt chặn chung: một lượt pipeline kết thúc nhanh hơn ``LUOT_TOI_THIEU`` giây (vì BẤT KỲ lý do nào) thì nghỉ
+#: ``LUOT_NGHI_SAU`` giây trước lượt kế, để vòng nghe không bao giờ quay không nhường cho vòng lặp sự kiện của HA.
+LUOT_TOI_THIEU = 0.3
+LUOT_NGHI_SAU = 0.5
 _PLAYING = {"playing", "buffering"}
 
 
@@ -80,6 +94,9 @@ class R1Satellite(R1MicEntity, AssistSatelliteEntity):
         self._co_phien = asyncio.Event()     # có phiên chờ chạy (chế độ từ đánh thức trên loa)
         self._phien_luot = None              # phiên mà lượt pipeline đang chạy thuộc về
         self._cut_luot = 0                   # giá trị ``_cut`` lúc lượt hiện tại bắt đầu (đèn «lỗi»)
+        self._loi_luot: str | None = None    # mã lỗi thật của lượt pipeline vừa chạy (None = không lỗi)
+        self._loi_lien_tiep = 0              # số lượt lỗi liên tiếp (tăng khoảng nghỉ, báo một lần)
+        self._dang_bao_thieu = False         # đã tạo mục «Sửa chữa» thiếu engine từ đánh thức
 
     @property
     def talk(self):
@@ -188,11 +205,22 @@ class R1Satellite(R1MicEntity, AssistSatelliteEntity):
                 await self._co_phien.wait()
                 continue
             bat_dau = PipelineStage.STT if self._tiep else PipelineStage.WAKE_WORD
+            if bat_dau is PipelineStage.WAKE_WORD:
+                # Từ đánh thức do pipeline HA dò: chưa có engine thì mọi lượt đều lỗi ngay. Báo cấu hình thiếu
+                # (mục «Sửa chữa» + một dòng log) và ĐỢI, không mở pipeline, không bật đèn «lỗi».
+                thieu = self._thieu_tu_danh_thuc()
+                if thieu is not None:
+                    self._bao_thieu_tu_danh_thuc(thieu)
+                    await asyncio.sleep(KIEM_LAI_CAU_HINH)
+                    continue
+                self._xoa_bao_thieu()
             self._tiep = False
             self._co_tts = False
+            self._loi_luot = None
             self._tts_xong.clear()
             self._phien_luot = self.talk.session
             self._cut_luot = self._cut
+            bat_dau_luot = asyncio.get_running_loop().time()
             try:
                 await self.async_accept_pipeline_from_satellite(
                     audio_stream=self._luong_stt(), start_stage=bat_dau)
@@ -203,10 +231,68 @@ class R1Satellite(R1MicEntity, AssistSatelliteEntity):
                 self.talk.end(self._phien_luot, "loi_pipeline", cut=False)
                 await asyncio.sleep(2)
                 continue
+            if self._loi_luot is not None and not self._co_tts:
+                # Lượt kết thúc bằng lỗi thật (HA báo bằng sự kiện, không ném ngoại lệ): nghỉ tăng dần rồi
+                # mới thử lại, kẻo quay vòng liên tục (xem LOI_NGHI_DAU).
+                self._loi_lien_tiep += 1
+                self._bao_loi_lien_tiep(self._loi_luot)
+                self.talk.end(self._phien_luot, "loi_pipeline", cut=False)
+                self._phien_luot = None
+                await asyncio.sleep(min(LOI_NGHI_TOI_DA, LOI_NGHI_DAU * 2 ** min(self._loi_lien_tiep - 1, 10)))
+                continue
+            self._loi_lien_tiep = 0
             if self._co_tts:
                 await self._tts_xong.wait()
             self.talk.turn_finished(self._phien_luot, self._tiep)
             self._phien_luot = None
+            if self._cut == self._cut_luot and asyncio.get_running_loop().time() - bat_dau_luot < LUOT_TOI_THIEU:
+                await asyncio.sleep(LUOT_NGHI_SAU)    # kết thúc tức thì mà KHÔNG do ta cắt: nhường vòng lặp sự kiện
+
+    def _thieu_tu_danh_thuc(self) -> str | None:
+        """Mã lỗi nếu pipeline đang dùng KHÔNG có engine từ đánh thức dùng được (cùng điều kiện mà
+        ``PipelineRun.prepare_wake_word_detection`` của HA kiểm), ngược lại None."""
+        try:
+            pipeline = async_get_pipeline(self.hass, self._resolve_pipeline())
+        except HomeAssistantError:
+            return None            # không phân giải được pipeline: để chính HA báo lỗi như thường
+        entity_id = pipeline.wake_word_entity or wake_word.async_default_entity(self.hass)
+        if entity_id is None:
+            return LOI_THIEU_TU_DANH_THUC[0]
+        if wake_word.async_get_wake_word_detection_entity(self.hass, entity_id) is None:
+            return LOI_THIEU_TU_DANH_THUC[1]
+        return None
+
+    def _bao_thieu_tu_danh_thuc(self, ma: str) -> None:
+        if self._dang_bao_thieu:
+            return
+        self._dang_bao_thieu = True
+        _LOGGER.warning(
+            "%s: pipeline Assist chưa có engine từ đánh thức (%s) nên vệ tinh chưa nghe. Cài engine (vd openWakeWord "
+            "qua Wyoming) và chọn từ đánh thức trong pipeline của thực thể Trợ lý, hoặc tắt «Assist». Vệ tinh tự "
+            "chạy lại khi cấu hình đủ.", self.entity_id, ma)
+        ir.async_create_issue(
+            self.hass, DOMAIN, f"thieu_tu_danh_thuc_{self._entry.entry_id}", is_fixable=False,
+            severity=ir.IssueSeverity.WARNING, translation_key="thieu_tu_danh_thuc",
+            translation_placeholders={"entity": self.entity_id})
+
+    def _xoa_bao_thieu(self) -> None:
+        if self._dang_bao_thieu:
+            self._dang_bao_thieu = False
+            ir.async_delete_issue(self.hass, DOMAIN, f"thieu_tu_danh_thuc_{self._entry.entry_id}")
+            _LOGGER.info("%s: đã có engine từ đánh thức, vệ tinh bắt đầu nghe", self.entity_id)
+
+    def _bao_loi_lien_tiep(self, ma: str) -> None:
+        """Ghi MỘT dòng cảnh báo nói rõ nguyên nhân khi lỗi bắt đầu lặp (rồi mỗi 20 lần), không ghi mỗi vòng."""
+        if self._loi_lien_tiep != 1 and self._loi_lien_tiep % 20:
+            return
+        if ma in LOI_THIEU_TU_DANH_THUC:
+            _LOGGER.warning(
+                "%s: pipeline Assist chưa có engine từ đánh thức (%s). Cài engine (vd openWakeWord qua Wyoming) "
+                "và chọn từ đánh thức trong pipeline của thực thể Trợ lý, hoặc tắt «Assist». Vệ tinh thử lại "
+                "với khoảng nghỉ tăng dần.", self.entity_id, ma)
+        else:
+            _LOGGER.warning("%s: pipeline Assist lỗi %d lần liên tiếp (%s); thử lại với khoảng nghỉ tăng dần.",
+                            self.entity_id, self._loi_lien_tiep, ma)
 
     def _luong_stt(self):
         """Tiếng mic cho MỘT lượt pipeline. Ghi nhớ số lần cắt NGAY lúc tạo (không đợi lần lặp
@@ -245,8 +331,12 @@ class R1Satellite(R1MicEntity, AssistSatelliteEntity):
             _LOGGER.debug("%s: pipeline error %s", self.entity_id, event.data)
             # Đèn «lỗi» (den.py), trừ khi lượt do CHÍNH ta cắt (bấm kết thúc, hết phiên…) hoặc lỗi
             # chỉ là «không nghe thấy gì» (HA cũng báo ERROR cho việc đó).
-            if self._cut == self._cut_luot and den.la_loi_that((event.data or {}).get("code")):
-                self._entry.runtime_data.lights.bao_loi()
+            ma = (event.data or {}).get("code")
+            if self._cut == self._cut_luot and den.la_loi_that(ma):
+                self._loi_luot = str(ma or "loi")
+                # Đèn «lỗi» chỉ ở lần lỗi ĐẦU của chuỗi liên tiếp (không nhấp nháy ADB mỗi lượt thử lại).
+                if self._loi_lien_tiep == 0:
+                    self._entry.runtime_data.lights.bao_loi()
             self._tts_xong.set()
 
     def _loa_entity_id(self) -> str | None:

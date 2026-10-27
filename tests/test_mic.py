@@ -104,9 +104,11 @@ def pipeline():
     async def thay(self, **kw):
         await f(self, **kw)
 
+    # Môi trường test không có engine từ đánh thức thật: coi như đã có để vệ tinh mở pipeline (giả) như thường.
     with mock.patch(
             "homeassistant.components.assist_satellite.entity.AssistSatelliteEntity."
-            "async_accept_pipeline_from_satellite", new=thay):
+            "async_accept_pipeline_from_satellite", new=thay), \
+            mock.patch.object(sat_mod.R1Satellite, "_thieu_tu_danh_thuc", return_value=None):
         yield f
 
 
@@ -355,3 +357,62 @@ async def test_tuy_chon_dat_host_mic_roi_nap_lai(hass, r1, pcm_server, pipeline)
     await _cho(lambda: pcm_server.writers)
     await pcm_server.send(pcm(5))
     await _cho(lambda: _state(hass, SAT) == "idle", hass)
+
+
+async def test_pipeline_loi_ngay_khong_quay_vong(hass, r1, pcm_server, caplog):
+    """Pipeline HA lỗi tức thì (vd chưa có engine từ đánh thức: ``wake-engine-missing``) kết thúc bằng
+    sự kiện ERROR chứ không ném ngoại lệ. Vòng nghe PHẢI nghỉ tăng dần, không mở lượt mới liên tục:
+    bản cũ quay hàng nghìn vòng/giây, mỗi vòng bật đèn «lỗi» (một lệnh ADB) làm HA đầy RAM rồi bị khởi động lại."""
+    lan_goi = []
+
+    async def loi_ngay(self, audio_stream, start_stage=PipelineStage.STT, **kw):
+        lan_goi.append(start_stage)
+        self.on_pipeline_event(PipelineEvent(
+            PipelineEventType.ERROR, {"code": "wake-engine-missing", "message": "No wake word engine"}))
+
+    with mock.patch("homeassistant.components.assist_satellite.entity.AssistSatelliteEntity."
+                    "async_accept_pipeline_from_satellite", new=loi_ngay), \
+            mock.patch.object(sat_mod, "LOI_NGHI_DAU", 0.2), mock.patch.object(sat_mod, "LOI_NGHI_TOI_DA", 0.4), \
+            mock.patch.object(sat_mod.R1Satellite, "_thieu_tu_danh_thuc", return_value=None):
+        e = await _them(hass, r1, "127.0.0.1", pcm_server.port)
+        den_loi = mock.patch.object(type(e.runtime_data.lights), "bao_loi")
+        with den_loi as bao_loi:
+            await _cho(lambda: pcm_server.writers)
+            await _bom(hass, pcm_server, pcm(1000), lambda: len(lan_goi) >= 1)
+            await asyncio.sleep(1.2)
+        # nghỉ 0,2 → 0,4 → 0,4…: tối đa vài lượt trong ~1,2 giây (bản cũ: hàng trăm)
+        assert 1 <= len(lan_goi) <= 8, f"{len(lan_goi)} lượt pipeline trong 1,2 giây — vòng nghe quay vòng"
+        assert bao_loi.call_count <= 1, "đèn «lỗi» bật mỗi vòng thay vì một lần"
+    assert "wake" in caplog.text.lower() and "engine" in caplog.text.lower()   # có dòng cảnh báo nói rõ nguyên nhân
+
+
+async def test_chua_co_engine_tu_danh_thuc_thi_khong_mo_pipeline(hass, r1, pcm_server, caplog):
+    """GỐC của lỗi quay vòng: HA chưa có engine từ đánh thức thì mọi lượt pipeline đều lỗi ngay. Vệ tinh phải
+    phát hiện TRƯỚC khi chạy: không mở pipeline nào, không bật đèn «lỗi», tạo mục «Sửa chữa» + một dòng
+    cảnh báo; khi engine xuất hiện thì tự chạy lại và xoá mục Sửa chữa."""
+    from homeassistant.helpers import issue_registry as ir
+    lan_goi = []
+
+    async def ghi(self, audio_stream, start_stage=PipelineStage.STT, **kw):
+        lan_goi.append(start_stage)
+        async for _ in audio_stream:
+            pass
+
+    with mock.patch("homeassistant.components.assist_satellite.entity.AssistSatelliteEntity."
+                    "async_accept_pipeline_from_satellite", new=ghi), \
+            mock.patch.object(sat_mod, "KIEM_LAI_CAU_HINH", 0.1):
+        e = await _them(hass, r1, "127.0.0.1", pcm_server.port)
+        ma_van_de = f"thieu_tu_danh_thuc_{e.entry_id}"
+        with mock.patch.object(type(e.runtime_data.lights), "bao_loi") as bao_loi:
+            await _cho(lambda: pcm_server.writers)
+            await _bom(hass, pcm_server, pcm(1000), lambda: ir.async_get(hass).async_get_issue(DOMAIN, ma_van_de))
+            await asyncio.sleep(0.5)
+            assert lan_goi == [], "đã mở pipeline dù chưa có engine từ đánh thức"
+            assert bao_loi.call_count == 0
+        assert caplog.text.count("chưa có engine từ đánh thức") == 1     # một dòng, không lặp mỗi lượt kiểm
+
+        # engine xuất hiện (thật: thêm Wyoming/openWakeWord) → tự chạy lại, mục Sửa chữa biến mất
+        with mock.patch.object(sat_mod.R1Satellite, "_thieu_tu_danh_thuc", return_value=None):
+            await _bom(hass, pcm_server, pcm(1000), lambda: lan_goi)
+        assert lan_goi[0] is PipelineStage.WAKE_WORD
+        assert ir.async_get(hass).async_get_issue(DOMAIN, ma_van_de) is None

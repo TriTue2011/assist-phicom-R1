@@ -22,6 +22,7 @@ KHÔNG bao giờ làm sập HA: ``start`` nuốt lỗi bind và chỉ log.
 from __future__ import annotations
 
 import asyncio
+import time
 import contextlib
 import hmac
 import json
@@ -226,8 +227,12 @@ class R1MicServer:
                                 ip, self._speaker_ip)
                 return
             if self._writer is not None:
-                _LOGGER.warning("R1 mic server: từ chối luồng thứ hai từ %s — đang có "
-                                "một luồng mic đang nhận", ip)
+                # APK thử nối lại đều đặn khi còn luồng cũ: ghi cảnh báo tối đa 5 phút một lần.
+                bay_gio = time.monotonic()
+                if bay_gio - getattr(self, "_bao_luong_hai", 0.0) >= 300.0:
+                    self._bao_luong_hai = bay_gio
+                    _LOGGER.warning("R1 mic server: từ chối luồng thứ hai từ %s — đang có "
+                                    "một luồng mic đang nhận", ip)
                 return
             if self._mic.muted:
                 _LOGGER.warning("R1 mic server: mic đang tắt — từ chối kết nối từ %s", ip)

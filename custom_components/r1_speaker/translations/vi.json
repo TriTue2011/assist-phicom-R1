@@ -368,6 +368,10 @@
     "cong_dieu_khien": {
       "title": "Loa R1 không trả lời cổng điều khiển",
       "description": "Cổng điều khiển {port} của loa {host} không trả lời suốt vài phút. Thường gặp khi loa mới reset hoặc đã cài ứng dụng bằng bản tích hợp cũ (chưa ẩn các ứng dụng gốc của hãng). Cách sửa: cập nhật tích hợp lên bản mới nhất, vào thiết bị «Phicomm R1» gọi dịch vụ «Cài ứng dụng lên loa» (install_apps) với các giá trị mặc định (tự dọn cập nhật OTA, cài ghi đè trình phát, thiết bị, APK mic, rồi ẩn các ứng dụng gốc), sau đó bấm «Khởi động lại loa». Loa chưa có WiFi: xem docs/KET-NOI-WIFI.md."
+    },
+    "thieu_tu_danh_thuc": {
+      "title": "Assist của loa R1 chưa có từ đánh thức",
+      "description": "Pipeline Assist của {entity} chưa có engine từ đánh thức nên vệ tinh chưa nghe và chưa mở lượt nào. Cách sửa: cài engine từ đánh thức (ví dụ openWakeWord qua Wyoming), vào Cài đặt → Trợ lý giọng nói, chọn từ đánh thức cho pipeline đang dùng và gán pipeline đó cho thực thể Trợ lý của loa; hoặc tắt «Assist». Mục này tự biến mất khi cấu hình đủ."
     }
   }
 }
