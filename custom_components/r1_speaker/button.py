@@ -7,6 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.const import EntityCategory
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .adb_client import AdbError
@@ -19,7 +20,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
                             async_add_entities: AddConfigEntryEntitiesCallback) -> None:
     preregister(hass, entry, "button", f"{entry.entry_id}_reboot", "r1_khoi_dong_lai")
     preregister(hass, entry, "button", f"{entry.entry_id}_chuan_bi", "r1_chuan_bi_loa")
-    async_add_entities([R1RebootButton(entry), R1PrepareButton(entry)])
+    preregister(hass, entry, "button", f"{entry.entry_id}_dung_nhac", "r1_dung_nhac")
+    async_add_entities([R1RebootButton(entry), R1PrepareButton(entry), R1StopButton(entry)])
+
+
+class R1StopButton(ButtonEntity):
+    """«Dừng nhạc»: nút Stop ở trang thiết bị. Hộp điều khiển chuẩn của Home Assistant chỉ hiện Stop khi loa KHÔNG hỗ trợ Tạm dừng, nên
+    không đặt được cạnh nút Phát/Tạm dừng (chủ máy 28/10/2026: «cho stop và mute vào đây được không»); nút riêng này gọi đúng
+    ``media_player.media_stop`` của loa (có kiểm loa đã dừng và tự gửi lại)."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "dung_nhac"
+
+    def __init__(self, entry: R1ConfigEntry) -> None:
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_dung_nhac"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry.entry_id)})
+
+    async def async_press(self) -> None:
+        loa = er.async_get(self.hass).async_get_entity_id("media_player", DOMAIN, f"{self._entry.entry_id}_speaker")
+        if loa is None:
+            raise HomeAssistantError("Chưa có thực thể loa để dừng nhạc")
+        await self.hass.services.async_call("media_player", "media_stop", {"entity_id": loa}, blocking=True)
 
 
 class R1PrepareButton(ButtonEntity):

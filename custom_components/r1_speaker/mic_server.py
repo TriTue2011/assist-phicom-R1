@@ -234,9 +234,6 @@ class R1MicServer:
                     _LOGGER.warning("R1 mic server: từ chối luồng thứ hai từ %s — đang có "
                                     "một luồng mic đang nhận", ip)
                 return
-            if self._mic.muted:
-                _LOGGER.warning("R1 mic server: mic đang tắt — từ chối kết nối từ %s", ip)
-                return
             hello = await asyncio.wait_for(self._read_frame(reader), HELLO_TIMEOUT)
             data = _la_khung_json(hello) if hello is not None else None
             if (data is None or data.get("type") != "hello" or data.get("version") != 1

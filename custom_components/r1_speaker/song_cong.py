@@ -345,6 +345,12 @@ class R1Duplex:
         """Luồng mic đứt SAU KHI đã nối trong phiên → đóng phiên sạch, mở lại được."""
         if not self.active:
             return
+        if self.mic.muted:
+            # Tắt mic giữa phiên: trước đây nhờ HA ngắt kết nối loa nên phiên đóng; nay kết nối được GIỮ (còn mang âm lượng, đèn) nên phải đóng
+            # phiên rõ ràng, tiếng không còn tới điện thoại.
+            _LOGGER.info("song công: mic bị tắt — đóng phiên")
+            self.end("mic_tat")
+            return
         if self.mic.connected:
             self._mic_seen = True
             self._notify()

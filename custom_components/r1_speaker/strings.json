@@ -148,6 +148,9 @@
       },
       "chuan_bi": {
         "name": "Prepare speaker (hide vendor apps)"
+      },
+      "dung_nhac": {
+        "name": "Stop music"
       }
     }
   },

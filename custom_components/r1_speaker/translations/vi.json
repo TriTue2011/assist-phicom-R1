@@ -148,6 +148,9 @@
       },
       "chuan_bi": {
         "name": "Chuẩn bị loa (ẩn ứng dụng gốc)"
+      },
+      "dung_nhac": {
+        "name": "Dừng nhạc"
       }
     }
   },

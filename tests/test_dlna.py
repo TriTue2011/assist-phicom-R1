@@ -243,3 +243,15 @@ async def test_hoi_trang_thai_hong_thoang_qua_khong_bao_da_dung(hass, r1, dmr):
     for _ in range(3):
         await ent._doc()
     assert hass.states.get(LOA).state == "idle" and hass.states.get(LOA).attributes["idle_reason"] == "error"
+
+
+async def test_nut_dung_nhac_gui_stop_toi_renderer(hass, r1, dmr):
+    """Nút «Dừng nhạc» (trang thiết bị): bấm là gọi media_stop của loa → Stop tới renderer."""
+    from homeassistant.helpers import entity_registry as er
+    r1.state["dlna_open"] = False
+    await _them(hass, r1)
+    await _phat(hass)
+    nut = next(e.entity_id for e in er.async_get(hass).entities.values()
+               if e.platform == "r1_speaker" and e.domain == "button" and e.translation_key == "dung_nhac")
+    await hass.services.async_call("button", "press", {"entity_id": nut}, blocking=True)
+    assert len(dmr.called("Stop")) >= 1 and hass.states.get(LOA).state == "idle"

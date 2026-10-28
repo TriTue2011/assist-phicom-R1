@@ -381,8 +381,8 @@ async def test_duplex_view_phat_xuong_loa_va_dong_phien(hass, r1, pcm_server, pl
 
 
 async def test_tat_mic_giua_phien_song_cong_dong_phien_va_ngat_loa(hass, play_server):
-    """switch.r1_tat_mic trong lúc song công: đầu nhận NGẮT kết nối loa → phiên đóng sạch
-    (mat_ket_noi), tiếng không còn tới điện thoại. Ca biên thêm khi đóng gói R1."""
+    """switch.r1_tat_mic trong lúc song công: phiên đóng sạch (mic_tat) và tiếng không còn tới điện thoại; kết nối loa được GIỮ (còn mang âm
+    lượng/đèn nhạc — tắt mic không được làm mất chỉnh âm lượng). Ca biên thêm khi đóng gói R1."""
     from custom_components.r1_speaker.mic_server import R1MicServer
     d, mic, talk = tao_phien(hass, play_server.port,
                              DuplexSettings(vad_threshold=0.5, preroll_s=0.0, hangover_s=0.0))
@@ -398,9 +398,10 @@ async def test_tat_mic_giua_phien_song_cong_dong_phien_va_ngat_loa(hass, play_se
         nhan: list[bytes] = []
         d.add_audio_listener(nhan.append)
         mic.set_muted(True)
-        assert await asyncio.wait_for(reader.read(), 3) == b""   # loa bị ngắt
-        assert not d.active and d.last_end == "mat_ket_noi" and talk.session is None
+        await cho(lambda: not d.active)
+        assert d.last_end == "mic_tat" and talk.session is None
         assert nhan == []
+        assert server.receiving                                    # kết nối loa còn nguyên
         writer.close()
     finally:
         await server.async_close()

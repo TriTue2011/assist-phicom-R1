@@ -258,8 +258,8 @@ class R1Mic:
         self.muted = muted
         if muted and self._writer is not None:
             self._writer.close()           # ngắt luồng: không nhận byte nào nữa
-        if muted and self._inbound_closer is not None:
-            self._inbound_closer()         # đầu nhận NV244: ngắt cả luồng loa nối vào
+        # Đầu nhận (APK nối vào HA): KHÔNG ngắt kết nối khi tắt mic. Kết nối đó còn mang âm lượng, đèn nhạc… nên ngắt là «tắt mic xong không chỉnh
+        # được âm lượng nữa» (người dùng báo 28/10/2026). ``feed_inbound`` đã bỏ khúc tiếng khi mic tắt: tiếng tới HA rồi bị bỏ ngay, không ai nhận.
         self._kick.set()                   # đánh thức vòng đang chờ (nối lại khi bật)
         # Tắt/bật mic là sự kiện người dùng thấy (trạng thái mic, phiên đang mở) dù ``available``
         # không đổi: báo cả hai loại người nghe.

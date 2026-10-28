@@ -202,37 +202,30 @@ def test_cai_dat_mic_listen_doc_tu_options():
 
 # ── Ca biên bổ sung (đóng gói R1): tắt mic giữa phiên, khung lẻ/rỗng, hello hỏng ────────
 
-async def test_tat_mic_giua_phien_dong_ket_noi_va_tu_choi_noi_lai(dau_nhan):
-    """switch.r1_tat_mic = ĐÓNG luồng: loa phải bị ngắt (không chỉ bỏ khung), nối lại bị từ chối
-    cho tới khi bật mic; bật lại thì loa nối lại được."""
+async def test_tat_mic_giu_ket_noi_dieu_khien_nhung_bo_tieng(dau_nhan):
+    """switch.r1_tat_mic: tiếng mic bị BỎ ngay (không ai nhận), nhưng kết nối với APK GIỮ NGUYÊN vì nó còn mang âm lượng/đèn nhạc (người dùng báo
+    28/10/2026: «tắt mic là không chỉnh được âm lượng nữa»); bật mic lại thì tiếng chảy tiếp trên cùng kết nối."""
     mic, server, khuc = dau_nhan
     reader, writer = await noi(server.port)
     writer.write(hello() + khung(pcm(1)))
     await writer.drain()
     await cho(lambda: len(khuc) == 1)
     mic.set_muted(True)
-    try:
-        dong = await asyncio.wait_for(reader.read(), 3) == b""
-    except ConnectionResetError:
-        dong = True
-    assert dong, "tắt mic mà HA vẫn giữ kết nối cho loa gửi tiếp"
-    await cho(lambda: not server.receiving)
-    r2, w2 = await noi(server.port)                   # đang tắt mic → từ chối
-    w2.write(hello() + khung(pcm(2)))
-    try:
-        await w2.drain()
-        dong2 = await asyncio.wait_for(r2.read(), 3) == b""
-    except ConnectionError:
-        dong2 = True
-    assert dong2 and len(khuc) == 1
+    writer.write(khung(pcm(2)))                       # tiếng gửi khi mic tắt: HA đọc rồi bỏ
+    await writer.drain()
+    await asyncio.sleep(0.3)
+    assert len(khuc) == 1, "tiếng khi mic tắt không được tới listener nào"
+    assert server.receiving, "tắt mic KHÔNG được ngắt kết nối điều khiển"
+    await server.gui_am_luong(5)                      # đường âm lượng vẫn thông khi mic tắt
+    assert await asyncio.wait_for(reader.readexactly(4 + len(b'{"type":"am_luong","muc":5}')), 3)
+    r2, w2 = await noi(server.port)                   # APK nối lại (mất kết nối) lúc mic tắt vẫn được nhận
     w2.close()
     mic.set_muted(False)
-    r3, w3 = await noi(server.port)
-    w3.write(hello() + khung(pcm(3)))
-    await w3.drain()
+    writer.write(khung(pcm(3)))
+    await writer.drain()
     await cho(lambda: len(khuc) == 2)
     assert khuc[1] == pcm(3)
-    w3.close()
+    writer.close()
 
 
 async def test_khung_rong_va_le_byte_khong_lam_lech_pcm(dau_nhan):
