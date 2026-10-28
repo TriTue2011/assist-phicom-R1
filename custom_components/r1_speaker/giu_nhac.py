@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -60,9 +60,11 @@ class Hold:
 
 
 class MusicKeeper:
-    def __init__(self, hass: HomeAssistant, resolve: Callable[[], str | None]) -> None:
+    def __init__(self, hass: HomeAssistant, resolve: Callable[[], str | None],
+                 refresh: Callable[[], Awaitable[None]] | None = None) -> None:
         self.hass = hass
-        self._resolve = resolve            # thực thể dlna_dmr của loa (tìm lúc cần)
+        self._resolve = resolve            # thực thể media_player của loa (tìm lúc cần)
+        self._refresh = refresh            # đọc trạng thái renderer MỚI trước khi chụp (ta không hỏi nền lúc idle)
         self._n = 0
         self._snap: Snapshot | None = None
         self._lock = asyncio.Lock()
@@ -92,6 +94,12 @@ class MusicKeeper:
     # ── tạm dừng ──────────────────────────────────────────────────────────────
 
     async def _snapshot_and_pause(self) -> Snapshot | None:
+        if self._refresh is not None:
+            try:
+                async with asyncio.timeout(const.REFRESH_TOI_DA):
+                    await self._refresh()
+            except (TimeoutError, HomeAssistantError, OSError) as exc:
+                _LOGGER.debug("không đọc lại được trạng thái nhạc trước khi chụp: %s", type(exc).__name__)
         eid = self._resolve()
         st = self.hass.states.get(eid) if eid else None
         if st is None or st.state not in PLAYING:

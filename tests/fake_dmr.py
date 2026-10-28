@@ -121,6 +121,10 @@ class FakeDMR:
         self.enabled = enabled
         #: (hành động, {đối số: giá trị}) theo thứ tự nhận
         self.actions: list[tuple[str, dict[str, str]]] = []
+        #: trạng thái truyền tải giả: Play → PLAYING, Pause → PAUSED_PLAYBACK, Stop → STOPPED (test đặt tay để mô phỏng hết bài)
+        self.transport_state = "STOPPED"
+        self.transport_status = "OK"
+        self.uri = ""
         self.port = 0
         self._runner = None
 
@@ -153,8 +157,21 @@ class FakeDMR:
                 r"<(\w+)>([^<]*)</\1>", body) if m.group(1) not in ("Body", "Envelope")}
             from html import unescape
             self.actions.append((action, {k: unescape(v) for k, v in args.items()}))
-            outs = "".join(f"<{k}>{escape(v)}</{k}>"
-                           for k, v in _ACTIONS[svc][action][1].items())
+            if action == "SetAVTransportURI":
+                self.uri = args.get("CurrentURI", "")
+            elif action == "Play":
+                self.transport_state = "PLAYING"
+            elif action == "Pause":
+                self.transport_state = "PAUSED_PLAYBACK"
+            elif action == "Stop":
+                self.transport_state = "STOPPED"
+            salida = dict(_ACTIONS[svc][action][1])
+            if action == "GetTransportInfo":
+                salida.update(CurrentTransportState=self.transport_state, CurrentTransportStatus=self.transport_status)
+            elif action == "GetPositionInfo":
+                if self.transport_state in ("PLAYING", "PAUSED_PLAYBACK"):
+                    salida.update(TrackDuration="00:03:00", RelTime="00:00:05", TrackURI=self.uri)
+            outs = "".join(f"<{k}>{escape(v)}</{k}>" for k, v in salida.items())
             xml = ('<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/'
                    'envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">'
                    f'<s:Body><u:{action}Response xmlns:u="{_NS[svc]}">{outs}'

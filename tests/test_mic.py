@@ -121,7 +121,7 @@ def _nhanh():
             mock.patch.object(sat_mod, "TAIL", 0), \
             mock.patch.object(sat_mod, "POLL", 0.02), \
             mock.patch.object(sat_mod, "PLAY_START_WAIT", 0.3), \
-            mock.patch.object(mp_mod, "READY_POLL", 0.05):
+            mock.patch.object(mp_mod, "CHAM_NHAC", 0.05), mock.patch.object(mp_mod, "CHAM_TIN", 0.05):
         yield
 
 
@@ -312,24 +312,23 @@ async def test_tra_loi_goi_play_media_dung_tham_so(hass, r1, pcm_server, pipelin
 
 
 async def test_cho_phat_xong_theo_dlna(hass, r1, pcm_server, pipeline):
-    """Có thực thể dlna_dmr: giữ bỏ-mic tới khi nó hết phát."""
+    """Thực thể loa đang phát: giữ bỏ-mic tới khi nó hết phát."""
     await _them(hass, r1, "127.0.0.1", pcm_server.port)
     sat = _vet_tinh(hass)
-    hass.states.async_set("media_player.dmr_gia", "idle")
+    loa = "media_player.r1_loa"
     xong = asyncio.Event()
 
     async def chay():
-        with mock.patch.object(sat_mod, "dlna_entity_id", return_value="media_player.dmr_gia"), \
-                mock.patch.object(mp_mod.R1Player, "async_play_media", new=mock.AsyncMock()):
+        with mock.patch.object(mp_mod.R1Player, "async_play_media", new=mock.AsyncMock()):
             await sat._phat("media-source://x")
         xong.set()
 
     t = hass.async_create_task(chay())
     await asyncio.sleep(0.05)
-    hass.states.async_set("media_player.dmr_gia", "playing")
+    hass.states.async_set(loa, "playing")
     await asyncio.sleep(0.2)
     assert not xong.is_set() and sat._dang_noi          # còn đang phát
-    hass.states.async_set("media_player.dmr_gia", "idle")
+    hass.states.async_set(loa, "idle")
     await asyncio.wait_for(t, 2)
     assert xong.is_set() and not sat._dang_noi
 

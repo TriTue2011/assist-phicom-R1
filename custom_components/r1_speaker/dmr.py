@@ -1,0 +1,196 @@
+"""Máy khách DLNA/UPnP AV tối thiểu cho renderer CÓ SẴN trên loa R1 — thay tích hợp ``dlna_dmr`` của Home Assistant.
+
+Chủ máy 28/10/2026: «trên R1 custom không cần thêm DLNA hay AirPlay riêng», «đàm thoại trên R1 nếu không có DLNA thì lại không được».
+Trước đây ``media_player.r1_loa`` chuyển lệnh sang thực thể ``dlna_dmr`` của loa (phải tự thêm tay); nay tự làm lấy.
+
+Đã đo trên loa thật (172.16.10.x, 28/10/2026): loa trả lời SSDP **unicast** tới cổng 1900 của chính nó (``M-SEARCH`` với
+``ST: urn:schemas-upnp-org:device:MediaRenderer:1``) kèm ``LOCATION`` mô tả thiết bị (Platinum UPnP 1.0.4, cổng cấp phát lúc chạy,
+nên tìm lại mỗi lần nối thay vì nhớ cổng). Phần SOAP (SetAVTransportURI/Play/Pause/Stop/Seek/GetTransportInfo/GetPositionInfo)
+dùng ``async_upnp_client`` sẵn có của Home Assistant, không tự viết giao thức.
+
+Quy tắc tài nguyên: ổ cắm SSDP đóng ngay sau lượt tìm; thiết bị UPnP chỉ nối khi cần và bỏ khi lỗi (lần sau tìm lại, vì cổng đổi
+sau khi loa khởi động lại); không giữ kết nối nền, không đăng ký sự kiện (tiến độ do người gọi hỏi lại có chu kỳ, chỉ khi đang phát).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import socket
+from dataclasses import dataclass
+from datetime import timedelta
+from urllib.parse import urlparse
+
+from aiohttp import ClientError
+from async_upnp_client.aiohttp import AiohttpSessionRequester
+from async_upnp_client.client_factory import UpnpFactory
+from async_upnp_client.exceptions import UpnpError
+from async_upnp_client.profiles.dlna import DmrDevice, TransportState
+from async_upnp_client.utils import str_to_time
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+_LOGGER = logging.getLogger(__name__)
+
+SSDP_PORT = 1900
+SSDP_ST = "urn:schemas-upnp-org:device:MediaRenderer:1"
+#: Chờ loa trả lời SSDP mỗi lượt (giây). Loa trả trong dưới 1 giây khi DLNA đang bật.
+SSDP_CHO = 1.5
+#: Chờ lệnh SOAP (giây). Loa yếu: đủ rộng để không cắt nhầm, đủ chặt để lệnh treo không giữ luồng.
+SOAP_CHO = 8.0
+AVT = "urn:schemas-upnp-org:service:AVTransport:1"
+
+_CHAY = {TransportState.PLAYING.value: "playing", TransportState.TRANSITIONING.value: "buffering",
+         TransportState.PAUSED_PLAYBACK.value: "paused", TransportState.PAUSED_RECORDING.value: "paused"}
+
+
+def _giay(chuoi) -> float | None:
+    """``HH:MM:SS`` của UPnP → giây; ``NOT_IMPLEMENTED``/rỗng/sai → ``None``."""
+    try:
+        t = str_to_time(str(chuoi or ""))
+    except (ValueError, TypeError):
+        return None
+    return None if t is None else t.total_seconds()
+
+
+class R1DmrError(Exception):
+    """Không điều khiển được renderer của loa (không tìm thấy, không trả lời, lệnh bị từ chối)."""
+
+
+@dataclass(frozen=True)
+class TrangThaiDmr:
+    state: str                     # "playing" | "buffering" | "paused" | "idle"
+    loi: bool = False              # renderer báo TransportStatus ERROR_OCCURRED
+    position: float | None = None  # giây
+    duration: float | None = None  # giây
+    uri: str | None = None
+
+
+class _Nhan(asyncio.DatagramProtocol):
+    def __init__(self, host: str, xong: asyncio.Future) -> None:
+        self._host, self._xong = host, xong
+
+    def datagram_received(self, data: bytes, addr) -> None:
+        if self._xong.done():
+            return
+        for dong in data.decode("utf-8", "replace").split("\r\n"):
+            if dong.lower().startswith("location:"):
+                url = dong.split(":", 1)[1].strip()
+                # Chỉ nhận mô tả của CHÍNH loa này: thiết bị khác trong mạng không được dẫn ta tới địa chỉ lạ.
+                if urlparse(url).hostname == self._host:
+                    self._xong.set_result(url)
+                return
+
+
+async def tim_mo_ta(host: str, *, cong: int = SSDP_PORT, cho: float = SSDP_CHO) -> str | None:
+    """Địa chỉ mô tả thiết bị của renderer trên ``host`` (SSDP unicast), hoặc ``None`` nếu loa không trả lời."""
+    loop = asyncio.get_running_loop()
+    xong: asyncio.Future = loop.create_future()
+    transport, _ = await loop.create_datagram_endpoint(
+        lambda: _Nhan(host, xong), family=socket.AF_INET, local_addr=("0.0.0.0", 0))
+    try:
+        transport.sendto((f"M-SEARCH * HTTP/1.1\r\nHOST: {host}:{cong}\r\nMAN: \"ssdp:discover\"\r\nMX: 1\r\n"
+                          f"ST: {SSDP_ST}\r\n\r\n").encode(), (host, cong))
+        try:
+            return await asyncio.wait_for(xong, cho)
+        except TimeoutError:
+            return None
+    finally:
+        transport.close()
+
+
+class R1Dmr:
+    """Điều khiển renderer DLNA của một loa R1."""
+
+    def __init__(self, hass: HomeAssistant, host: str, *, cong_ssdp: int = SSDP_PORT) -> None:
+        self._hass, self._host, self._cong = hass, host, cong_ssdp
+        self._dev: DmrDevice | None = None
+        self._khoa = asyncio.Lock()
+
+    @property
+    def da_noi(self) -> bool:
+        """Đã nối được renderer (đã có thiết bị UPnP trong bộ nhớ): hỏi trạng thái khi đó chỉ tốn một lệnh SOAP, không tìm SSDP."""
+        return self._dev is not None
+
+    async def _thiet_bi(self, cho_ssdp: float = SSDP_CHO) -> DmrDevice:
+        async with self._khoa:
+            if self._dev is not None:
+                return self._dev
+            mo_ta = await tim_mo_ta(self._host, cong=self._cong, cho=cho_ssdp)
+            if mo_ta is None:
+                raise R1DmrError(f"Loa {self._host} không trả lời SSDP: DLNA của loa đang tắt hoặc loa mất mạng?")
+            try:
+                requester = AiohttpSessionRequester(async_get_clientsession(self._hass), with_sleep=True,
+                                                    timeout=SOAP_CHO)
+                device = await UpnpFactory(requester, non_strict=True).async_create_device(mo_ta)
+                self._dev = DmrDevice(device, None)
+            except (UpnpError, ClientError, TimeoutError, OSError) as exc:
+                raise R1DmrError(f"Không đọc được mô tả renderer của loa {self._host}: {type(exc).__name__}") from exc
+            return self._dev
+
+    def _bo(self) -> None:
+        """Bỏ thiết bị đã nối: cổng của renderer đổi sau khi loa khởi động lại, lần sau tìm lại."""
+        self._dev = None
+
+    async def _goi(self, viec):
+        dev = await self._thiet_bi()
+        try:
+            async with asyncio.timeout(SOAP_CHO + 2):
+                return await viec(dev)
+        except (UpnpError, ClientError, TimeoutError, OSError) as exc:
+            self._bo()
+            raise R1DmrError(f"Renderer của loa {self._host} lỗi: {type(exc).__name__}") from exc
+
+    async def async_san_sang(self, toi_da: float) -> None:
+        """Chờ renderer lên (loa vừa bật DLNA): thử tìm lại mỗi giây cho tới ``toi_da`` giây."""
+        try:
+            async with asyncio.timeout(toi_da):
+                while True:
+                    try:
+                        await self._thiet_bi(cho_ssdp=1.0)
+                        return
+                    except R1DmrError:
+                        await asyncio.sleep(0.5)
+        except TimeoutError:
+            raise R1DmrError(f"Renderer của loa {self._host} chưa lên sau {toi_da:.0f} giây "
+                             "(DLNA của loa chưa bật?)") from None
+
+    async def async_phat(self, url: str, tieu_de: str) -> None:
+        async def viec(dev: DmrDevice) -> None:
+            await dev.async_set_transport_uri(url, tieu_de)
+            await dev.async_wait_for_can_play(3)
+            await dev.async_play()
+        await self._goi(viec)
+
+    async def async_tiep(self) -> None:
+        await self._goi(lambda dev: dev.async_play())
+
+    async def async_tam_dung(self) -> None:
+        await self._goi(lambda dev: dev.async_pause())
+
+    async def async_dung(self) -> None:
+        await self._goi(lambda dev: dev.async_stop())
+
+    async def async_tua(self, giay: float) -> None:
+        async def viec(dev: DmrDevice) -> None:
+            if not dev.has_seek_rel_time:
+                raise UpnpError("renderer không hỗ trợ tua")
+            await dev.async_seek_rel_time(timedelta(seconds=giay))
+        await self._goi(viec)
+
+    async def async_doc(self) -> TrangThaiDmr:
+        """Hỏi trạng thái hiện tại (GetTransportInfo, kèm GetPositionInfo khi đang phát)."""
+        async def viec(dev: DmrDevice) -> TrangThaiDmr:
+            # Gọi thẳng hành động SOAP thay vì ``dev.async_update``: thư viện nuốt lỗi mạng ở đó, nên renderer chết (loa tắt DLNA,
+            # khởi động lại) sẽ không bị phát hiện và ta không bao giờ tìm lại cổng mới.
+            dich_vu = dev.device.service(AVT)
+            thong_tin = await dich_vu.action("GetTransportInfo").async_call(InstanceID=0)
+            state = _CHAY.get(str(thong_tin.get("CurrentTransportState") or ""), "idle")
+            loi = str(thong_tin.get("CurrentTransportStatus") or "").upper() == "ERROR_OCCURRED"
+            pos = duration = uri = None
+            if state != "idle":
+                vi_tri = await dich_vu.action("GetPositionInfo").async_call(InstanceID=0)
+                pos, duration = _giay(vi_tri.get("RelTime")), _giay(vi_tri.get("TrackDuration"))
+                uri = str(vi_tri.get("TrackURI") or "") or None
+            return TrangThaiDmr(state=state, loi=loi, position=pos, duration=duration, uri=uri)
+        return await self._goi(viec)

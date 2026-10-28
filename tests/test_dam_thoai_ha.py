@@ -4,6 +4,7 @@ renderer giả trong bộ nhớ; pipeline Assist được mock (``FakePipeline``
 
 import asyncio
 import time
+import types
 from unittest import mock
 
 import pytest
@@ -18,7 +19,7 @@ from custom_components.r1_speaker import media_player as mp_mod
 from custom_components.r1_speaker import mic as mic_mod
 from custom_components.r1_speaker.const import DOMAIN, MIC_CHUNK
 
-from .memory_port import them_dmr_gia
+from .memory_port import FakeDmr
 from .test_mic import (SAT, PcmServer, _bom, _cho, _nhanh, _state, _vet_tinh, pcm,  # noqa: F401
                        pcm_server, pipeline, samples)
 
@@ -48,14 +49,17 @@ async def _them(hass, r1, **options) -> MockConfigEntry:
 
 @pytest.fixture
 def nhac(hass):
-    """Renderer giả được coi là dlna_dmr của loa. Chỉ dừng đúng các bản vá của chính nó
-    (không ``mock.patch.stopall``: nó sẽ gỡ luôn các bản vá của plugin HA)."""
+    """Renderer giả trong bộ nhớ (``FakeDmr``) thay ``R1Dmr`` của loa; ``media_source`` được giả để id ``media-source://`` đi
+    thẳng tới renderer như cũ (giải URL thật là việc của HA)."""
     patches = []
 
     async def make():
-        dmr = await them_dmr_gia(hass)
-        for muc in (mp_mod, sat_mod):
-            p = mock.patch.object(muc, "dlna_entity_id", return_value=dmr.entity_id)
+        dmr = FakeDmr()
+        entry = hass.config_entries.async_entries(DOMAIN)[0]
+        entry.runtime_data.dmr = dmr
+        for p in (mock.patch.object(mp_mod.media_source, "async_resolve_media",
+                                    new=mock.AsyncMock(side_effect=lambda h, mid, eid: types.SimpleNamespace(url=mid))),
+                  mock.patch.object(mp_mod, "CHAM_NHAC", 0.03), mock.patch.object(mp_mod, "CHAM_TIN", 0.03)):
             p.start()
             patches.append(p)
         return dmr
@@ -112,13 +116,14 @@ async def test_nut_dam_thoai_tam_dung_nhac_mo_phien_ket_thuc_phat_lai(
         hass, r1, pcm_server, pipeline, nhac):
     e = await _san_sang(hass, r1, pcm_server, pipeline)
     dmr = await nhac()
-    dmr.start_music(MUSIC)
-    assert _state(hass, LOA) == "playing"                      # thẻ thấy nhạc qua r1_loa
+    dmr.start_music(MUSIC)                                      # nhạc do thiết bị khác bật: thực thể thấy ở chu kỳ coordinator kế
+    await e.runtime_data.async_refresh()
+    await _cho(lambda: _state(hass, LOA) == "playing", hass)    # thẻ thấy nhạc qua r1_loa
     assert PipelineStage.WAKE_WORD in pipeline.turns            # đang chờ từ gọi của HA
 
     await _talk(e).async_start("button")
 
-    assert _state(hass, dmr.entity_id) == "paused" and dmr.log == [("pause",)]
+    assert _state(hass, LOA) == "paused" and dmr.log == [("pause",)]
     assert _talk(e).session_kind == "button"
     await _cho(lambda: PipelineStage.STT in pipeline.turns, hass)  # nghe thẳng, bỏ bước từ gọi
     assert hass.states.get(MICST).attributes["phien"] == "button"
@@ -128,7 +133,7 @@ async def test_nut_dam_thoai_tam_dung_nhac_mo_phien_ket_thuc_phat_lai(
     _vet_tinh(hass)._cat_luot()                                 # pipeline xong lượt
     await _cho(lambda: _talk(e).session is None, hass)
     await _talk(e).async_settle()
-    assert dmr.log == [("pause",), ("play",)] and _state(hass, dmr.entity_id) == "playing"
+    assert dmr.log == [("pause",), ("play",)] and _state(hass, LOA) == "playing"
     assert hass.states.get(MICST).attributes["phien"] is None
     assert hass.states.get(MICST).attributes["ket_thuc_gan_nhat"] == "xong"
 
@@ -203,7 +208,7 @@ async def test_tts_khi_dang_phat_nhac_tam_dung_roi_phat_lai_sau_tts(hass, r1, nh
     dmr.finish()                                                # tin xong
     await _cho(lambda: e.runtime_data.talk.music.holds == 0, hass)
     assert dmr.urls() == ["media-source://tts/x?message=hi", MUSIC]   # chuỗi URI: tin → nhạc
-    assert any(x[0] == "seek" for x in dmr.log) and _state(hass, dmr.entity_id) == "playing"
+    assert any(x[0] == "seek" for x in dmr.log) and _state(hass, LOA) == "playing"
 
 
 async def test_nhac_thuong_khong_bi_tam_dung(hass, r1, nhac):
@@ -231,11 +236,11 @@ async def test_loa_pause_play_chuyen_sang_dlna(hass, r1, nhac):
     assert _state(hass, LOA) == "playing" and dmr.log == [("pause",), ("play",)]
 
 
-async def test_loa_pause_khong_co_dlna_bao_loi_ro(hass, r1):
+async def test_loa_pause_khi_renderer_khong_tra_loi_bao_loi_ro(hass, r1):
     await _them(hass, r1)
-    with pytest.raises(HomeAssistantError, match="dlna_dmr"):
-        await hass.services.async_call("media_player", "media_pause", {"entity_id": LOA},
-                                       blocking=True)
+    with mock.patch("custom_components.r1_speaker.dmr.tim_mo_ta", new=mock.AsyncMock(return_value=None)), \
+            pytest.raises(HomeAssistantError, match="SSDP"):
+        await hass.services.async_call("media_player", "media_pause", {"entity_id": LOA}, blocking=True)
 
 
 async def test_tts_cua_assist_trong_phien_nhac_chi_ve_khi_phien_dong(
@@ -275,7 +280,7 @@ async def test_nhac_phat_lai_khong_lam_vet_tinh_treo_mic(hass, r1, pcm_server, p
     dmr.finish()                                                # tin xong → nhạc được phát lại
     await asyncio.wait_for(task, 3)
     assert time.monotonic() - t0 < 3 and not sat._dang_noi
-    await _cho(lambda: _state(hass, dmr.entity_id) == "playing", hass)
+    await _cho(lambda: _state(hass, LOA) == "playing", hass)
 
 
 # ── Trạng thái mic trên thực thể ──────────────────────────────────────────────────

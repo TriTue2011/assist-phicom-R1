@@ -41,6 +41,7 @@ from .he_thong import HeThongLoa
 from .tu_ket_noi import TuKetNoi
 from .den_adb import AdbLights
 from .dam_thoai import R1Talk
+from .dmr import R1Dmr
 from .giu_nhac import MusicKeeper
 from .coordinator import R1ConfigEntry, R1Coordinator
 from .intercom import IntercomView, MicView, R1Intercom, go2rtc_source, wake_endpoint
@@ -235,8 +236,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
     coordinator.mic_server.khi_sai_khoa = _mo_cua_ghep
     await coordinator.mic_server.start()
     coordinator.playback = R1Playback(*play_address(entry), via=coordinator.mic_server)
+    coordinator.dmr = R1Dmr(hass, speaker_host(entry))
+
+    async def _lam_moi_loa() -> None:
+        if coordinator.lam_moi_loa is not None:
+            await coordinator.lam_moi_loa()
+
     coordinator.music = MusicKeeper(
-        hass, lambda: media_player.dlna_entity_id(hass, speaker_host(entry)))
+        hass, lambda: er.async_get(hass).async_get_entity_id("media_player", DOMAIN, f"{entry.entry_id}_speaker"),
+        refresh=_lam_moi_loa)
     coordinator.talk = R1Talk(hass, coordinator.mic, coordinator.music, modo)
     coordinator.intercom = R1Intercom(hass, coordinator.playback, coordinator.mic,
                                       TalkSettings.from_entry(entry))

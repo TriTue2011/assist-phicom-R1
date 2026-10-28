@@ -26,8 +26,9 @@
       listening_tip_ha: "Mic loa gửi tiếng LIÊN TỤC về Home Assistant; HA đang dò từ đánh thức trong luồng đó.",
       sending_tip: "Tiếng mic đang được gửi về Home Assistant.",
       unknown_tip: "Không đọc được trạng thái mic — coi như mic có thể đang mở.",
-      busy: "Đang có phiên", mute: "Tắt mic", music: "Nhạc", pause: "Tạm dừng", play: "Phát",
+      busy: "Đang có phiên", mute: "Tắt mic", music: "Nhạc", music_last: "Bài vừa rồi", pause: "Tạm dừng", play: "Phát",
       nothing: "Không có nhạc đang phát", playing: "Đang phát", paused: "Đã tạm dừng",
+      r_finished: "đã hết bài", r_stopped: "đã dừng", r_error: "lỗi phát (renderer DLNA của loa báo lỗi)", r_interrupted: "bị bài khác thay",
       pending: "Phía loa chưa có (từ đánh thức trên loa còn chờ)",
       refused: "Phiên bị từ chối gần đây", none: "Không tìm thấy thực thể r1_speaker nào.",
       no_mic: "Mic chưa sẵn sàng — chưa mở được phiên",
@@ -54,8 +55,9 @@
       listening_tip_ha: "The speaker microphone streams CONTINUOUSLY to Home Assistant; HA listens for the wake word in that stream.",
       sending_tip: "Microphone audio is being sent to Home Assistant.",
       unknown_tip: "Mic status unreadable — assume the mic may be open.",
-      busy: "Session in progress", mute: "Mute mic", music: "Music", pause: "Pause", play: "Play",
+      busy: "Session in progress", mute: "Mute mic", music: "Music", music_last: "Last track", pause: "Pause", play: "Play",
       nothing: "Nothing is playing", playing: "Playing", paused: "Paused",
+      r_finished: "finished", r_stopped: "stopped", r_error: "playback error (the speaker's DLNA renderer reported an error)", r_interrupted: "replaced by another track",
       pending: "Speaker side not built yet (wake word on the speaker is pending)",
       refused: "A session was recently refused", none: "No r1_speaker entity found.",
       no_mic: "Microphone not ready — cannot start a session",
@@ -153,7 +155,7 @@
     var ms = sp ? sp.state : null;
     var music = {
       entity: ent.speaker || null, present: !!ent.speaker, available: isUp(sp), state: ms,
-      title: sa.media_title || null,
+      title: sa.media_title || null, dur: sa.media_duration || null, reason: sa.idle_reason || null,
       canPause: isUp(sp) && (ms === "playing" || ms === "buffering"),
       canPlay: isUp(sp) && ms === "paused",
     };
@@ -663,7 +665,14 @@
       rf.style.display = m.mic.refused ? "" : "none";
       rf.textContent = m.mic.refused ? t.refused + ": " + (m.mic.lastRefusal || "") : "";
       var mt = m.music.canPause ? t.playing : (m.music.canPlay ? t.paused : t.nothing);
-      q("[data-music-text]").textContent = m.music.title ? mt + " — " + m.music.title : mt;
+      var xt = mt;
+      if (m.music.title) xt += " — " + m.music.title;
+      if ((m.music.canPause || m.music.canPlay) && m.music.dur) {
+        xt += " (" + Math.floor(m.music.dur / 60) + ":" + ("0" + (m.music.dur % 60)).slice(-2) + ")";
+      } else if (!m.music.canPause && !m.music.canPlay && m.music.reason && t["r_" + m.music.reason]) {
+        xt = t.music_last + " " + t["r_" + m.music.reason];     // vì sao loa đang im: hết bài / người dùng dừng / lỗi
+      }
+      q("[data-music-text]").textContent = xt;
       q("[data-pause]").disabled = !m.music.canPause;
       q("[data-play]").disabled = !m.music.canPlay;
       var ss = q("[data-song-song]");

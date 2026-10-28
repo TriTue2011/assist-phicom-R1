@@ -1,26 +1,24 @@
-"""``media_player.r1_loa``: phát tiếng của HA ra loa R1 qua DLNA của firmware.
+"""``media_player.r1_loa``: phát tiếng của HA ra loa R1 qua DLNA có sẵn của firmware, TỰ ĐIỀU KHIỂN (không cần ``dlna_dmr``).
 
-Không tự nói giao thức DLNA. Loa đã có DLNA renderer; tích hợp ``dlna_dmr`` có sẵn của HA
-lo phần UPnP. Lớp này chỉ thêm phần dlna_dmr không biết làm: **bật DLNA trên loa trước**
-(``Set_DLNA_Open``) rồi mới chuyển lệnh phát sang thực thể dlna_dmr của chính loa này.
+Chủ máy 28/10/2026: «trên R1 custom không cần thêm DLNA hay AirPlay riêng». Lớp ``dmr.R1Dmr`` tự tìm renderer (SSDP unicast tới loa)
+và nói UPnP AV bằng ``async_upnp_client`` sẵn có của Home Assistant; thực thể này tự giữ trạng thái, tiến độ, thời lượng và lý do idle.
 
 Hợp đồng ``play_media`` (``tts.speak`` cũng đi đường này):
- - Tìm mục dlna_dmr có địa chỉ máy trùng với loa; không có → ``HomeAssistantError`` nói rõ
-   phải thêm dlna_dmr (không im lặng).
- - DLNA đang tắt → gửi ``Set_DLNA_Open``, rồi chờ thực thể dlna_dmr sẵn sàng tối đa
-   ``DLNA_READY_TIMEOUT`` giây; hết giờ → ``HomeAssistantError``.
- - Chuyển nguyên ``media_type``/``media_id``/tham số sang ``media_player.play_media`` của
-   thực thể dlna_dmr (nó tự xử lý media_source, URL tương đối, metadata DIDL).
-Ngoài phạm vi: trạng thái phát/tạm dừng/dừng (dùng thẳng thực thể dlna_dmr), âm lượng (dùng
-``number`` đã có).
+ - DLNA của loa đang tắt → gửi ``Set_DLNA_Open``, rồi chờ renderer lên tối đa ``DLNA_READY_TIMEOUT`` giây; hết giờ → ``HomeAssistantError``.
+ - ``media-source://`` được giải ra URL, URL tương đối được đổi thành địa chỉ HA tới được từ loa.
+ - Báo tin (TTS / ``announce``): tạm dừng nhạc, phát tin, rồi nền theo dõi tin xong và khôi phục nhạc (``giu_nhac``).
+Trạng thái chỉ được hỏi lại có chu kỳ KHI ĐANG PHÁT (3 giây; 1 giây khi đang báo tin) và sau mỗi lệnh; idle/tạm dừng thì không hỏi nền.
+``idle_reason`` (``finished`` / ``stopped`` / ``interrupted`` / ``error``) khai khi idle để tích hợp phát nhạc phân biệt Stop với hết bài.
+Âm lượng dùng đường APK có sẵn (``number``).
 """
 
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
+import time
 from typing import Any
-from urllib.parse import urlparse
 
 from homeassistant.components.media_player import (
     MediaPlayerEntity,
@@ -28,8 +26,9 @@ from homeassistant.components.media_player import (
     MediaPlayerState,
     MediaType,
 )
-from homeassistant.const import EVENT_STATE_CHANGED, STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.core import Event, HomeAssistant, ServiceResponse, SupportsResponse, callback
+from homeassistant.components import media_source
+from homeassistant.components.media_player.browse_media import async_process_play_media_url
+from homeassistant.core import HomeAssistant, ServiceResponse, SupportsResponse, callback
 from homeassistant.exceptions import HomeAssistantError
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
@@ -38,9 +37,11 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from . import const
 from .const import DLNA_READY_TIMEOUT, DOMAIN
+from .dmr import R1Dmr, R1DmrError, TrangThaiDmr
 from .coordinator import R1ConfigEntry, R1Coordinator
 from .client import R1Error
 from .entity import R1Entity
@@ -48,11 +49,12 @@ from .music import CONTROL_COMMANDS, PLAYLIST_COMMANDS, SEARCH_SOURCES, R1Music
 
 _LOGGER = logging.getLogger(__name__)
 
-DLNA_DMR_DOMAIN = "dlna_dmr"
 #: Tên thực thể theo mẫu camera (``media_player.<camera>_loa``). Tên thiết bị "Phicomm R1"
 #: sẽ cho ``media_player.phicomm_r1_loa``, nên đặt sẵn tên gợi ý khi đăng ký lần đầu.
 SUGGESTED_OBJECT_ID = "r1_loa"
-READY_POLL = 1.0
+#: Hỏi lại trạng thái renderer khi đang phát nhạc / khi đang báo tin (giây).
+CHAM_NHAC = 3.0
+CHAM_TIN = 1.0
 #: False: AI box đã gỡ → cổng nhạc 8082 không còn → không đăng ký dịch vụ nhạc.
 MUSIC_SERVICES = False
 
@@ -99,18 +101,6 @@ def _register_music_services(platform) -> None:
         "async_music_playlist", supports_response=SupportsResponse.OPTIONAL)
 
 
-def dlna_entity_id(hass: HomeAssistant, host: str) -> str | None:
-    """Thực thể dlna_dmr cùng địa chỉ máy với loa."""
-    registry = er.async_get(hass)
-    for cfg in hass.config_entries.async_entries(DLNA_DMR_DOMAIN):
-        if urlparse(cfg.data.get("url", "")).hostname != host:
-            continue
-        for ent in er.async_entries_for_config_entry(registry, cfg.entry_id):
-            if ent.domain == "media_player":
-                return ent.entity_id
-    return None
-
-
 _STATES = {"playing": MediaPlayerState.PLAYING, "paused": MediaPlayerState.PAUSED,
            "buffering": MediaPlayerState.BUFFERING, "idle": MediaPlayerState.IDLE}
 
@@ -122,9 +112,8 @@ def is_announcement(media_id: str, kwargs: dict[str, Any]) -> bool:
 
 
 class R1Player(R1Entity, MediaPlayerEntity):
-    """Loa R1. Phát/tạm dừng/dừng và trạng thái là của thực thể dlna_dmr cùng địa chỉ máy; thực
-    thể này chuyển lệnh sang đó, soi trạng thái của nó và (việc dlna_dmr không biết làm) bật
-    DLNA của loa trước khi phát. Báo tin (TTS) tạm dừng nhạc rồi phát lại sau (``giu_nhac``)."""
+    """Loa R1: tự điều khiển renderer DLNA của loa (``dmr.R1Dmr``), giữ trạng thái/tiến độ/thời lượng/lý do idle. Báo tin (TTS)
+    tạm dừng nhạc rồi phát lại sau (``giu_nhac``)."""
 
     _attr_translation_key = "speaker"
     _attr_supported_features = (MediaPlayerEntityFeature.PLAY_MEDIA
@@ -132,18 +121,56 @@ class R1Player(R1Entity, MediaPlayerEntity):
                                 | MediaPlayerEntityFeature.PAUSE
                                 | MediaPlayerEntityFeature.PLAY
                                 | MediaPlayerEntityFeature.STOP
+                                | MediaPlayerEntityFeature.SEEK
                                 | MediaPlayerEntityFeature.VOLUME_SET
                                 | MediaPlayerEntityFeature.VOLUME_STEP)
 
     def __init__(self, coordinator: R1Coordinator) -> None:
         super().__init__(coordinator, "speaker")
+        self._tt = TrangThaiDmr(state="idle")
+        self._tt_utc = None                  # lúc đọc trạng thái (để ngoại suy vị trí)
+        self._uri: str | None = None         # media_id gốc đã phát (để giu_nhac đặt lại đúng bài)
+        self._tieu_de: str | None = None
+        self._ly_do: str | None = None       # idle_reason
+        self._nhanh = False                  # đang báo tin: hỏi lại trạng thái dày hơn
+        self._cham: asyncio.Task | None = None
+        self._dang_dong_bo = False           # một lượt đọc theo chu kỳ coordinator đang chạy
+
+    @property
+    def _dmr(self) -> R1Dmr:
+        return self.coordinator.dmr
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        self.async_on_remove(self.hass.bus.async_listen(
-            EVENT_STATE_CHANGED, self._khi_dmr_doi, event_filter=self._la_dmr))
         # Âm lượng là của APK (mức nhạc): đổi ở loa/ở số → cập nhật thanh trượt của thẻ YouTube.
         self.async_on_remove(self.coordinator.mic_server.add_state_listener(self.async_write_ha_state))
+        # Bên giữ nhạc cần trạng thái MỚI trước khi chụp (nhạc có thể do thiết bị khác bật, ta không hỏi nền lúc idle).
+        self.coordinator.lam_moi_loa = functools.partial(self.async_lam_moi, chi_khi_da_noi=True)
+        self.async_on_remove(self._huy_cham)
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Mỗi chu kỳ coordinator (10 giây) mà DLNA của loa đang bật và ta không có vòng hỏi nào: đọc lại trạng thái renderer, để
+        thẻ thấy cả nhạc do thiết bị khác bật (điện thoại, DLNA controller). Không thêm bộ hẹn giờ mới."""
+        super()._handle_coordinator_update()
+        data = self.coordinator.data
+        if (data is not None and data.dlna_open and not self._dang_dong_bo
+                and (self._cham is None or self._cham.done())):
+            self._dang_dong_bo = True
+            self.coordinator.config_entry.async_create_background_task(
+                self.hass, self._dong_bo_nen(), f"{self.entity_id} dmr sync")
+
+    async def _dong_bo_nen(self) -> None:
+        try:
+            await self.async_lam_moi()
+        finally:
+            self._dang_dong_bo = False
+
+    @callback
+    def _huy_cham(self) -> None:
+        self.coordinator.lam_moi_loa = None
+        if self._cham is not None and not self._cham.done():
+            self._cham.cancel()
 
     # Âm lượng nhạc qua APK (cùng đường với ``number.r1_am_luong``): thẻ YouTube chỉnh âm lượng loa bằng ``volume_set``.
     @property
@@ -165,100 +192,161 @@ class R1Player(R1Entity, MediaPlayerEntity):
         except (ConnectionError, OSError, TimeoutError, ValueError) as exc:
             raise HomeAssistantError("Loa chưa nối về HA (APK mic): chưa đổi được âm lượng") from exc
 
-    @callback
-    def _la_dmr(self, data: dict[str, Any]) -> bool:
-        eid = data.get("entity_id", "")
-        return eid.startswith("media_player.") and eid == self._dlna_entity_id()
-
-    @callback
-    def _khi_dmr_doi(self, _event: Event) -> None:
-        self.async_write_ha_state()
-
-    def _dmr_state(self):
-        eid = self._dlna_entity_id()
-        return self.hass.states.get(eid) if eid else None
+    # ── trạng thái ─────────────────────────────────────────────────────────────
 
     @property
     def state(self) -> MediaPlayerState:
-        st = self._dmr_state()
-        return _STATES.get(st.state, MediaPlayerState.IDLE) if st is not None \
-            else MediaPlayerState.IDLE
+        return _STATES.get(self._tt.state, MediaPlayerState.IDLE)
 
     @property
     def media_title(self) -> str | None:
-        st = self._dmr_state()
-        return st.attributes.get("media_title") if st is not None else None
+        return self._tieu_de if self._tt.state != "idle" else None
 
     @property
     def media_content_id(self) -> str | None:
-        st = self._dmr_state()
-        return st.attributes.get("media_content_id") if st is not None else None
+        return (self._uri or self._tt.uri) if self._tt.state != "idle" else None
+
+    @property
+    def media_position(self) -> int | None:
+        return None if self._tt.position is None else int(self._tt.position)
+
+    @property
+    def media_position_updated_at(self):
+        return self._tt_utc if self._tt.position is not None else None
+
+    @property
+    def media_duration(self) -> int | None:
+        return None if not self._tt.duration else int(self._tt.duration)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """``idle_reason``: vì sao loa đang idle (``finished`` hết bài / ``stopped`` người dùng dừng / ``interrupted`` bị bài mới
+        thay / ``error`` lỗi phát). Chỉ có khi idle; tích hợp phát nhạc (YouTube) đọc nó thay vì đoán bằng thời lượng bài."""
+        if self._tt.state == "idle" and self._ly_do:
+            return {"idle_reason": self._ly_do}
+        return None
 
     @property
     def available(self) -> bool:
         # Khác các thực thể khác: DLNA tắt (dlna_open False/None) vẫn phát được vì ta bật nó.
         return CoordinatorEntity.available.fget(self)
 
-    def _dlna_entity_id(self) -> str | None:
-        return dlna_entity_id(self.hass, self._host)
+    @callback
+    def _ap_dung(self, tt: TrangThaiDmr) -> None:
+        cu = self._tt
+        if tt.state == "idle":
+            if self._ly_do is None and cu.state in ("playing", "buffering"):
+                self._ly_do = "error" if tt.loi else "finished"        # renderer tự dừng: không do lệnh của ta
+        else:
+            self._ly_do = None
+        du_kien = None
+        if cu.position is not None and cu.state == "playing" and self._tt_utc is not None:
+            du_kien = cu.position + (dt_util.utcnow() - self._tt_utc).total_seconds()
+        nhay = tt.position is not None and (du_kien is None or abs(tt.position - du_kien) > 2.5)
+        self._tt, self._tt_utc = tt, dt_util.utcnow()
+        if tt.state not in ("playing", "buffering") and self._cham is not None and self._cham is not asyncio.current_task():
+            # Không còn phát: vòng hỏi lại thôi ngay, không thức thêm lượt. Bỏ tham chiếu NGAY: tác vụ đã huỷ chưa «xong» cho tới
+            # vòng lặp kế, nên giữ lại thì ``_bat_dau_cham`` tưởng nó còn sống và không bật vòng mới khi nhạc phát lại.
+            cham, self._cham = self._cham, None
+            cham.cancel()
+        if (tt.state, tt.uri, tt.duration) != (cu.state, cu.uri, cu.duration) or nhay:
+            self.async_write_ha_state()
 
-    async def _wait_ready(self, entity_id: str) -> None:
-        """Chờ thực thể dlna_dmr có trạng thái dùng được. Cứ ~1 giây ép nó thử nối lại:
-        với "poll availability" bật (luồng thêm tay) đó là cách nó nối được ngay khi DLNA
-        của loa vừa lên; không bật thì nó chỉ nối khi nghe SSDP alive từ loa."""
-        async with asyncio.timeout(DLNA_READY_TIMEOUT):
-            while (st := self.hass.states.get(entity_id)) is None \
-                    or st.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-                await self.hass.services.async_call(
-                    "homeassistant", "update_entity", {"entity_id": entity_id},
-                    blocking=True)
-                await asyncio.sleep(READY_POLL)
+    async def _doc(self) -> TrangThaiDmr | None:
+        """Hỏi trạng thái renderer; không trả lời được thì coi như dừng vì lỗi (ghi một dòng nhật ký)."""
+        try:
+            tt = await self._dmr.async_doc()
+        except R1DmrError as exc:
+            if self._tt.state != "idle":
+                _LOGGER.warning("%s: %s", self.entity_id, exc)
+                self._ly_do = "error"
+                self._ap_dung(TrangThaiDmr(state="idle", loi=True))
+            return None
+        self._ap_dung(tt)
+        return tt
 
-    async def _dlna_goi(self, service: str) -> None:
-        target = self._dlna_entity_id()
-        if target is None:
-            raise HomeAssistantError(
-                f"Chưa có tích hợp dlna_dmr cho loa {self._host}: thêm DLNA Digital Media "
-                "Renderer (Cài đặt → Thiết bị) rồi thử lại.")
-        await self.hass.services.async_call(
-            "media_player", service, {"entity_id": target}, blocking=True)
+    async def async_lam_moi(self, *, chi_khi_da_noi: bool = False) -> None:
+        """Đọc trạng thái ngay; đang phát thì bật vòng hỏi lại có chu kỳ. DLNA của loa đang tắt thì không có renderer để hỏi.
+        ``chi_khi_da_noi``: bên giữ nhạc gọi mỗi lần mở phiên đàm thoại — chưa nối renderer thì bỏ qua (đừng chờ SSDP làm chậm
+        việc mở phiên; vòng đọc theo chu kỳ coordinator sẽ nối trong nền)."""
+        data = self.coordinator.data
+        if data is None or not data.dlna_open or (chi_khi_da_noi and not self._dmr.da_noi):
+            return
+        tt = await self._doc()
+        if tt is not None and tt.state in ("playing", "buffering"):
+            self._bat_dau_cham()
+
+    def _bat_dau_cham(self) -> None:
+        if self._cham is None or self._cham.done():
+            self._cham = self.coordinator.config_entry.async_create_background_task(
+                self.hass, self._cham_vong(), f"{self.entity_id} dmr poll")
+
+    async def _cham_vong(self) -> None:
+        """Chỉ chạy khi đang phát; idle/tạm dừng/lỗi thì dừng (không hỏi nền)."""
+        while True:
+            await asyncio.sleep(CHAM_TIN if self._nhanh else CHAM_NHAC)
+            tt = await self._doc()
+            if tt is None or tt.state not in ("playing", "buffering"):
+                return
+
+    async def _cho_trang_thai(self, mong_doi: set[str], toi_da: float = 3.0) -> None:
+        """Sau một lệnh, đọc lại cho tới khi renderer đổi sang trạng thái mong đợi (loa trả lời trễ vài trăm mili giây)."""
+        han = time.monotonic() + toi_da
+        while True:
+            tt = await self._doc()
+            if tt is None or tt.state in mong_doi or time.monotonic() >= han:
+                break
+            await asyncio.sleep(0.25)
+        if self._tt.state in ("playing", "buffering"):
+            self._bat_dau_cham()
+
+    # ── lệnh ───────────────────────────────────────────────────────────────────
+
+    async def _lenh(self, viec, mong_doi: set[str]) -> None:
+        try:
+            await viec()
+        except R1DmrError as exc:
+            raise HomeAssistantError(str(exc)) from exc
+        await self._cho_trang_thai(mong_doi)
 
     async def async_media_pause(self) -> None:
-        await self._dlna_goi("media_pause")
+        await self._lenh(self._dmr.async_tam_dung, {"paused", "idle"})
 
     async def async_media_play(self) -> None:
-        await self._dlna_goi("media_play")
+        await self._lenh(self._dmr.async_tiep, {"playing", "buffering"})
 
     async def async_media_stop(self) -> None:
-        await self._dlna_goi("media_stop")
+        self._ly_do = "stopped"
+        await self._lenh(self._dmr.async_dung, {"idle"})
+
+    async def async_media_seek(self, position: float) -> None:
+        await self._lenh(lambda: self._dmr.async_tua(position), {"playing", "buffering", "paused"})
 
     async def async_play_media(self, media_type: MediaType | str, media_id: str,
                                **kwargs: Any) -> None:
-        """Nhạc: chuyển thẳng sang dlna_dmr. Báo tin (TTS / announce): tạm dừng nhạc trước,
-        phát tin, rồi NỀN theo dõi tin phát xong và khôi phục nhạc — lệnh này trả về ngay sau
-        khi đã gửi tin đi, không chờ hết tin (``tts.speak`` khỏi bị treo)."""
+        """Nhạc: phát thẳng qua renderer. Báo tin (TTS / announce): tạm dừng nhạc trước, phát tin, rồi NỀN theo dõi tin phát
+        xong và khôi phục nhạc — lệnh này trả về ngay sau khi đã gửi tin đi, không chờ hết tin (``tts.speak`` khỏi bị treo)."""
         if not is_announcement(media_id, kwargs):
-            await self._phat_toi_dlna(media_type, media_id, **kwargs)
+            await self._phat_dmr(media_type, media_id, **kwargs)
             return
         talk = self.coordinator.talk
         giu = await talk.music.hold()
         try:
-            await self._phat_toi_dlna(media_type, media_id, **kwargs)
+            self._nhanh = True
+            await self._phat_dmr(media_type, media_id, **kwargs)
         except BaseException:
+            self._nhanh = False
             await giu.release()
             raise
         self.coordinator.config_entry.async_create_background_task(
             self.hass, self._theo_doi_tin(giu), f"{self.entity_id} announce")
 
     async def _theo_doi_tin(self, giu) -> None:
-        """Chờ tin bắt đầu rồi kết thúc (theo trạng thái dlna_dmr), báo vệ tinh, nhả nhạc."""
+        """Chờ tin bắt đầu rồi kết thúc (theo trạng thái renderer), báo vệ tinh, nhả nhạc."""
         talk = self.coordinator.talk
         try:
-            eid = self._dlna_entity_id()
-
             def dang_phat() -> bool:
-                st = self.hass.states.get(eid) if eid else None
-                return st is not None and st.state in ("playing", "buffering")
+                return self._tt.state in ("playing", "buffering")
 
             async with asyncio.timeout(const.ANNOUNCE_START_WAIT + const.ANNOUNCE_MAX):
                 for _ in range(int(const.ANNOUNCE_START_WAIT / 0.05) + 1):
@@ -273,33 +361,31 @@ class R1Player(R1Entity, MediaPlayerEntity):
             _LOGGER.warning("tin trên %s chưa xong sau %.0f giây — khôi phục nhạc",
                             self.entity_id, const.ANNOUNCE_MAX)
         finally:
+            self._nhanh = False
             talk.announce_done()
             await giu.release()
 
-    async def _phat_toi_dlna(self, media_type: MediaType | str, media_id: str,
-                             **kwargs: Any) -> None:
-        target = self._dlna_entity_id()
-        if target is None:
-            raise HomeAssistantError(
-                f"Chưa có tích hợp dlna_dmr cho loa {self._host}: thêm "
-                "DLNA Digital Media Renderer (Cài đặt → Thiết bị) rồi thử lại.")
+    async def _phat_dmr(self, media_type: MediaType | str, media_id: str, **kwargs: Any) -> None:
         data = self.coordinator.data
         if data is None or not data.dlna_open:
             await self.coordinator.async_command(
                 lambda: self.coordinator.client.set_dlna_open(True), dlna_open=True)
         try:
-            await self._wait_ready(target)
-        except TimeoutError:
-            raise HomeAssistantError(
-                f"{target} chưa sẵn sàng sau {DLNA_READY_TIMEOUT:.0f} giây "
-                "(DLNA của loa chưa lên?).") from None
-        service_data = {"entity_id": target, "media_content_type": media_type,
-                        "media_content_id": media_id}
-        for key in ("announce", "enqueue", "extra"):
-            if kwargs.get(key) is not None:
-                service_data[key] = kwargs[key]
-        await self.hass.services.async_call("media_player", "play_media", service_data,
-                                            blocking=True)
+            await self._dmr.async_san_sang(DLNA_READY_TIMEOUT)
+        except R1DmrError as exc:
+            raise HomeAssistantError(str(exc)) from exc
+        url = media_id
+        if media_source.is_media_source_id(media_id):
+            url = (await media_source.async_resolve_media(self.hass, media_id, self.entity_id)).url
+        url = async_process_play_media_url(self.hass, url)
+        tieu_de = str((kwargs.get("extra") or {}).get("title") or "Home Assistant")
+        self._ly_do, self._uri, self._tieu_de = "interrupted", media_id, tieu_de
+        try:
+            await self._dmr.async_phat(url, tieu_de)
+        except R1DmrError as exc:
+            self._ly_do = "error"
+            raise HomeAssistantError(str(exc)) from exc
+        await self._cho_trang_thai({"playing", "buffering"})
 
     # ── nhạc qua cổng 8082 (firmware có sẵn) ────────────────────────────────────
 

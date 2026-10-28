@@ -157,7 +157,16 @@ q("[data-play]").click();
 // 4) Trạng thái mic không đọc được: KHÔNG hiện như «Tắt».
 states["sensor.r1_trang_thai_mic"]={state:"unavailable",attributes:{}}; card.hass=mk();
 const lạ={mic:q("[data-mic-text]").textContent, status:q("[data-mic]").dataset.status};
-setTimeout(()=>{document.getElementById("out").textContent=JSON.stringify({truoc,loi,nghe,gui,la:lạ,calls,
+// 5) Loa im: thẻ nói VÌ SAO (hết bài / đã dừng / lỗi) thay vì chỉ «không có nhạc»; đang phát thì hiện thời lượng.
+states["media_player.r1_loa"]={state:"idle",attributes:{idle_reason:"finished"}}; card.hass=mk();
+const het=q("[data-music-text]").textContent;
+states["media_player.r1_loa"]={state:"idle",attributes:{idle_reason:"error"}}; card.hass=mk();
+const hong=q("[data-music-text]").textContent;
+states["media_player.r1_loa"]={state:"playing",attributes:{media_title:"A",media_duration:185}}; card.hass=mk();
+const dai=q("[data-music-text]").textContent;
+states["media_player.r1_loa"]={state:"idle",attributes:{}}; card.hass=mk();
+const rong=q("[data-music-text]").textContent;
+setTimeout(()=>{document.getElementById("out").textContent=JSON.stringify({truoc,loi,nghe,gui,la:lạ,calls,het,hong,dai,rong,
  eq:!!q("[data-eq] r1-eq-card"), xss:sr.innerHTML.includes("<img src=x"), title:q("[data-music-text]").textContent});},150);
 </script>"""
 
@@ -192,6 +201,9 @@ def test_giao_dien_the_dam_thoai_trang_thai_mic_nut_va_thuc_the_den_muon(tmp_pat
     assert r["calls"] == [["media_player", "media_pause", {"entity_id": "media_player.r1_loa"}],
                           ["media_player", "media_play", {"entity_id": "media_player.r1_loa"}]]
     assert r["eq"] is True and r["xss"] is False                # nhúng thẻ EQ; tên bài không thành HTML
+    # loa im thì nói vì sao; đang phát thì kèm thời lượng (185 giây = 3:05); không có lý do thì như cũ
+    assert r["het"] == "Bài vừa rồi đã hết bài" and "lỗi phát" in r["hong"]
+    assert r["dai"] == "Đang phát — A (3:05)" and r["rong"] == "Không có nhạc đang phát"
 
 
 def _chay_chrome_den_khi_xong(page, thoi_gian=40):

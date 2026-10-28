@@ -45,8 +45,10 @@ EQ_PRESET_MB = {name: tuple(db * 100 for db in levels) for name, levels in EQ_PR
 MUSIC_LIGHT_ENABLE, MUSIC_LIGHT_LUMA, MUSIC_LIGHT_CHROMA = 64, 65, 66
 MUSIC_LIGHT_RANGE = {MUSIC_LIGHT_ENABLE: (0, 1), MUSIC_LIGHT_LUMA: (0, 100), MUSIC_LIGHT_CHROMA: (1, 100)}
 
-#: Sau Set_DLNA_Open, chờ thực thể dlna_dmr của loa sẵn sàng tối đa ngần này giây.
+#: Sau Set_DLNA_Open, chờ renderer DLNA của loa lên tối đa ngần này giây.
 DLNA_READY_TIMEOUT = 15.0
+#: Đọc lại trạng thái nhạc trước khi chụp để giữ nhạc: quá ngần này giây thì bỏ qua, không làm chậm việc mở phiên đàm thoại.
+REFRESH_TOI_DA = 1.0
 
 # ── Mic của loa → Assist (dịch vụ mic trên loa CHƯA có; xem mic.py) ───────────────
 CONF_MIC_HOST = "mic_host"

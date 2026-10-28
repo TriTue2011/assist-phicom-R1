@@ -1,26 +1,35 @@
 # Phát tiếng của HA ra loa R1 (`media_player.r1_loa`)
 
-Không có giao thức DLNA tự viết. Firmware của loa đã có DLNA renderer; HA phát qua tích hợp
-`dlna_dmr` có sẵn. `r1_speaker` chỉ thêm phần dlna_dmr không làm được: **bật DLNA trên loa
-(`Set_DLNA_Open`) trước khi phát**, rồi chuyển lệnh sang thực thể dlna_dmr của chính loa đó.
+**Không cần thêm DLNA hay AirPlay riêng.** `r1_speaker` tự điều khiển renderer DLNA có sẵn trong firmware của loa (từ 0.6.0;
+trước đó phải thêm tay tích hợp `dlna_dmr`).
 
-## Cài đặt
+## Cách hoạt động
 
-1. Thêm tích hợp `r1_speaker` (IP và cổng WebSocket của loa).
-2. Bật DLNA một lần (công tắc DLNA của `r1_speaker`) để loa có renderer.
-3. Thêm **DLNA Digital Media Renderer** cho loa. Nên thêm bằng **URL mô tả thiết bị nhập tay**
-   (luồng thủ công), vì luồng đó bật "poll availability" nên thực thể dlna_dmr tự nối lại khi
-   DLNA của loa vừa lên. Luồng khám phá SSDP không bật tuỳ chọn này; khi đó thực thể chỉ nối
-   lại nếu nghe được thông báo SSDP alive từ loa.
-4. Phát: `tts.speak` hoặc `media_player.play_media` với `media_player.r1_loa`. Âm lượng chỉnh
-   bằng `number.phicomm_r1_volume`.
+1. Khi phát, nếu DLNA của loa đang tắt thì tích hợp bật nó (`Set_DLNA_Open`).
+2. Tích hợp tìm renderer bằng **SSDP unicast tới chính loa** (cổng 1900; loa trả về địa chỉ mô tả thiết bị, cổng do loa cấp lúc chạy
+   nên được tìm lại mỗi lần nối, không nhớ cứng). Chỉ nhận địa chỉ mô tả thuộc đúng loa này.
+3. Phát bằng UPnP AV (`SetAVTransportURI` + `Play`), tạm dừng/phát tiếp/dừng/tua cũng qua đó. Thư viện `async_upnp_client` có sẵn
+   trong Home Assistant lo phần SOAP.
+4. Trạng thái (`playing` / `paused` / `idle`), tên bài, **thời lượng**, vị trí và **lý do idle** hiện ngay trên `media_player.r1_loa`
+   và trên thẻ R1. Hỏi lại renderer có chu kỳ chỉ **khi đang phát** (3 giây; 1 giây khi đang báo tin) và theo chu kỳ 10 giây
+   của tích hợp khi DLNA bật (để thấy cả nhạc do thiết bị khác bật). Idle/tạm dừng thì không hỏi nền.
 
-`media_player.r1_loa` báo lỗi rõ (không im lặng) nếu chưa có mục dlna_dmr cùng địa chỉ máy
-với loa, hoặc nếu thực thể dlna_dmr chưa sẵn sàng sau 15 giây kể từ khi bật DLNA.
+`tts.speak` và `media_player.play_media` đều đi đường này; `media-source://` được giải ra URL, URL tương đối được đổi thành địa chỉ
+HA mà loa tới được. Âm lượng chỉnh bằng `number.phicomm_r1_volume` (đường APK có sẵn).
 
-## Chưa kiểm trên loa thật
+## Lý do idle (`idle_reason`)
 
-Cổng và đường dẫn mô tả thiết bị của renderer (báo cáo dịch ngược ghi 1146 nhưng là suy đoán,
-cổng cấp phát lúc chạy); loa có gửi SSDP alive, có chấp nhận đăng ký sự kiện UPnP, định dạng
-âm thanh nào nhận được (MP3/WAV từ TTS); `Set_DLNA_Open` có thật sự khởi động renderer.
-Test chỉ dùng loa giả (WebSocket + renderer UPnP giả ở 127.0.0.1).
+Khi `idle`, thực thể có thuộc tính `idle_reason`: `finished` (bài tự hết), `stopped` (lệnh dừng của người dùng/tự động hoá),
+`interrupted` (bài mới thay bài đang phát), `error` (renderer báo lỗi truyền tải, hoặc loa không trả lời giữa lúc đang phát).
+Tích hợp phát nhạc YouTube đọc thuộc tính này để phân biệt Stop với hết bài thay vì đoán bằng thời lượng bài.
+
+## Lỗi
+
+`media_player.r1_loa` báo lỗi rõ (không im lặng) nếu loa không trả lời SSDP (DLNA tắt hoặc loa mất mạng), nếu renderer chưa lên sau
+15 giây kể từ khi bật DLNA, hoặc nếu một lệnh bị renderer từ chối.
+
+## Đã đo trên loa thật (28/10/2026)
+
+Loa trả lời SSDP unicast, công bố `MediaRenderer:1` (Platinum UPnP 1.0.4, cổng 1590 lúc đo); đọc `GetTransportInfo` được, hỗ trợ
+`Seek`. **Chưa nghe thử phát âm thanh thật** từ mã mới: kiểm bằng `media_player.play_media` rồi xem `idle_reason` khi bài hết.
+Chưa đo: định dạng âm thanh nào loa nhận (MP3/WAV/AAC từ TTS và YouTube), có tua được thật, hành vi khi hai nguồn cùng phát.

@@ -136,8 +136,63 @@ class FakeDriver:
     def cut_turn(self): self.cut += 1
 
 
+class FakeDmr:
+    """``R1Dmr`` giả trong bộ nhớ (cùng giao diện bất đồng bộ): ghi lệnh vào ``log`` đúng khuôn của ``FakeDmrPlayer`` cũ để các
+    kịch bản đàm thoại/giữ nhạc giữ nguyên. ``finish()`` mô phỏng hết bài/hết tin (thực thể thấy ở lần hỏi lại kế tiếp)."""
+
+    def __init__(self):
+        self.log: list[tuple] = []
+        self._st = "idle"
+        self._uri = None
+        self._pos = None
+        self._pos_at = None
+        self.loi = False
+
+    da_noi = True
+
+    async def async_san_sang(self, toi_da): return None
+
+    async def async_phat(self, url, tieu_de):
+        self.log.append(("play_media", url))
+        self._uri, self._st, self._pos, self._pos_at = url, "playing", None, None
+
+    async def async_tiep(self):
+        self.log.append(("play",))
+        self._st = "playing"
+
+    async def async_tam_dung(self):
+        self.log.append(("pause",))
+        self._st = "paused"
+
+    async def async_dung(self):
+        self.log.append(("stop",))
+        self._st = "idle"
+
+    async def async_tua(self, giay):
+        self.log.append(("seek", giay))
+
+    async def async_doc(self):
+        from custom_components.r1_speaker.dmr import TrangThaiDmr
+        pos = None
+        if self._pos is not None:
+            pos = self._pos + (dt_util.utcnow() - self._pos_at).total_seconds() if self._st == "playing" else self._pos
+        return TrangThaiDmr(state=self._st, loi=self.loi, position=pos, duration=None, uri=self._uri)
+
+    def start_music(self, url, position=None, ago=0.0):
+        """Đặt sẵn: đang phát ``url`` (như người dùng bật nhạc từ thiết bị khác trước đó)."""
+        self._uri, self._st = url, "playing"
+        self._pos = position
+        self._pos_at = dt_util.utcnow() - timedelta(seconds=ago) if position is not None else None
+
+    def finish(self):
+        self._st = "idle"
+
+    def urls(self):
+        return [e[1] for e in self.log if e[0] == "play_media"]
+
+
 class FakeDmrPlayer(MediaPlayerEntity):
-    """Renderer DLNA giả là thực thể media_player THẬT của HA (dịch vụ pause/play/play_media/
+    """Thực thể media_player giả (bộ giữ nhạc làm việc với MỌI media_player) là thực thể media_player THẬT của HA (dịch vụ pause/play/play_media/
     seek đi qua đúng đường dịch vụ). ``log`` ghi mọi lệnh theo thứ tự."""
 
     _attr_should_poll = False

@@ -39,7 +39,6 @@ from . import den
 from .const import DOMAIN, MIC_QUEUE_CHUNKS
 from .coordinator import R1ConfigEntry
 from .entity import R1MicEntity, preregister
-from .media_player import dlna_entity_id
 from .settings import speaker_host
 
 _LOGGER = logging.getLogger(__name__)
@@ -366,9 +365,9 @@ class R1Satellite(R1MicEntity, AssistSatelliteEntity):
                 self._tts_xong.set()
 
     async def _cho_phat_xong(self, seq0: int | None = None) -> None:
-        """Chờ thực thể dlna_dmr của loa đi từ phát → không phát. Không có/không thấy phát
+        """Chờ thực thể media_player của loa đi từ phát → không phát. Không có/không thấy phát
         trong ``PLAY_START_WAIT`` giây thì coi như đã xong."""
-        dmr = dlna_entity_id(self.hass, speaker_host(self._entry))
+        dmr = self._loa_entity_id()
         if dmr is None:
             return
         # Tin do ``R1Player`` phát đã có bên theo dõi riêng (và sẽ phát lại nhạc ngay khi tin

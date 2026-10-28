@@ -15,6 +15,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .client import R1Client, R1Error, R1State, with_overrides
 from .const import DOMAIN, SCAN_INTERVAL
 from .dam_thoai import R1Talk
+from .dmr import R1Dmr
 from .giu_nhac import MusicKeeper
 from .intercom import R1Intercom
 from .mic import R1Mic
@@ -41,6 +42,8 @@ class R1Coordinator(DataUpdateCoordinator[R1State]):
     intercom: R1Intercom
     duplex: R1Duplex
     music: MusicKeeper
+    dmr: R1Dmr
+    lam_moi_loa: Callable[[], Awaitable[None]] | None = None
     talk: R1Talk
     lights: "R1Lights"
     apps: "BoCai"

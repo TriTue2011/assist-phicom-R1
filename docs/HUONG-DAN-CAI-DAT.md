@@ -216,10 +216,10 @@ tai và miệng (`assist_satellite.r1` + `media_player.r1_loa`).
 - **`tts.speak` / thông báo (`announce`) trên `media_player.r1_loa`**: nhạc tạm dừng trước, tin phát,
   nhạc phát lại sau tin. Lệnh trả về ngay, không chờ hết tin. Nhạc thường (không `announce`) không bị đụng.
 - **Nhạc YouTube**: tích hợp YouTube của HA (`tritue_youtube_player`) gọi `media_player.play_media`
-  với luồng do HA ký lên `media_player.r1_loa` → DLNA của loa. Không dùng cổng 8082 (AI box đã gỡ).
+  với luồng do HA ký lên `media_player.r1_loa` → renderer DLNA của loa. Không dùng cổng 8082 (AI box đã gỡ).
   CHƯA ĐO: luồng proxy hết hạn khi đặt lại URI sau tin; loa có nhận tua (`media_seek`) không.
-- **`media_player.r1_loa`** nay có tạm dừng / phát / dừng và soi trạng thái, tên bài của thực thể
-  dlna_dmr; chưa thêm dlna_dmr thì các lệnh này báo lỗi nêu rõ.
+- **`media_player.r1_loa`** tự điều khiển renderer DLNA của loa (không cần thêm `dlna_dmr`): phát, tạm dừng, dừng, tua, và khai
+  trạng thái, tên bài, thời lượng, `idle_reason`. Xem `docs/PHAT-RA-LOA.md`.
 - **`sensor.r1_trang_thai_mic`**: `tat` (không nghe), `nghe` (loa chờ từ đánh thức, chưa gửi gì về HA),
   `gui` (byte mic đang về HA). Chế độ `ha`: luồng nối là `gui`. Chế độ `speaker`: `gui` chỉ trong phiên.
 - **`number.r1_tang_mic`** 0–30 dB, mặc định **+12 dB (CHƯA ĐO trên mic loa)**; khuếch đại tuyến tính,
