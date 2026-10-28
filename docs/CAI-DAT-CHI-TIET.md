@@ -35,7 +35,21 @@ nữa với IP khác, mỗi loa có khoá, cổng, phiên, đèn và thực th�
 | Địa chỉ HA mà loa gọi tới (`ha_url`) | Dạng `http://<IP của HA>:8123`. Để trống = tự đoán. Có nhập thì HA kiểm ngay: không được là `127.0.0.1`/`localhost`, và HA phải tự gọi lại được địa chỉ đó |
 | Đổi khoá URL bộ đàm | Sinh khoá mới cho các dòng go2rtc; dòng cũ ngừng chạy |
 | Ghép lại APK | Sinh khoá nghe mic mới và mở lại cửa ghép; APK trên loa tự xin khoá mới sau vài giây (dùng khi cài lại APK hoặc thay loa) |
+| Chế độ «đóng ADB» | Tự đóng ADB mạng của loa khi APK đã nối về HA ổn định 2 phút (không bao giờ đóng khi APK chưa nối, để khỏi tự khoá). Mặc định TẮT. Xem bảng chọn bên dưới |
 | Chỉnh thông số nâng cao | Sang bước hai: 19 số âm thanh ở mục 4 (cũng chỉnh được ở thẻ) |
+
+### Chọn: đóng ADB hay giữ ADB
+
+Hai chế độ, **bạn chọn một** (ô «Chế độ đóng ADB» ở tuỳ chọn, hoặc nút «Đóng ADB mạng» để đóng ngay một lần):
+
+| | **1. Đóng ADB** (hoàn toàn qua APK) | **2. Giữ ADB** (mặc định) |
+|---|---|---|
+| An ninh | Không máy nào trong mạng nối được cổng 5555 (loa có `ro.debuggable=1`, ADB mở có thể là quyền root; botnet kiểu Kimwolf lây qua đường này) | Cổng 5555 mở không xác thực cho cả mạng LAN; phải tự khoá ở router (xem README mục 12) |
+| Chạy được | Mic, đàm thoại, Assist, âm lượng, phát nhạc DLNA/AirPlay, Dừng, Tắt tiếng | Tất cả |
+| Đèn | Chỉ hiệu ứng có sẵn của firmware (màu cố định, thở, hướng đánh thức) qua APK | Đèn tự do 13 hiệu ứng, thông số riêng, màu RGB tuỳ ý |
+| Cần ADB nên **không dùng được** khi đóng | — | Cài/cập nhật APK và ứng dụng, «Chuẩn bị loa», khởi động lại từ HA, thông tin hệ thống (CPU/RAM/WiFi), công tắc Bluetooth (các mục này sẽ chuyển dần sang APK) |
+| Mở lại | Rút điện loa rồi cắm lại (cổng 5555 tự mở lúc khởi động; chế độ 1 đóng lại sau 2 phút kể từ khi APK nối lại) | — |
+| Rủi ro | Cần APK đã cài và nối về HA TRƯỚC khi đóng (tích hợp tự bảo đảm điều này); cập nhật APK phải mở ADB lại | ADB bị chiếm thì loa mất kiểm soát |
 
 ---
 
@@ -50,6 +64,7 @@ nữa với IP khác, mỗi loa có khoá, cổng, phiên, đèn và thực th�
 | Tăng cường bass / Cường độ bass | switch / number | Bật bass và độ mạnh | 0–1000 |
 | Loudness / Độ lợi loudness | switch / number | Bù tiếng ở âm lượng nhỏ | 0–1000 |
 | DLNA, AirPlay | switch | Cho loa nhận nhạc qua DLNA / AirPlay | |
+| Đóng ADB mạng (tới lần khởi động lại loa) | button | Loa thôi nghe cổng ADB mạng 5555 ngay (dịch vụ `usb:` của adbd, như `adb usb`), rồi HA thử nối lại để xác nhận; còn nghe thì báo lỗi chứ không nói «đã đóng». Có tác dụng tới lần khởi động lại sau: **rút điện loa rồi cắm lại là mở lại**. Xem mục «Chọn: đóng ADB hay giữ ADB» ở mục 1 |
 | Dừng nhạc | button | Nút Stop ở trang thiết bị (gọi `media_player.media_stop` của loa, tự gửi lại nếu loa bỏ qua). Hộp điều khiển chuẩn của Home Assistant chỉ hiện Stop khi loa không hỗ trợ Tạm dừng nên không đặt cạnh nút Phát/Tạm dừng được; biểu tượng loa cạnh thanh âm lượng là nút **Tắt tiếng loa** | |
 | Bluetooth | switch | Bật/tắt Bluetooth của loa. Trạng thái đọc qua ADB (`settings get global bluetooth_on`), lệnh đi qua `send_message` what=64 (chưa kiểm trên loa thật); sau lệnh tích hợp đọc lại để xác nhận. Cùng DLNA và AirPlay hiện ở thẻ R1 (mục «Kết nối loa») để bật/tắt từng kết nối khi dò lỗi; công tắc DLNA khai thuộc tính `renderer` (đã nối bằng đường nào, hoặc đã thử những đường nào mà hỏng) | |
 | Tăng mic | number | Khuếch đại tuyến tính tiếng mic (dB) **ở HA**, áp trước khi tiếng vào Assist; chặn cứng ở biên độ tối đa, không lọc ồn. Nhớ giá trị qua các lần khởi động HA. **CHƯA ĐO** | 0–30 dB, mặc định 12 |

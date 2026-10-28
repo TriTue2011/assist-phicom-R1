@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from homeassistant.components import persistent_notification
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -21,7 +22,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
     preregister(hass, entry, "button", f"{entry.entry_id}_reboot", "r1_khoi_dong_lai")
     preregister(hass, entry, "button", f"{entry.entry_id}_chuan_bi", "r1_chuan_bi_loa")
     preregister(hass, entry, "button", f"{entry.entry_id}_dung_nhac", "r1_dung_nhac")
-    async_add_entities([R1RebootButton(entry), R1PrepareButton(entry), R1StopButton(entry)])
+    preregister(hass, entry, "button", f"{entry.entry_id}_dong_adb", "r1_dong_adb")
+    async_add_entities([R1RebootButton(entry), R1PrepareButton(entry), R1StopButton(entry), R1CloseAdbButton(entry)])
+
+
+class R1CloseAdbButton(ButtonEntity):
+    """«Đóng ADB mạng»: loa thôi nghe cổng 5555 cho tới lần khởi động lại sau (rút điện cắm lại là mở lại). ADB mở không xác thực là
+    cửa vào cho botnet cùng mạng (chủ máy 28/10/2026). Sau khi đóng, mọi việc cần ADB (đèn tự do, cài ứng dụng, khởi động lại, đọc thông
+    tin hệ thống, công tắc Bluetooth) ngừng chạy cho tới khi mở lại; mic, âm lượng, phát nhạc, nút Dừng/Tắt tiếng vẫn dùng bình thường."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "dong_adb"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, entry: R1ConfigEntry) -> None:
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_dong_adb"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry.entry_id)})
+
+    async def async_press(self) -> None:
+        try:
+            await self._entry.runtime_data.apps.dev.dong_adb_mang()
+        except (AdbError, OSError, TimeoutError) as exc:
+            raise HomeAssistantError(f"Chưa đóng được ADB mạng của loa: {exc or type(exc).__name__}") from exc
+        persistent_notification.async_create(
+            self.hass,
+            "Đã đóng ADB mạng của loa R1: không máy nào trong mạng nối được cổng 5555 nữa. Các việc cần ADB (đèn tự do, cài ứng dụng, "
+            "khởi động lại từ HA, thông tin hệ thống, công tắc Bluetooth) tạm ngừng. **Mở lại: rút điện loa rồi cắm lại.**",
+            title="R1: đã đóng ADB mạng", notification_id=f"{DOMAIN}_{self._entry.entry_id}_dong_adb")
 
 
 class R1StopButton(ButtonEntity):

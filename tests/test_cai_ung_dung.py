@@ -373,6 +373,30 @@ async def test_nut_khoi_dong_lai_loa_goi_adb_reboot_va_bao_loi_ro(hass, ha_cai):
         await hass.services.async_call("button", "press", {"entity_id": nut[0]}, blocking=True)
 
 
+async def test_nut_dong_adb_goi_dong_adb_mang_bao_thanh_cong_bang_thong_bao_va_loi_ro(hass, ha_cai):
+    """Nút «Đóng ADB mạng»: thành công thì có thông báo nói rõ cách mở lại; thất bại thì báo lỗi, KHÔNG có thông báo «đã đóng»."""
+    e, bo, dev = ha_cai
+    goi = []
+
+    async def dong_adb_mang():
+        goi.append(1)
+        if dev.fail:
+            raise AdbError(dev.fail)
+
+    dev.dong_adb_mang = dong_adb_mang
+    nut = [s.entity_id for s in hass.states.async_all("button") if "dong_adb" in s.entity_id]
+    assert nut == ["button.r1_dong_adb"]
+    await hass.services.async_call("button", "press", {"entity_id": nut[0]}, blocking=True)
+    assert goi == [1]
+    tb = [n for n in hass.data.get("persistent_notification", {}).values() if "đóng ADB" in (n.get("title") or "")]
+    assert tb and "rút điện" in tb[0]["message"]
+    hass.data["persistent_notification"].clear()
+    dev.fail = "adbd vẫn còn nghe cổng mạng"
+    with pytest.raises(HomeAssistantError, match="Chưa đóng được ADB mạng"):
+        await hass.services.async_call("button", "press", {"entity_id": nut[0]}, blocking=True)
+    assert not any("đóng ADB" in (n.get("title") or "") for n in hass.data.get("persistent_notification", {}).values())
+
+
 async def test_loi_o_buoc_pm_install_thi_thong_bao_neu_dung_buoc_va_lenh(caplog):
     """Lỗi thật 24/10/2026: thông báo chỉ có «loa từ chối dịch vụ shell», không biết bước nào, lệnh nào."""
     dev = FakeDev()

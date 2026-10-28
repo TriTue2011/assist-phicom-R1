@@ -180,9 +180,15 @@ states["media_player.r1_loa"]={state:"idle",attributes:{supported_features:8,is_
 stop.dungKhiIdle=q("[data-stop]").disabled; stop.tat=q("[data-spk-mute]").checked;
 states["media_player.r1_loa"]={state:"playing",attributes:{supported_features:0}}; card.hass=mk();
 stop.anKhiKhongHoTro=q("[data-spk-mute-row]").style.display==="none";
+// 8) Nút «Đóng ADB mạng…»: hỏi xác nhận (nêu ưu/nhược); huỷ thì KHÔNG gọi gì, đồng ý thì bấm button.r1_dong_adb.
+add("button.r1_dong_adb","dong_adb","unknown"); card.hass=mk();
+const adb={hang:q("[data-adb-row]").style.display!=="none", chu:q("[data-adb-dong]").textContent};
+let hoi=""; window.confirm=function(m){hoi=m; return false;};
+const b0=calls.length; q("[data-adb-dong]").click(); adb.huy=calls.length-b0; adb.hoi=hoi;
+window.confirm=function(){return true;}; q("[data-adb-dong]").click(); adb.goi=JSON.stringify(calls.slice(b0)); calls.length=b0;
 const antes=calls.length; const cd=q('[data-conn="airplay"]'); cd.checked=true; cd.dispatchEvent(new Event("change"));
 kn.goi=JSON.stringify(calls.slice(antes)); calls.length=antes;      // giữ nguyên danh sách lệnh của các bước trước cho phần kiểm cũ
-setTimeout(()=>{document.getElementById("out").textContent=JSON.stringify({truoc,loi,nghe,gui,la:lạ,calls,het,hong,dai,rong,kn,stop,
+setTimeout(()=>{document.getElementById("out").textContent=JSON.stringify({truoc,loi,nghe,gui,la:lạ,calls,het,hong,dai,rong,kn,stop,adb,
  eq:!!q("[data-eq] r1-eq-card"), xss:sr.innerHTML.includes("<img src=x"), title:q("[data-music-text]").textContent});},150);
 </script>"""
 
@@ -225,6 +231,10 @@ def test_giao_dien_the_dam_thoai_trang_thai_mic_nut_va_thuc_the_den_muon(tmp_pat
     assert json.loads(sp["goi"]) == [["media_player", "media_stop", {"entity_id": "media_player.r1_loa"}],
                                      ["media_player", "volume_mute", {"entity_id": "media_player.r1_loa", "is_volume_muted": True}]]
     assert sp["dungKhiIdle"] is True and sp["tat"] is True and sp["anKhiKhongHoTro"] is True
+    ad = r["adb"]
+    assert ad["hang"] is True and "Đóng ADB" in ad["chu"] and ad["huy"] == 0
+    assert all(k in ad["hoi"] for k in ("ƯU", "NHƯỢC", "MỞ LẠI", "rút điện"))
+    assert json.loads(ad["goi"]) == [["button", "press", {"entity_id": "button.r1_dong_adb"}]]
     kn = r["kn"]
     assert kn["sec"] and kn["dlna"] is True and kn["airplay"] is False
     assert kn["btOff"] is False, "Bluetooth «unknown» (ADB chưa đọc được) vẫn phải bấm được"

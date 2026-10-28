@@ -14,7 +14,7 @@ from homeassistant.config_entries import ConfigEntry
 
 from .agc import AgcSettings, LimiterSettings
 from .noise_suppress import NoiseSettings
-from .const import ADB_SERVER_LOCAL, CONF_ADB_MODE, CONF_ADB_SERVER, DEFAULT_ADB_MODE, DEFAULT_ADB_SERVER
+from .const import ADB_SERVER_LOCAL, CONF_ADB_MODE, CONF_ADB_SERVER, CONF_ADB_TU_DONG, DEFAULT_ADB_MODE, DEFAULT_ADB_SERVER
 from .const import (CONF_WAKE_ENABLE, CONF_WAKE_SENSITIVITY, CONF_WAKE_WORD,
                     DEFAULT_WAKE_ENABLE, DEFAULT_WAKE_SENSITIVITY, DEFAULT_WAKE_WORD)
 from .const import (CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, CONF_AGC_TARGET_DB,
@@ -171,6 +171,11 @@ def wake_settings(entry: ConfigEntry) -> dict[str, Any]:
         "tu_khoa": str(conf(entry, CONF_WAKE_WORD, DEFAULT_WAKE_WORD) or ""),
         "do_nhay": float(conf(entry, CONF_WAKE_SENSITIVITY, DEFAULT_WAKE_SENSITIVITY)),
     }
+
+
+def adb_tu_dong_dong(entry: ConfigEntry) -> bool:
+    """Chủ máy chọn chế độ «đóng ADB»: tự đóng ADB mạng của loa khi APK đã nối về HA."""
+    return conf(entry, CONF_ADB_TU_DONG, False) is True
 
 
 def adb_settings(entry: ConfigEntry) -> tuple[str, str]:

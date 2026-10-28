@@ -151,6 +151,9 @@
       },
       "dung_nhac": {
         "name": "Stop music"
+      },
+      "dong_adb": {
+        "name": "Close network ADB (until speaker restarts)"
       }
     }
   },
@@ -167,7 +170,8 @@
           "nang_cao": "Edit advanced parameters (voice gate, noise, duplex)",
           "ghep_lai_apk": "Re-pair the speaker APK (new key; the APK fetches it by itself)",
           "adb_server": "adb-server address (optional; leave EMPTY to connect straight to the speaker IP, port 5555)",
-          "adb_mode": "How to reach the speaker over ADB: auto, server (via adb-server) or direct (straight to the speaker)"
+          "adb_mode": "How to reach the speaker over ADB: auto, server (via adb-server) or direct (straight to the speaker)",
+          "adb_tu_dong_dong": "«Close ADB» mode: auto-close the speaker's network ADB once the APK is connected. PRO: blocks botnets on the LAN. CON: lose free-form lights, app install, reboot from HA, system info, Bluetooth switch; re-open by unplugging the speaker"
         }
       },
       "nang_cao": {

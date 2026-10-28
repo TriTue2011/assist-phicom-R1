@@ -27,7 +27,8 @@
       sending_tip: "Tiếng mic đang được gửi về Home Assistant.",
       unknown_tip: "Không đọc được trạng thái mic — coi như mic có thể đang mở.",
       busy: "Đang có phiên", mute: "Tắt mic", conn: "Kết nối loa (bật/tắt để dò lỗi phát nhạc)", dlna: "DLNA", airplay: "AirPlay", bluetooth: "Bluetooth",
-      bt_unknown: "Bluetooth chưa đọc được trạng thái (cần ADB)", music: "Nhạc", music_last: "Bài vừa rồi", pause: "Tạm dừng", play: "Phát", stop: "Dừng", spk_mute: "Tắt tiếng loa",
+      bt_unknown: "Bluetooth chưa đọc được trạng thái (cần ADB)", adb_dong: "Đóng ADB mạng…",
+      adb_confirm: "Đóng ADB mạng của loa?\n\nƯU: không máy nào trong mạng nối được cổng 5555 (chặn botnet kiểu Kimwolf, kể cả quyền root).\nNHƯỢC: đèn tự do, cài ứng dụng, khởi động lại từ HA, thông tin hệ thống và công tắc Bluetooth ngừng chạy. Mic, âm lượng, phát nhạc, Dừng/Tắt tiếng vẫn dùng bình thường.\nMỞ LẠI: rút điện loa rồi cắm lại.", music: "Nhạc", music_last: "Bài vừa rồi", pause: "Tạm dừng", play: "Phát", stop: "Dừng", spk_mute: "Tắt tiếng loa",
       nothing: "Không có nhạc đang phát", playing: "Đang phát", paused: "Đã tạm dừng",
       r_finished: "đã hết bài", r_stopped: "đã dừng", r_error: "lỗi phát (renderer DLNA của loa báo lỗi)", r_interrupted: "bị bài khác thay",
       pending: "Phía loa chưa có (từ đánh thức trên loa còn chờ)",
@@ -57,7 +58,8 @@
       sending_tip: "Microphone audio is being sent to Home Assistant.",
       unknown_tip: "Mic status unreadable — assume the mic may be open.",
       busy: "Session in progress", mute: "Mute mic", conn: "Speaker connections (toggle to troubleshoot playback)", dlna: "DLNA", airplay: "AirPlay", bluetooth: "Bluetooth",
-      bt_unknown: "Bluetooth state unreadable (needs ADB)", music: "Music", music_last: "Last track", pause: "Pause", play: "Play", stop: "Stop", spk_mute: "Mute speaker",
+      bt_unknown: "Bluetooth state unreadable (needs ADB)", adb_dong: "Close network ADB…",
+      adb_confirm: "Close the speaker's network ADB?\n\nPRO: no machine on the network can reach port 5555 (blocks Kimwolf-style botnets, root included).\nCON: free-form lights, app install, reboot from HA, system info and the Bluetooth switch stop working. Mic, volume, playback, Stop/Mute keep working.\nRE-OPEN: unplug the speaker and plug it back in.", music: "Music", music_last: "Last track", pause: "Pause", play: "Play", stop: "Stop", spk_mute: "Mute speaker",
       nothing: "Nothing is playing", playing: "Playing", paused: "Paused",
       r_finished: "finished", r_stopped: "stopped", r_error: "playback error (the speaker's DLNA renderer reported an error)", r_interrupted: "replaced by another track",
       pending: "Speaker side not built yet (wake word on the speaker is pending)",
@@ -110,7 +112,7 @@
       intercom: by("switch", "intercom_open"), song: by("switch", "song_song"),
       mic_status: by("sensor", "mic_status"), wake: by("binary_sensor", "wake"),
       speaker: by("media_player", "speaker"), mute: by("switch", "mute"), volume: by("number", "volume"),
-      dlna: by("switch", "dlna"), airplay: by("switch", "airplay"), bluetooth: by("switch", "bluetooth"),
+      dlna: by("switch", "dlna"), airplay: by("switch", "airplay"), bluetooth: by("switch", "bluetooth"), adb_dong: by("button", "dong_adb"),
       device_id: mine.length ? reg[mine[0]].device_id : null,
     };
   }
@@ -177,13 +179,15 @@
       conn[k] = { entity: ent[k] || null, present: !!ent[k], available: co, on: co ? (cs.state === "on" ? true : (cs.state === "off" ? false : null)) : null,
                   note: (cs && cs.attributes && cs.attributes.renderer) || "" };
     });
+    // Nút «Đóng ADB mạng» (button.r1_dong_adb): chỉ bấm được khi chủ máy xác nhận ở hộp thoại nêu ưu/nhược.
+    var adbDong = { entity: ent.adb_dong || null, present: !!ent.adb_dong };
     var wst = stateOf(hass, ent.wake);
     var wa = (wst && wst.attributes) || {};
     var wake = { entity: ent.wake || null, present: !!ent.wake, on: !!wst && wst.state === "on",
                  pending: wa.phia_loa === "CHO_PHIA_LOA", mode: wa.che_do || mic.mode };
     return {
       found: !!(ent.intercom || ent.mic_status || ent.speaker), mic: mic, talk: talk, intercom: intercom, song: song, volume: vol,
-      music: music, always: always, mute: mute, conn: conn, wake: wake, deviceId: ent.device_id,
+      music: music, always: always, mute: mute, conn: conn, adbDong: adbDong, wake: wake, deviceId: ent.device_id,
       showEq: config.show_eq !== false,
     };
   }
@@ -273,7 +277,8 @@
         '<section data-conn-sec style="display:none"><b>' + esc(t.conn) + "</b>" +
         ["dlna", "airplay", "bluetooth"].map(function (k) {
           return '<div class="row" data-conn-row="' + k + '"><label>' + esc(t[k]) + '</label><ha-switch data-conn="' + k + '"></ha-switch></div>';
-        }).join("") + '<div class="tip" data-conn-note></div></section>' +
+        }).join("") + '<div class="row" data-adb-row style="display:none"><button class="sec" data-adb-dong>' + esc(t.adb_dong) + "</button></div>" +
+        '<div class="tip" data-conn-note></div></section>' +
         '<div class="note" data-pending style="display:none">' + esc(t.pending) + "</div>" +
         '<section><div class="row"><span>' + esc(t.music) + ': <span data-music-text></span></span>' +
         '<span><button class="sec" data-pause>' + esc(t.pause) + '</button> ' +
@@ -341,6 +346,10 @@
       var gs = root.querySelector("[data-nghe-gain]");
       if (gs) gs.addEventListener("input", function () { self._datGain(Number(gs.value)); });
       on("[data-nghe]", function () { if (self._ng) self._ngDong(); else self._ngMo(); });
+      on("[data-adb-dong]", function () {
+        var m = now().adbDong;
+        if (m.present && window.confirm(self._t.adb_confirm)) self._call("button", "press", { entity_id: m.entity });
+      });
       root.querySelectorAll("[data-conn]").forEach(function (cs) {
         cs.addEventListener("change", function () {
           var c = now().conn[cs.dataset.conn];
@@ -697,7 +706,9 @@
       if (sw) { sw.disabled = !m.mute.available; sw.checked = m.mute.on === true; }
       var csec = q("[data-conn-sec]");
       if (csec) {
-        var coAi = ["dlna", "airplay", "bluetooth"].some(function (k) { return m.conn[k].present; });
+        var coAi = ["dlna", "airplay", "bluetooth"].some(function (k) { return m.conn[k].present; }) || m.adbDong.present;
+        var adbRow = q("[data-adb-row]");
+        if (adbRow) adbRow.style.display = m.adbDong.present ? "" : "none";
         csec.style.display = coAi ? "" : "none";
         ["dlna", "airplay", "bluetooth"].forEach(function (k) {
           var row = q('[data-conn-row="' + k + '"]'), c = m.conn[k], cs = q('[data-conn="' + k + '"]');

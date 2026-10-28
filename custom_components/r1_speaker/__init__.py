@@ -38,6 +38,8 @@ from .den import R1Lights, dang_ky_dich_vu as dang_ky_dich_vu_den
 from .adb_client import AdbDevice
 from .cai_ung_dung import BoCai
 from .he_thong import HeThongLoa
+from .den_apk import ApkLights, LightsRouter
+from .tu_dong_dong_adb import TuDongDongAdb
 from .tu_ket_noi import TuKetNoi
 from .den_adb import AdbLights
 from .dam_thoai import R1Talk
@@ -48,7 +50,7 @@ from .intercom import IntercomView, MicView, R1Intercom, go2rtc_source, wake_end
 from .mic import R1Mic
 from .mic_server import R1MicServer
 from .playback import R1Playback
-from .settings import (adb_settings, DuplexSettings, TalkSettings, agc_settings, cong_nghe_trong, limiter_settings, mic_host_hieu_luc, noise_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
+from .settings import (adb_settings, adb_tu_dong_dong, DuplexSettings, TalkSettings, agc_settings, cong_nghe_trong, limiter_settings, mic_host_hieu_luc, noise_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
                        speaker_port, wake_mode)
 from .song_cong import DuplexView, R1Duplex
 
@@ -258,7 +260,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
     # Đèn: hiệu ứng chạy trên loa qua ADB (adb-server nếu có, không thì nối thẳng); xem den_adb.py.
     adb_server, adb_mode = adb_settings(entry)
     adb_dev = AdbDevice(speaker_host(entry), ADB_PORT, adb_server, adb_mode)
-    sink = AdbLights(adb_dev)
+    # Đèn: ADB (hiệu ứng tự do) hoặc APK (hiệu ứng firmware, không cần ADB) theo chế độ «đóng ADB» người dùng chọn; ADB lỗi thì APK dự phòng.
+    sink = LightsRouter(AdbLights(adb_dev), ApkLights(coordinator.mic_server), lambda: adb_tu_dong_dong(entry))
     # Bộ cài ứng dụng dùng CHUNG AdbDevice với đèn (adbd của loa chỉ nhận một kết nối: dùng chung kết nối đã mở).
     def _cau_hinh_apk():
         cong, khoa = mic_listen(entry)
@@ -268,6 +271,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
     # APK cài NGOÀI tích hợp (máy tính, adb tay) chưa biết HA ở đâu: HA tự cấu hình khi thấy APK đã cài mà chưa nối về.
     coordinator.tu_ket_noi = TuKetNoi(coordinator.apps, coordinator.mic_server)
     entry.async_create_background_task(hass, coordinator.tu_ket_noi.chay(), "r1_speaker tự kết nối APK")
+    # Chế độ «đóng ADB» (người dùng chọn ở tuỳ chọn): chỉ đóng khi APK đã nối ổn định; đọc tuỳ chọn mỗi nhịp nên bật/tắt có hiệu lực ngay.
+    entry.async_create_background_task(
+        hass, TuDongDongAdb(adb_dev, coordinator.mic_server, lambda: adb_tu_dong_dong(entry)).chay(), "r1_speaker tự đóng ADB")
     coordinator.he_thong = HeThongLoa(hass, entry, adb_dev, sink)        # đèn ưu tiên số 1, đọc thông tin số 2
     coordinator.lights = R1Lights(hass, entry, sink=sink)
     sink.khi_roi = coordinator.lights.ap_dung_lai        # phiên đèn đứt (loa khởi động lại, ADB rớt) thì áp lại

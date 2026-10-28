@@ -35,6 +35,9 @@ def chuan_hoa_shell(lenh: str) -> str:
     """Đổi ``pm …`` thành ``/system/bin/pm …`` để adbd của loa không từ chối dịch vụ."""
     return _PM_DAU_LENH.sub("/system/bin/pm", lenh, count=1)
 TIMEOUT_S = 5.0
+#: Đóng ADB mạng: chờ adbd khởi động lại rồi thử nối cổng mạng ngần ấy lần, mỗi lần cách nhau ngần ấy giây. Còn nghe ở LẦN NÀO cũng là chưa đóng.
+DONG_CHO_S = 1.5
+DONG_KIEM_LAN = 3
 #: Nối thẳng: giữ kết nối thêm ngần này giây sau luồng cuối cùng rồi mới nhả (adbd đôi khi im lặng với kết nối mở NGAY sau
 #: khi đóng; giữ thêm cũng tránh nối đi nối lại khi hai lệnh đến sát nhau).
 IDLE_S = 8.0
@@ -404,6 +407,36 @@ class AdbDevice:
             with contextlib.suppress(Exception):
                 await s.close()
         self.duong = None
+
+    async def con_nghe_mang(self) -> bool:
+        """Cổng ADB mạng của loa còn nhận kết nối TCP không (chỉ thử bắt tay TCP, không nói giao thức ADB)."""
+        try:
+            _r, w = await asyncio.wait_for(asyncio.open_connection(self.host, self.port), 2.0)
+        except (OSError, TimeoutError):
+            return False
+        w.close()
+        with contextlib.suppress(OSError):
+            await w.wait_closed()
+        return True
+
+    async def dong_adb_mang(self) -> None:
+        """Đóng ADB MẠNG của loa: dịch vụ ``usb:`` của adbd (như ``adb usb``) đưa adbd về chỉ-USB và khởi động lại nó.
+
+        Chỉ có tác dụng tới lần khởi động lại SAU của loa (init dựng lại cổng 5555 lúc khởi động: ``persist.adb.tcp.port`` rỗng,
+        đo 28/10/2026), nên rút điện cắm lại là mở lại được. Không tin lời adbd: sau lệnh phải THỬ nối cổng mạng, còn nghe ở
+        bất kỳ lần nào thì báo lỗi (loa không cho đóng từ xa) chứ không nói «đã đóng»."""
+        s = await self.open("usb:")
+        try:
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(s.read_all(), 5)
+        finally:
+            with contextlib.suppress(Exception):
+                await s.close()
+        self.duong = None
+        for _ in range(DONG_KIEM_LAN):
+            await asyncio.sleep(DONG_CHO_S)
+            if await self.con_nghe_mang():
+                raise AdbError("adbd vẫn còn nghe cổng mạng sau lệnh đóng: loa này không cho đóng ADB từ xa")
 
     async def push(self, data: bytes, remote: str, mode: int = 0o755) -> None:
         """Đẩy tệp bằng giao thức sync (SEND / DATA / DONE)."""

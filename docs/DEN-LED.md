@@ -25,6 +25,22 @@ hay thông số là thêm dữ liệu, không sửa giao diện.
 * **Không cần APK** cho đèn (APK chỉ còn lo mic, âm lượng, đèn theo nhạc của firmware). Không cần máy chủ quyền shell.
 * **Không bắt buộc có adb-server**: custom tự nói giao thức ADB, nối thẳng tới loa nếu không có server (mục 2).
 
+## 0b. Đèn không cần ADB (chế độ «đóng ADB», từ 0.7.0)
+
+Khi chọn chế độ «đóng ADB» (tuỳ chọn tích hợp, hoặc nút «Đóng ADB mạng»), đèn **tự chuyển sang đường APK**: HA gửi khung `den_hieu_ung` xuống APK, APK gọi dịch vụ
+`msgcenter` của firmware chạy hiệu ứng có sẵn trong `/system/etc/lights_effects.conf` (`den_firmware.py`, `den_apk.py`). Đường này **đã xác nhận bằng mắt
+22/10/2026** (đáy lên màu), nhưng khác ADB:
+
+| | ADB (mặc định) | APK (đóng ADB) |
+|---|---|---|
+| Màu | RGB tuỳ ý | Làm tròn về 7 màu của firmware (đỏ, lục, lam, cam, tím, lục lam, trắng) |
+| Độ sáng, tốc độ | Chỉnh được | Không (độ sáng 0 = tắt; tốc độ chỉ chỉnh được với hiệu ứng HA tự đổi màu) |
+| Thở, chạy đuổi viền | Có, tuỳ thông số | Do firmware tự lặp, không chỉnh thông số |
+| Nhấp nháy, nhịp tim, chớp, pháo hoa, cầu vồng, sao chổi | Chạy trên loa | HA đổi lần lượt màu firmware (bước ≥ 0,3 giây), sao chổi/xoay chỉ xấp xỉ bằng đổi màu |
+| Đáy + viền cùng lúc | Có | Không: firmware chỉ giữ MỘT hiệu ứng; đáy đang sáng thì ưu tiên đáy |
+
+Chế độ «giữ ADB» vẫn dùng ADB trước; ADB lỗi mà APK sẵn sàng (APK báo `che_do=firmware`) thì tự dùng APK. APK bản cũ không báo nên bị coi là chưa sẵn sàng.
+
 ## 1. Phần cứng (đã kiểm, chủ máy xác nhận bằng mắt)
 
 | Đèn | Số đèn | Mặt nạ `led_color` | Màu |

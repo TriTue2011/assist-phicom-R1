@@ -286,3 +286,44 @@ async def test_hello_im_lang_het_gio_thi_dong(dau_nhan, monkeypatch):
     assert await asyncio.wait_for(reader.read(), 3) == b""
     assert not server.receiving
     writer.close()
+
+
+# ── Đèn firmware: APK báo trạng thái, HA gửi hiệu ứng ────────────────────────────────────
+
+async def test_den_trang_thai_chi_san_sang_khi_apk_bao_che_do_firmware_va_het_khi_dut(dau_nhan):
+    mic, server, _ = dau_nhan
+    reader, writer = await noi(server.port)
+    writer.write(hello())
+    await writer.drain()
+    await cho(lambda: server.receiving)
+    assert server.den_san_sang is None
+    writer.write(khung_json({"type": "den_trang_thai", "san_sang": True}))      # APK cũ: không có che_do → chưa sẵn sàng
+    await writer.drain()
+    await asyncio.sleep(0.1)
+    assert server.den_san_sang is False
+    writer.write(khung_json({"type": "den_trang_thai", "san_sang": True, "che_do": "firmware"}))
+    await writer.drain()
+    await cho(lambda: server.den_san_sang is True)
+    writer.close()
+    await cho(lambda: not server.receiving)
+    assert server.den_san_sang is None
+
+
+async def test_gui_hieu_ung_gui_khung_dung_dinh_dang_va_tu_choi_id_ngoai_danh_sach(dau_nhan):
+    mic, server, _ = dau_nhan
+    with pytest.raises(ConnectionError):
+        await server.gui_hieu_ung(501)                                            # loa chưa nối
+    reader, writer = await noi(server.port)
+    writer.write(hello())
+    await writer.drain()
+    await cho(lambda: server.receiving)
+    for xau in (999, 0, -1, True, "501", None):
+        with pytest.raises(ValueError):
+            await server.gui_hieu_ung(xau)
+    await server.gui_hieu_ung(501)
+    n = int.from_bytes(await asyncio.wait_for(reader.readexactly(4), 3), "big")
+    assert json.loads(await reader.readexactly(n)) == {"type": "den_hieu_ung", "id": 501}
+    await server.hoi_den()
+    n = int.from_bytes(await asyncio.wait_for(reader.readexactly(4), 3), "big")
+    assert json.loads(await reader.readexactly(n)) == {"type": "den_hoi"}
+    writer.close()

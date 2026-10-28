@@ -96,6 +96,8 @@ class FakeAdbd:
         self.dang_noi = 0
         self.so_ket_noi = 0
         self.dong_luong: list[str] = []
+        self.srv = None                  # máy chủ đang nghe (test gán) để giả lập «usb:» đóng cổng mạng
+        self.dong_duoc = True            # False: adbd bỏ qua «usb:» và vẫn nghe (loa không cho đóng từ xa)
 
     @staticmethod
     def _gui(w, cmd, a0, a1, data=b""):
@@ -154,6 +156,11 @@ class FakeAdbd:
                         continue
                     luong[a0] = {"remote": nxt, "dich": dich, "sync": b""}
                     self._gui(w, A_OKAY, nxt, a0)
+                    if dich == "usb:":
+                        self._gui(w, A_WRTE, nxt, a0, b"restarting in USB mode\n")
+                        self._gui(w, A_CLSE, nxt, a0)
+                        if self.dong_duoc and self.srv is not None:
+                            asyncio.get_running_loop().call_later(0.05, self.srv.close)   # adbd khởi động lại KHÔNG nghe mạng nữa
                     if dich.startswith("shell:"):
                         self._gui(w, A_WRTE, nxt, a0, f"ra:{dich[6:]}".encode())
                         self._gui(w, A_CLSE, nxt, a0)
@@ -181,6 +188,7 @@ class FakeAdbd:
 
 @pytest.fixture(autouse=True)
 def _nhanh(monkeypatch):
+    monkeypatch.setattr(adb_client, "DONG_CHO_S", 0.2)
     monkeypatch.setattr(adb_client, "TIMEOUT_S", 1.5)
     monkeypatch.setattr(adb_client, "IDLE_S", 0.2)
     monkeypatch.setattr(adb_client, "THU_LAI_S", 0.05)
@@ -192,6 +200,7 @@ async def may():
     fs, fa = FakeServer(), FakeAdbd()
     s1, p1 = await _cong_nghe(fs.handle)
     s2, p2 = await _cong_nghe(fa.handle)
+    fa.srv = s2
     yield fs, p1, fa, p2
     for s in (s1, s2):
         s.close()
@@ -394,3 +403,23 @@ async def test_mo_luong_bi_tu_choi_van_nha_ket_noi_cho_client_khac(may, monkeypa
             break
         await asyncio.sleep(0.05)
     assert fa.dang_noi == 0
+
+
+async def test_dong_adb_mang_gui_usb_va_xac_nhan_bang_cach_thu_noi(may):
+    """Nút «Đóng ADB»: gửi dịch vụ usb:, rồi THỬ nối cổng mạng: không nối được mới là đã đóng."""
+    _fs, _p1, fa, p2 = may
+    d = _loa(p2, None, "direct")
+    assert await d.con_nghe_mang() is True
+    await d.dong_adb_mang()
+    assert "usb:" in fa.lenh and d.duong is None
+    assert await d.con_nghe_mang() is False
+
+
+async def test_dong_adb_mang_khong_noi_da_dong_khi_adbd_van_nghe(may):
+    """Loa bỏ qua usb: (vẫn nghe mạng): phải báo lỗi chứ không được nói «đã đóng»."""
+    _fs, _p1, fa, p2 = may
+    fa.dong_duoc = False
+    d = _loa(p2, None, "direct")
+    with pytest.raises(AdbError, match="không cho đóng"):
+        await d.dong_adb_mang()
+    assert await d.con_nghe_mang() is True

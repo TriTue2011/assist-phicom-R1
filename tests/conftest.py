@@ -119,6 +119,9 @@ def _khong_adb_that(monkeypatch):
         return n
 
     monkeypatch.setattr("custom_components.r1_speaker.AdbLights", tao)
+    # Bộ chọn đường đèn (ADB/APK) cũng được thay bằng sink ADB giả: test tích hợp không dựng đường đèn thật. Test của bộ chọn
+    # (``test_den_apk``) tự dựng ``LightsRouter`` với ADB và APK giả.
+    monkeypatch.setattr("custom_components.r1_speaker.LightsRouter", lambda adb, apk, dong: adb)
 
 
 @pytest.fixture(autouse=True)
