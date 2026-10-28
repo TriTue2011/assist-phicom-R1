@@ -186,3 +186,60 @@ async def test_bat_lai_vong_hoi_ngay_sau_khi_huy_khong_cho_tac_vu_cu_xong(hass, 
     ent._bat_dau_cham()                                    # phát lại ngay, chưa có lượt chờ nào xen vào
     assert ent._cham is not cu and ent._cham.cancelling() == 0
     ent._huy_cham()
+
+
+async def test_stop_renderer_bo_qua_lenh_dau_thi_tu_gui_lai(hass, r1, dmr):
+    """Chủ máy 28/10/2026: «Stop không được ngay, phải stop lần 2, 2–3 lần». Renderer bỏ qua Stop khi đang nạp luồng: thực thể phải tự gửi lại."""
+    r1.state["dlna_open"] = False
+    await _them(hass, r1)
+    await _phat(hass)
+    so_stop = {"n": 0}
+    goc = dmr._ctrl_handler
+
+    def bo_qua_hai_lan_dau(svc):
+        h = goc(svc)
+
+        async def handler(request):
+            if request.headers.get("SOAPAction", "").strip('"').endswith("#Stop"):
+                so_stop["n"] += 1
+                if so_stop["n"] <= 2:                                  # nhận nhưng KHÔNG dừng (vẫn PLAYING)
+                    return await h_phat_dung_yen(request)
+            return await h(request)
+        return handler
+
+    async def h_phat_dung_yen(request):
+        from aiohttp import web
+        return web.Response(text=('<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
+                                  's:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:StopResponse '
+                                  'xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"></u:StopResponse></s:Body></s:Envelope>'),
+                            content_type="text/xml")
+
+    # chèn bộ xử lý lỗi vào các tuyến điều khiển của renderer giả
+    for tuyen in dmr._runner.app.router.routes():
+        if tuyen.method == "POST" and tuyen.resource.canonical.endswith("/avt/ctrl"):
+            tuyen._handler = bo_qua_hai_lan_dau("AVT")
+    with mock.patch.object(r1_mp, "STOP_CHO_XAC_NHAN", 0.3):
+        await hass.services.async_call("media_player", "media_stop", {"entity_id": LOA}, blocking=True)
+    assert so_stop["n"] == 3, "phải tự gửi lại Stop tới khi renderer dừng"
+    assert hass.states.get(LOA).state == "idle"
+
+
+async def test_hoi_trang_thai_hong_thoang_qua_khong_bao_da_dung(hass, r1, dmr):
+    """«Đang phát lại dừng» (chủ máy 28/10/2026): loa R1 yếu trả lời trễ một lần thì thực thể báo «lỗi, đã dừng» dù nhạc vẫn chạy. Phải hỏng 3 lần
+    LIÊN TIẾP mới coi là lỗi; một lần hỏng rồi hỏi lại được thì vẫn «đang phát», không có idle_reason."""
+    r1.state["dlna_open"] = False
+    await _them(hass, r1)
+    await _phat(hass)
+    ent = hass.data[__import__("homeassistant.components.media_player", fromlist=["DATA_COMPONENT"]).DATA_COMPONENT].get_entity(LOA)
+    hien = dmr.enabled
+    dmr.enabled = lambda: False                                    # renderer không trả lời
+    await ent._doc()
+    await ent._doc()
+    assert hass.states.get(LOA).state == "playing" and "idle_reason" not in hass.states.get(LOA).attributes
+    dmr.enabled = hien                                             # hồi lại trước lần hỏng thứ ba
+    await ent._doc()
+    assert ent._loi_doc == 0 and hass.states.get(LOA).state == "playing"
+    dmr.enabled = lambda: False                                    # hỏng liên tiếp đủ 3 lần thì mới báo lỗi
+    for _ in range(3):
+        await ent._doc()
+    assert hass.states.get(LOA).state == "idle" and hass.states.get(LOA).attributes["idle_reason"] == "error"

@@ -58,6 +58,11 @@ SUGGESTED_OBJECT_ID = "r1_loa"
 # được (sai kẹt ~0,3 giây); chu kỳ lẻ làm pha đổi dần nên ước chính xác dần.
 CHAM_NHAC = 2.9
 CHAM_TIN = 1.0
+#: Stop: chờ renderer về idle tối đa ngần này giây mỗi lần; còn phát thì gửi lại (thêm tối đa ngần này lần).
+STOP_CHO_XAC_NHAN = 1.5
+STOP_GUI_LAI = 2
+#: Hỏi trạng thái renderer hỏng ngần này lần LIÊN TIẾP mới coi là loa mất/lỗi (một lần trễ thoáng qua của loa yếu không được báo «đã dừng»).
+LOI_DOC_TOI_DA = 3
 #: False: AI box đã gỡ → cổng nhạc 8082 không còn → không đăng ký dịch vụ nhạc.
 MUSIC_SERVICES = False
 
@@ -138,6 +143,7 @@ class R1Player(R1Entity, MediaPlayerEntity):
         self._nhanh = False                  # đang báo tin: hỏi lại trạng thái dày hơn
         self._cham: asyncio.Task | None = None
         self._dang_dong_bo = False           # một lượt đọc theo chu kỳ coordinator đang chạy
+        self._loi_doc = 0                    # số lần hỏi trạng thái hỏng LIÊN TIẾP
         self._uoc = UocViTri()               # vị trí chính xác hơn 1 giây từ RelTime nguyên giây
         self._ghi_luc = 0.0                  # lúc (đồng hồ đơn điệu) ghi trạng thái gần nhất
 
@@ -280,11 +286,15 @@ class R1Player(R1Entity, MediaPlayerEntity):
         try:
             tt = await self._dmr.async_doc()
         except R1DmrError as exc:
-            if self._tt.state != "idle":
-                _LOGGER.warning("%s: %s", self.entity_id, exc)
+            self._loi_doc += 1
+            if self._tt.state != "idle" and self._loi_doc >= LOI_DOC_TOI_DA:
+                _LOGGER.warning("%s: %s (hỏng %d lần liên tiếp)", self.entity_id, exc, self._loi_doc)
                 self._ly_do = "error"
                 self._ap_dung(TrangThaiDmr(state="idle", loi=True))
+            elif self._tt.state != "idle":
+                _LOGGER.debug("%s: hỏi trạng thái hỏng lần %d/%d: %s", self.entity_id, self._loi_doc, LOI_DOC_TOI_DA, exc)
             return None
+        self._loi_doc = 0
         self._ap_dung(tt)
         return tt
 
@@ -309,6 +319,8 @@ class R1Player(R1Entity, MediaPlayerEntity):
         while True:
             await asyncio.sleep(CHAM_TIN if self._nhanh else CHAM_NHAC)
             tt = await self._doc()
+            if tt is None and self._loi_doc and self._tt.state in ("playing", "buffering"):
+                continue                                    # lỗi thoáng qua: hỏi lại ở chu kỳ sau, chưa kết luận loa dừng
             if tt is None or tt.state not in ("playing", "buffering"):
                 return
 
@@ -325,12 +337,12 @@ class R1Player(R1Entity, MediaPlayerEntity):
 
     # ── lệnh ───────────────────────────────────────────────────────────────────
 
-    async def _lenh(self, viec, mong_doi: set[str]) -> None:
+    async def _lenh(self, viec, mong_doi: set[str], toi_da: float = 3.0) -> None:
         try:
             await viec()
         except R1DmrError as exc:
             raise HomeAssistantError(str(exc)) from exc
-        await self._cho_trang_thai(mong_doi)
+        await self._cho_trang_thai(mong_doi, toi_da)
 
     async def async_media_pause(self) -> None:
         await self._lenh(self._dmr.async_tam_dung, {"paused", "idle"})
@@ -339,8 +351,15 @@ class R1Player(R1Entity, MediaPlayerEntity):
         await self._lenh(self._dmr.async_tiep, {"playing", "buffering"})
 
     async def async_media_stop(self) -> None:
+        """Dừng hẳn. Renderer có thể bỏ qua Stop khi đang nạp luồng (TRANSITIONING) nên một lệnh không đủ — người dùng phải bấm Stop 2–3
+        lần (chủ máy 28/10/2026): kiểm loa đã idle chưa, chưa thì gửi lại (tối đa ``STOP_GUI_LAI`` lần thêm)."""
         self._ly_do = "stopped"
-        await self._lenh(self._dmr.async_dung, {"idle"})
+        for lan in range(STOP_GUI_LAI + 1):
+            await self._lenh(self._dmr.async_dung, {"idle"}, toi_da=STOP_CHO_XAC_NHAN)
+            if self._tt.state == "idle":
+                return
+            _LOGGER.warning("%s: renderer vẫn %s sau lệnh Stop (lần %d/%d) — gửi lại",
+                            self.entity_id, self._tt.state, lan + 1, STOP_GUI_LAI + 1)
 
     async def async_media_seek(self, position: float) -> None:
         await self._lenh(lambda: self._dmr.async_tua(position), {"playing", "buffering", "paused"})
