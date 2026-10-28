@@ -10,7 +10,7 @@ Kho này biến loa **Phicomm R1** thành một thiết bị đầy đủ của 
 > **Đọc trước khi làm theo.** Đây là dự án thử nghiệm. Phần lớn mã được kiểm bằng loa giả trên máy phát triển; các điểm đã kiểm trên **loa thật** và điểm **chưa kiểm** được ghi rõ ở từng mục và ở
 > [docs/PHAT-TRIEN.md](docs/PHAT-TRIEN.md). Cài ứng dụng lên loa và dùng ADB là việc **khó đảo ngược** với thiết bị của bạn: đọc phần *Quyền riêng tư và bảo mật* trước.
 
-**Giấy phép: CHỦ KHO CHỌN GIẤY PHÉP.** Kho chưa có tệp `LICENSE`; chủ kho phải chọn giấy phép trước khi công khai hoặc phân phối.
+**Giấy phép: [MIT](LICENSE)** cho mã của kho này (tích hợp `r1_speaker`, APK `vn.r1.bodam`, trang kết nối WiFi). Các ứng dụng gốc của hãng Phicomm đi kèm trong `custom_components/r1_speaker/apk/` (`autodlna.apk`, `unisound.apk.*`) **không** thuộc giấy phép này: chúng thuộc bản quyền của hãng, kho chỉ mang theo để cài lên loa của chính bạn.
 
 ## Cài đặt nhanh (chỉ cần HACS)
 
