@@ -135,6 +135,28 @@ async def test_hoan_im_di_va_bao_lai_sau_n_phut_voi_cung_noi_dung(hass, bt):
     await b.tat()                                                                      # không có gì đang kêu: không lỗi
 
 
+async def test_so_phut_hoan_la_thuc_the_so_va_hoan_khong_neu_so_phut_thi_dung_no(hass, bt):
+    """Mặc định 9 phút; chỉnh ở ``number.r1_hoan_bao_thuc`` thì nút trên thẻ, hành động phím và dịch vụ không nêu ``phut`` đều báo lại sau chừng đó."""
+    e, b, phat, sk, _ = bt
+    ent = er.async_get(hass).async_get_entity_id("number", "r1_speaker", f"{e.entry_id}_hoan_phut")
+    assert ent and float(hass.states.get(ent).state) == 9 and b.hoan_phut == 9
+    await hass.services.async_call("number", "set_value", {"entity_id": ent, "value": 4}, blocking=True)
+    assert b.hoan_phut == 4
+    await b.nhac_nho("Họp lúc 9 giờ", sau_phut=1)
+    await _tien(hass, 65)
+    for _ in range(100):
+        if phat:
+            break
+        await asyncio.sleep(0.01)
+    assert b.dang_keu is not None
+    await b.hoan()                                                                     # không nêu số phút
+    await hass.async_block_till_done()
+    (a,) = [x for x in b.ds.values() if x.get("noi_dung") == "Họp lúc 9 giờ"]
+    con = (ke_tiep(a, dt_util.now()) - dt_util.now()).total_seconds()
+    assert 3 * 60 < con <= 4 * 60 + 5, con                                             # báo lại sau ~4 phút, không phải 9
+    await b.tat()
+
+
 async def test_kieu_media_phat_dia_chi_am_thanh_va_het_gio_thi_dung_lai(hass, bt):
     e, b, phat, sk, _ = bt
     a = await b.dat(gio=(dt_util.now() + timedelta(minutes=1)).strftime("%H:%M"), loai="media", noi_dung="http://ha.local/chuong.mp3", lap_s=5, toi_da_s=30)

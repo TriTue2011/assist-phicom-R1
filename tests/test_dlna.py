@@ -268,3 +268,12 @@ async def test_loa_co_browse_media_de_hien_trong_trang_phuong_tien_va_duyet_duoc
     loa = hass.data[media_player.DATA_COMPONENT].get_entity(LOA)
     goc = await loa.async_browse_media()                                      # gốc: danh sách nguồn phương tiện của HA
     assert goc.media_content_id == "media-source://" and goc.can_expand
+
+
+async def test_loa_khai_assumed_state_de_hop_media_cua_ha_ve_rieng_ca_phat_tam_dung_va_dung(hass, r1, dmr):
+    """Giao diện HA chỉ vẽ MỘT nút phát/tạm dừng/dừng nếu thực thể hỗ trợ Tạm dừng (không có Stop); ``assumed_state`` làm nó vẽ riêng ba nút."""
+    from homeassistant.components.media_player import MediaPlayerEntityFeature as F
+    await _them(hass, r1)
+    at = hass.states.get(LOA).attributes
+    assert at["assumed_state"] is True
+    assert all(at["supported_features"] & f for f in (F.PLAY, F.PAUSE, F.STOP))

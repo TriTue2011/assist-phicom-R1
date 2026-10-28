@@ -1,15 +1,16 @@
-/* R1 — thẻ gộp có tab nhỏ: Đàm thoại / EQ / Cài đặt. Chỉ hiện một phần mỗi lúc, cách YouTube chia tab.
+/* R1 — thẻ gộp có tab nhỏ: Đàm thoại / EQ / Chức năng / Cài đặt. Chỉ hiện một phần mỗi lúc, cách YouTube chia tab.
  * Cấu hình: type: custom:r1-card (không tham số).
  *
  * Ba thẻ con được nạp bằng ĐƯỜNG DẪN đổi MỖI LẦN MỞ TRANG (/r1_speaker/b/<thời gian>/...) rồi đăng ký
  * dưới tên riêng (r1-*-card-n): trình duyệt/ứng dụng HA/proxy giữ bản cũ của URL cố định hàng giờ (có
  * lớp đệm còn bỏ qua cả tham số ?...), nên dùng thẳng ``<r1-talk-card>`` thì sửa xong vẫn thấy bản cũ.
  * Nếu vẫn nhận bản cũ thì dùng tạm thẻ cũ và ghi rõ ở cuối thẻ. */
-const BUILD = "2026-10-22.13";
+const BUILD = "2026-10-28.1";
 
 const TABS = [
   { id: "talk", tag: "r1-talk-card-n", ten: "Đàm thoại", cfg: { show_eq: false } },
   { id: "eq", tag: "r1-eq-card-n", ten: "EQ", cfg: {} },
+  { id: "chucnang", tag: "r1-chucnang-card-n", ten: "Chức năng", cfg: {} },
   { id: "settings", tag: "r1-settings-card-n", ten: "Cài đặt", cfg: { gop: true } },
 ];
 
@@ -81,17 +82,20 @@ class R1Card extends HTMLElement {
       bar.appendChild(b);
       this._btn[t.id] = b;
       const el = document.createElement(t.tag);
-      el.setConfig({ type: "custom:" + t.tag, ...t.cfg });
+      el.setConfig(this._cfgCon(t));
       el.style.display = "none";
       this._body.appendChild(el);
       this._parts[t.id] = el;
     });
     this._body.insertBefore(bar, this._body.firstChild);
+    this._loaBar = document.createElement("div");
+    this._loaBar.className = "tabs loa";
+    this._body.insertBefore(this._loaBar, this._body.firstChild);
     const ver = document.createElement("div");
     ver.className = "ver";
     const cu = TABS.filter((x) => !x.tuoi).map((x) => x.id);
     const bd = (id) => (((window.R1_THE || {})[id] || {}).build || "?");
-    ver.textContent = "r1-card " + BUILD + " · đàm thoại " + bd("talk") + " · EQ " + bd("eq") + " · cài đặt " + bd("settings") +
+    ver.textContent = "r1-card " + BUILD + " · đàm thoại " + bd("talk") + " · EQ " + bd("eq") + " · cài đặt " + bd("settings") + " · chức năng " + bd("chucnang") +
       (cu.length ? " · DÙNG BẢN CŨ của: " + cu.join(", ") + " (lớp đệm chặn bản mới)" : "");
     this._body.appendChild(ver);
     if (this._hass) this._gan(this._hass);
@@ -111,7 +115,45 @@ class R1Card extends HTMLElement {
       this._btn[k].classList.toggle("sel", k === mo);
     });
   }
-  _gan(hass) { Object.values(this._parts).forEach((p) => (p.hass = hass)); }
+  /** Cấu hình thẻ con. ``device_id`` trong cấu hình thẻ gộp ghim MỘT loa cho cả ba tab; không ghim mà có nhiều loa thì EQ và
+   * Cài đặt theo loa đang chọn ở hàng chọn loa. Đàm thoại giữ cách chọn riêng của nó. */
+  _cfgCon(t) {
+    const dev = this._config.device_id || (t.id !== "talk" && this._dev) || null;
+    return { type: "custom:" + t.tag, ...t.cfg, ...(dev ? { device_id: dev } : {}) };
+  }
+  /** Các loa R1 của HA: [{id, ten}], xếp theo mã thiết bị (cùng thứ tự các thẻ con dùng để chọn loa đầu). Tên là tên thiết bị
+   * trong HA (đổi tên ở trang thiết bị thì thẻ theo); trùng tên thì thêm số thứ tự. */
+  _loa(hass) {
+    const reg = (hass && hass.entities) || {};
+    const ids = [...new Set(Object.values(reg).filter((e) => e && e.platform === "r1_speaker" && e.device_id).map((e) => e.device_id))].sort();
+    const ten = ids.map((id) => {
+      const d = (hass.devices || {})[id] || {};
+      return d.name_by_user || d.name || "Phicomm R1";
+    });
+    return ids.map((id, i) => ({ id, ten: ten.filter((x) => x === ten[i]).length > 1 ? ten[i] + " (" + (i + 1) + ")" : ten[i] }));
+  }
+  _capNhatLoa(hass) {
+    if (!this._loaBar) return;
+    const ds = this._config.device_id ? [] : this._loa(hass);
+    if (ds.length < 2) ds.length = 0;
+    if (ds.length && !ds.some((d) => d.id === this._dev)) this._dev = ds[0].id;
+    const sig = ds.map((d) => d.id + "|" + d.ten).join("\n") + "#" + this._dev;
+    if (sig === this._loaSig) return;
+    const doi = ds.length && this._devCon !== this._dev;       // loa đang chọn chưa được truyền cho thẻ con
+    this._loaSig = sig;
+    this._devCon = ds.length ? this._dev : undefined;
+    this._loaBar.textContent = "";
+    this._loaBar.style.display = ds.length ? "" : "none";
+    ds.forEach((d) => {
+      const b = document.createElement("button");
+      b.className = "tab" + (d.id === this._dev ? " sel" : "");
+      b.textContent = d.ten;
+      b.addEventListener("click", () => { this._dev = d.id; this._capNhatLoa(this._hass); });
+      this._loaBar.appendChild(b);
+    });
+    if (doi) TABS.filter((t) => t.id !== "talk").forEach((t) => this._parts[t.id].setConfig(this._cfgCon(t)));
+  }
+  _gan(hass) { Object.values(this._parts).forEach((p) => (p.hass = hass)); this._capNhatLoa(hass); }
   set hass(hass) { this._hass = hass; this._gan(hass); }
   getCardSize() { return 10; }
 }

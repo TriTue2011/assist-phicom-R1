@@ -125,6 +125,9 @@ class R1Player(R1Entity, MediaPlayerEntity):
     tạm dừng nhạc rồi phát lại sau (``giu_nhac``)."""
 
     _attr_translation_key = "speaker"
+    # Giao diện HA (``computeMediaControls``) chỉ vẽ MỘT nút phát/tạm dừng/dừng khi thực thể hỗ trợ Tạm dừng, nên hộp media không có Stop. Với
+    # ``assumed_state`` nó vẽ riêng Phát, Tạm dừng và Dừng (đã đối chiếu mã nguồn frontend, 28/10/2026; chủ máy: «không có nút stop nhỉ»).
+    _attr_assumed_state = True
     _attr_supported_features = (MediaPlayerEntityFeature.PLAY_MEDIA
                                 | MediaPlayerEntityFeature.MEDIA_ANNOUNCE
                                 | MediaPlayerEntityFeature.PAUSE

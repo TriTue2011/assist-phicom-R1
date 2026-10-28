@@ -14,7 +14,7 @@ from homeassistant.config_entries import ConfigEntry
 
 from .agc import AgcSettings, LimiterSettings
 from .noise_suppress import NoiseSettings
-from .const import ADB_SERVER_LOCAL, CONF_ADB_MODE, CONF_ADB_SERVER, CONF_ADB_TU_DONG, CONF_PHIM_MA, DEFAULT_ADB_MODE, DEFAULT_ADB_SERVER, DEFAULT_PHIM_MA
+from .const import ADB_SERVER_LOCAL, CONF_ADB_MODE, CONF_ADB_SERVER, CONF_ADB_TU_DONG, CONF_PHIM_MA, CONF_PHIM_NGUON, DEFAULT_ADB_MODE, DEFAULT_ADB_SERVER, DEFAULT_PHIM_MA, DEFAULT_PHIM_NGUON
 from .const import (CONF_WAKE_ENABLE, CONF_WAKE_SENSITIVITY, CONF_WAKE_WORD,
                     DEFAULT_WAKE_ENABLE, DEFAULT_WAKE_SENSITIVITY, DEFAULT_WAKE_WORD)
 from .const import (CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, CONF_AGC_TARGET_DB,
@@ -181,6 +181,12 @@ def phim_ma(entry: ConfigEntry) -> set[int]:
         if p.isdigit() and 1 <= int(p) <= 999 and len(ra) < 16:
             ra.add(int(p))
     return ra
+
+
+def phim_nguon(entry: ConfigEntry) -> str:
+    """``adb`` / ``apk`` / ``tat``; giá trị lạ rơi về mặc định."""
+    v = str(conf(entry, CONF_PHIM_NGUON, DEFAULT_PHIM_NGUON))
+    return v if v in ("adb", "apk", "tat") else DEFAULT_PHIM_NGUON
 
 
 def adb_tu_dong_dong(entry: ConfigEntry) -> bool:

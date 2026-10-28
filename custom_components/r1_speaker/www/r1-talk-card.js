@@ -26,9 +26,8 @@
       listening_tip_ha: "Mic loa gửi tiếng LIÊN TỤC về Home Assistant; HA đang dò từ đánh thức trong luồng đó.",
       sending_tip: "Tiếng mic đang được gửi về Home Assistant.",
       unknown_tip: "Không đọc được trạng thái mic — coi như mic có thể đang mở.",
-      busy: "Đang có phiên", mute: "Tắt mic", conn: "Kết nối loa (bật/tắt để dò lỗi phát nhạc)", dlna: "DLNA", airplay: "AirPlay", bluetooth: "Bluetooth",
-      bt_unknown: "Bluetooth chưa đọc được trạng thái (cần ADB)", adb_dong: "Đóng ADB mạng…",
-      adb_confirm: "Đóng ADB mạng của loa?\n\nƯU: không máy nào trong mạng nối được cổng 5555 (chặn botnet kiểu Kimwolf, kể cả quyền root).\nNHƯỢC: đèn tự do, cài ứng dụng, khởi động lại từ HA, thông tin hệ thống và công tắc Bluetooth ngừng chạy. Mic, âm lượng, phát nhạc, Dừng/Tắt tiếng vẫn dùng bình thường.\nMỞ LẠI: rút điện loa rồi cắm lại.", music: "Nhạc", music_last: "Bài vừa rồi", pause: "Tạm dừng", play: "Phát", stop: "Dừng", spk_mute: "Tắt tiếng loa",
+      busy: "Đang có phiên", mute: "Tắt mic",
+      err_short: "Lỗi phát", music_last: "Bài vừa rồi", pause: "Tạm dừng", play: "Phát", stop: "Dừng", spk_mute: "Tắt tiếng loa",
       nothing: "Không có nhạc đang phát", playing: "Đang phát", paused: "Đã tạm dừng",
       r_finished: "đã hết bài", r_stopped: "đã dừng", r_error: "lỗi phát (renderer DLNA của loa báo lỗi)", r_interrupted: "bị bài khác thay",
       pending: "Phía loa chưa có (từ đánh thức trên loa còn chờ)",
@@ -57,9 +56,8 @@
       listening_tip_ha: "The speaker microphone streams CONTINUOUSLY to Home Assistant; HA listens for the wake word in that stream.",
       sending_tip: "Microphone audio is being sent to Home Assistant.",
       unknown_tip: "Mic status unreadable — assume the mic may be open.",
-      busy: "Session in progress", mute: "Mute mic", conn: "Speaker connections (toggle to troubleshoot playback)", dlna: "DLNA", airplay: "AirPlay", bluetooth: "Bluetooth",
-      bt_unknown: "Bluetooth state unreadable (needs ADB)", adb_dong: "Close network ADB…",
-      adb_confirm: "Close the speaker's network ADB?\n\nPRO: no machine on the network can reach port 5555 (blocks Kimwolf-style botnets, root included).\nCON: free-form lights, app install, reboot from HA, system info and the Bluetooth switch stop working. Mic, volume, playback, Stop/Mute keep working.\nRE-OPEN: unplug the speaker and plug it back in.", music: "Music", music_last: "Last track", pause: "Pause", play: "Play", stop: "Stop", spk_mute: "Mute speaker",
+      busy: "Session in progress", mute: "Mute mic",
+      err_short: "Playback error", music_last: "Last track", pause: "Pause", play: "Play", stop: "Stop", spk_mute: "Mute speaker",
       nothing: "Nothing is playing", playing: "Playing", paused: "Paused",
       r_finished: "finished", r_stopped: "stopped", r_error: "playback error (the speaker's DLNA renderer reported an error)", r_interrupted: "replaced by another track",
       pending: "Speaker side not built yet (wake word on the speaker is pending)",
@@ -112,7 +110,6 @@
       intercom: by("switch", "intercom_open"), song: by("switch", "song_song"),
       mic_status: by("sensor", "mic_status"), wake: by("binary_sensor", "wake"),
       speaker: by("media_player", "speaker"), mute: by("switch", "mute"), volume: by("number", "volume"),
-      dlna: by("switch", "dlna"), airplay: by("switch", "airplay"), bluetooth: by("switch", "bluetooth"), adb_dong: by("button", "dong_adb"),
       device_id: mine.length ? reg[mine[0]].device_id : null,
     };
   }
@@ -171,23 +168,13 @@
     var mst = stateOf(hass, ent.mute);
     var mute = { entity: ent.mute || null, present: !!ent.mute, available: isUp(mst),
                  on: isUp(mst) ? mst.state === "on" : null };
-    var conn = {};
-    ["dlna", "airplay", "bluetooth"].forEach(function (k) {
-      var cs = stateOf(hass, ent[k]);
-      // «unknown» (ví dụ Bluetooth chưa đọc được qua ADB) vẫn cho bấm lệnh; chỉ «unavailable» mới khoá.
-      var co = !!cs && cs.state !== "unavailable";
-      conn[k] = { entity: ent[k] || null, present: !!ent[k], available: co, on: co ? (cs.state === "on" ? true : (cs.state === "off" ? false : null)) : null,
-                  note: (cs && cs.attributes && cs.attributes.renderer) || "" };
-    });
-    // Nút «Đóng ADB mạng» (button.r1_dong_adb): chỉ bấm được khi chủ máy xác nhận ở hộp thoại nêu ưu/nhược.
-    var adbDong = { entity: ent.adb_dong || null, present: !!ent.adb_dong };
     var wst = stateOf(hass, ent.wake);
     var wa = (wst && wst.attributes) || {};
     var wake = { entity: ent.wake || null, present: !!ent.wake, on: !!wst && wst.state === "on",
                  pending: wa.phia_loa === "CHO_PHIA_LOA", mode: wa.che_do || mic.mode };
     return {
       found: !!(ent.intercom || ent.mic_status || ent.speaker), mic: mic, talk: talk, intercom: intercom, song: song, volume: vol,
-      music: music, always: always, mute: mute, conn: conn, adbDong: adbDong, wake: wake, deviceId: ent.device_id,
+      music: music, always: always, mute: mute, wake: wake, deviceId: ent.device_id,
       showEq: config.show_eq !== false,
     };
   }
@@ -206,6 +193,10 @@
     "button.sec{background:transparent;color:inherit}",
     "button.noi{background:var(--error-color,#db4437);color:#fff}",
     "button[disabled]{opacity:.45;cursor:not-allowed}",
+    ".ctl{display:grid;place-items:center;width:36px;height:36px;padding:0;border:0;border-radius:50%;color:var(--primary-text-color);background:transparent;--mdc-icon-size:22px}",
+    ".ctl.main{width:42px;height:42px;margin:0 2px;color:var(--text-primary-color,#fff);background:var(--primary-color,#03a9f4);--mdc-icon-size:26px}",
+    ".ctl.stop{color:var(--error-color,#db4437)}", ".ctl.on{color:var(--primary-color,#03a9f4)}",
+    ".mus .row{justify-content:flex-start}", ".mt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.9em;opacity:.85}",
     // Nhấn GIỮ trên màn hình cảm ứng: không có touch-action:none thì trình duyệt điện thoại bắt đầu cuộn/menu
     // giữ lâu và HUỶ thao tác (pointercancel) ngay, nên «giữ để nói» không giữ được.
     "button[data-hold]{touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}",
@@ -219,6 +210,11 @@
     return String(s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
     });
+  }
+
+  /* Nút chỉ có biểu tượng, cùng bộ ``mdi:`` và kiểu nút ``.ctl`` của thẻ YouTube (tritue-youtube-player-card); chữ nằm ở title/aria-label. */
+  function icBtn(cls, attr, icon, label) {
+    return '<button class="' + cls + '" ' + attr + ' title="' + esc(label) + '" aria-label="' + esc(label) + '"><ha-icon icon="' + icon + '"></ha-icon></button>';
   }
 
   class R1TalkCard extends (typeof HTMLElement !== "undefined" ? HTMLElement : Object) {
@@ -274,17 +270,9 @@
         '<div class="row" data-ng-row style="display:none"><button class="sec" data-nghe>' + esc(t.ng_on) + "</button>" +
         '<span data-ng-muc class="muc"></span></div><div class="tip" data-ng-status></div>' +
         '<div class="row"><label>' + esc(t.mute) + '</label><ha-switch data-mute></ha-switch></div>' +
-        '<section data-conn-sec style="display:none"><b>' + esc(t.conn) + "</b>" +
-        ["dlna", "airplay", "bluetooth"].map(function (k) {
-          return '<div class="row" data-conn-row="' + k + '"><label>' + esc(t[k]) + '</label><ha-switch data-conn="' + k + '"></ha-switch></div>';
-        }).join("") + '<div class="row" data-adb-row style="display:none"><button class="sec" data-adb-dong>' + esc(t.adb_dong) + "</button></div>" +
-        '<div class="tip" data-conn-note></div></section>' +
         '<div class="note" data-pending style="display:none">' + esc(t.pending) + "</div>" +
-        '<section><div class="row"><span>' + esc(t.music) + ': <span data-music-text></span></span>' +
-        '<span><button class="sec" data-pause>' + esc(t.pause) + '</button> ' +
-        '<button class="sec" data-play>' + esc(t.play) + '</button> ' +
-        '<button class="sec" data-stop>' + esc(t.stop) + "</button></span></div>" +
-        '<div class="row" data-spk-mute-row style="display:none"><label>' + esc(t.spk_mute) + '</label><ha-switch data-spk-mute></ha-switch></div></section>' +
+        '<section class="mus"><div class="row">' + icBtn("ctl main", "data-pp", "mdi:play", t.play) +
+        icBtn("ctl stop", "data-stop", "mdi:stop", t.stop) + icBtn("ctl", "data-spk-mute", "mdi:volume-high", t.spk_mute) + '<span class="mt" data-music-text></span></div></section>' +
         '<div class="eq" data-eq></div></ha-card>';
     }
 
@@ -315,22 +303,18 @@
         if (!m.talk.enabled && !self._dtLuon) return;
         self._dtLuonDoi();
       });
-      on("[data-pause]", function () {
+      on("[data-pp]", function () {
         var m = now();
         if (m.music.canPause) self._call("media_player", "media_pause", { entity_id: m.music.entity });
+        else if (m.music.canPlay) self._call("media_player", "media_play", { entity_id: m.music.entity });
       });
       on("[data-stop]", function () {
         var m = now();
         if (m.music.canStop) self._call("media_player", "media_stop", { entity_id: m.music.entity });
       });
-      var sm = root.querySelector("[data-spk-mute]");
-      if (sm) sm.addEventListener("change", function () {
+      on("[data-spk-mute]", function () {
         var m = now();
-        if (m.music.canMute) self._call("media_player", "volume_mute", { entity_id: m.music.entity, is_volume_muted: sm.checked });
-      });
-      on("[data-play]", function () {
-        var m = now();
-        if (m.music.canPlay) self._call("media_player", "media_play", { entity_id: m.music.entity });
+        if (m.music.canMute) self._call("media_player", "volume_mute", { entity_id: m.music.entity, is_volume_muted: !m.music.muted });
       });
       on("[data-dt-bat]", function () { if (self._dt) self._dtDong(); else self._dtMo(); });
       var ss = root.querySelector("[data-song-song]");
@@ -346,16 +330,6 @@
       var gs = root.querySelector("[data-nghe-gain]");
       if (gs) gs.addEventListener("input", function () { self._datGain(Number(gs.value)); });
       on("[data-nghe]", function () { if (self._ng) self._ngDong(); else self._ngMo(); });
-      on("[data-adb-dong]", function () {
-        var m = now().adbDong;
-        if (m.present && window.confirm(self._t.adb_confirm)) self._call("button", "press", { entity_id: m.entity });
-      });
-      root.querySelectorAll("[data-conn]").forEach(function (cs) {
-        cs.addEventListener("change", function () {
-          var c = now().conn[cs.dataset.conn];
-          if (c && c.available) self._call("switch", cs.checked ? "turn_on" : "turn_off", { entity_id: c.entity });
-        });
-      });
       var sw = root.querySelector("[data-mute]");
       if (sw) sw.addEventListener("change", function () {
         var m = now();
@@ -704,41 +678,34 @@
       hold.title = al.title = m.talk.reason ? t[m.talk.reason] : "";
       var sw = q("[data-mute]");
       if (sw) { sw.disabled = !m.mute.available; sw.checked = m.mute.on === true; }
-      var csec = q("[data-conn-sec]");
-      if (csec) {
-        var coAi = ["dlna", "airplay", "bluetooth"].some(function (k) { return m.conn[k].present; }) || m.adbDong.present;
-        var adbRow = q("[data-adb-row]");
-        if (adbRow) adbRow.style.display = m.adbDong.present ? "" : "none";
-        csec.style.display = coAi ? "" : "none";
-        ["dlna", "airplay", "bluetooth"].forEach(function (k) {
-          var row = q('[data-conn-row="' + k + '"]'), c = m.conn[k], cs = q('[data-conn="' + k + '"]');
-          if (row) row.style.display = c.present ? "" : "none";
-          if (cs) { cs.disabled = !c.available; cs.checked = c.on === true; }
-        });
-        var nt = [];
-        if (m.conn.dlna.note) nt.push("DLNA: " + m.conn.dlna.note);
-        if (m.conn.bluetooth.present && m.conn.bluetooth.available && m.conn.bluetooth.on === null) nt.push(t.bt_unknown);
-        q("[data-conn-note]").textContent = nt.join(" · ");
-      }
       q("[data-pending]").style.display = m.wake.pending && m.wake.mode === "speaker" ? "" : "none";
       var rf = q("[data-refused]");
       rf.style.display = m.mic.refused ? "" : "none";
       rf.textContent = m.mic.refused ? t.refused + ": " + (m.mic.lastRefusal || "") : "";
-      var mt = m.music.canPause ? t.playing : (m.music.canPlay ? t.paused : t.nothing);
-      var xt = mt;
-      if (m.music.title) xt += " — " + m.music.title;
-      if ((m.music.canPause || m.music.canPlay) && m.music.dur) {
-        xt += " (" + Math.floor(m.music.dur / 60) + ":" + ("0" + (m.music.dur % 60)).slice(-2) + ")";
-      } else if (!m.music.canPause && !m.music.canPlay && m.music.reason && t["r_" + m.music.reason]) {
-        xt = t.music_last + " " + t["r_" + m.music.reason];     // vì sao loa đang im: hết bài / người dùng dừng / lỗi
+      var mu = m.music;
+      var tip = mu.canPause ? t.playing : (mu.canPlay ? t.paused : t.nothing);
+      var xt = mu.title || "";
+      var loi = !mu.canPause && !mu.canPlay && mu.reason === "error";
+      if ((mu.canPause || mu.canPlay) && mu.dur) {
+        tip += " (" + Math.floor(mu.dur / 60) + ":" + ("0" + (mu.dur % 60)).slice(-2) + ")";
+      } else if (!mu.canPause && !mu.canPlay && mu.reason && t["r_" + mu.reason]) {
+        tip = t.music_last + " " + t["r_" + mu.reason];         // vì sao loa đang im: chỉ hiện chữ khi lỗi, còn lại nằm ở dấu chỉ
+        if (loi) xt = t.err_short;
       }
-      q("[data-music-text]").textContent = xt;
-      q("[data-pause]").disabled = !m.music.canPause;
-      q("[data-play]").disabled = !m.music.canPlay;
-      q("[data-stop]").disabled = !m.music.canStop;
-      var smr = q("[data-spk-mute-row]"), sms = q("[data-spk-mute]");
-      if (smr) smr.style.display = m.music.canMute ? "" : "none";
-      if (sms) sms.checked = m.music.muted;
+      var tx = q("[data-music-text]");
+      tx.textContent = xt; tx.title = tip; tx.classList.toggle("warn", loi);
+      var pp = q("[data-pp]");                                         // một nút, đổi biểu tượng như thẻ YouTube
+      pp.disabled = !(mu.canPause || mu.canPlay);
+      pp.firstChild.setAttribute("icon", mu.canPause ? "mdi:pause" : "mdi:play");
+      pp.title = pp.ariaLabel = mu.canPause ? t.pause : t.play;
+      q("[data-stop]").disabled = !mu.canStop;
+      var bm = q("[data-spk-mute]");
+      if (bm) {
+        bm.style.display = mu.canMute ? "" : "none";
+        bm.setAttribute("aria-pressed", mu.muted ? "true" : "false");
+        bm.classList.toggle("on", mu.muted);
+        bm.firstChild.setAttribute("icon", mu.muted ? "mdi:volume-off" : "mdi:volume-high");
+      }
       var ss = q("[data-song-song]");
       if (ss) { ss.disabled = !m.song.available; ss.checked = m.song.on; }
       var nt = q("[data-ss-note]");

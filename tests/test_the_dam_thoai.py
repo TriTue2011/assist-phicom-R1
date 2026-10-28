@@ -135,17 +135,16 @@ add("switch.r1_dam_thoai","intercom_open","off",{giu_mo:false});
 add("sensor.r1_trang_thai_mic","mic_status","nghe",{phien:null,che_do_tu_danh_thuc:"speaker",phia_loa:"da_ket_noi",so_lan_tu_choi:0});
 add("media_player.r1_loa","speaker","playing",{media_title:"<img src=x onerror=alert(1)>",supported_features:8,is_volume_muted:false});
 add("switch.r1_tat_mic","mute","off");
-add("switch.r1_dlna","dlna","on",{renderer:"đã nối (SSDP unicast)"}); add("switch.r1_airplay","airplay","off"); add("switch.r1_bluetooth","bluetooth","unknown");
 let loi=null; try{ card.hass=mk(); }catch(e){ loi=String(e); }
 const sr=card.shadowRoot, q=s=>sr.querySelector(s);
 const nghe={mic:q("[data-mic-text]").textContent, status:q("[data-mic]").dataset.status,
  holdDisabled:q("[data-hold]").disabled, alwaysDisabled:q("[data-always]").disabled,
- pauseDisabled:q("[data-pause]").disabled, playDisabled:q("[data-play]").disabled,
+ ppDisabled:q("[data-pp]").disabled, ppIcon:q("[data-pp] ha-icon").getAttribute("icon"),
  noTalkButton:!q("[data-talk]") && !q("[data-end]"), tipLoa:q("[data-mic-tip]").textContent};
 states["sensor.r1_trang_thai_mic"]={state:"nghe",attributes:{phien:null,che_do_tu_danh_thuc:"ha"}}; card.hass=mk();   // chế độ HA dò từ đánh thức
 nghe.tipHa=q("[data-mic-tip]").textContent;
 states["sensor.r1_trang_thai_mic"]={state:"nghe",attributes:{phien:null,che_do_tu_danh_thuc:"speaker",phia_loa:"da_ket_noi",so_lan_tu_choi:0}}; card.hass=mk();
-q("[data-pause]").click();                                          // tạm dừng nhạc (nút mic điện thoại có test riêng)
+q("[data-pp]").click();                                             // đang phát: nút chính là Tạm dừng (nút mic điện thoại có test riêng)
 // 3) Đang có phiên, mic đang gửi.
 states["sensor.r1_trang_thai_mic"]={state:"gui",attributes:{phien:"button",so_lan_tu_choi:1,tu_choi_gan_nhat:"x"}};
 states["media_player.r1_loa"]={state:"paused",attributes:{}};
@@ -153,42 +152,32 @@ card.hass=mk();
 const gui={mic:q("[data-mic-text]").textContent, status:q("[data-mic]").dataset.status,
  holdDisabled:q("[data-hold]").disabled, alwaysDisabled:q("[data-always]").disabled,
  holdTitle:q("[data-hold]").title, refused:q("[data-refused]").style.display!=="none",
- pauseDisabled:q("[data-pause]").disabled, playDisabled:q("[data-play]").disabled};
-q("[data-play]").click();
+ ppDisabled:q("[data-pp]").disabled, ppIcon:q("[data-pp] ha-icon").getAttribute("icon")};
+q("[data-pp]").click();                                             // đang tạm dừng: nút chính là Phát
 // 4) Trạng thái mic không đọc được: KHÔNG hiện như «Tắt».
 states["sensor.r1_trang_thai_mic"]={state:"unavailable",attributes:{}}; card.hass=mk();
 const lạ={mic:q("[data-mic-text]").textContent, status:q("[data-mic]").dataset.status};
 // 5) Loa im: thẻ nói VÌ SAO (hết bài / đã dừng / lỗi) thay vì chỉ «không có nhạc»; đang phát thì hiện thời lượng.
 states["media_player.r1_loa"]={state:"idle",attributes:{idle_reason:"finished"}}; card.hass=mk();
-const het=q("[data-music-text]").textContent;
+const tx=()=>({t:q("[data-music-text]").textContent, tip:q("[data-music-text]").title});
+const het=tx();
 states["media_player.r1_loa"]={state:"idle",attributes:{idle_reason:"error"}}; card.hass=mk();
-const hong=q("[data-music-text]").textContent;
+const hong=tx();
 states["media_player.r1_loa"]={state:"playing",attributes:{media_title:"A",media_duration:185}}; card.hass=mk();
-const dai=q("[data-music-text]").textContent;
+const dai=tx();
 states["media_player.r1_loa"]={state:"idle",attributes:{}}; card.hass=mk();
-const rong=q("[data-music-text]").textContent;
-// 6) Công tắc kết nối (DLNA / AirPlay / Bluetooth) để dò lỗi: hiện đủ ba hàng, ghi chú chẩn đoán, bấm thì gọi dịch vụ công tắc.
-const kn={sec:q("[data-conn-sec]").style.display!=="none",
- dlna:q('[data-conn="dlna"]').checked, airplay:q('[data-conn="airplay"]').checked,
- btOff:q('[data-conn="bluetooth"]').disabled, note:q("[data-conn-note]").textContent};
+const rong=tx();
 // 7) Nút Dừng (media_stop) và «Tắt tiếng loa» (volume_mute) cho loa R1.
 states["media_player.r1_loa"]={state:"playing",attributes:{media_title:"A",supported_features:8,is_volume_muted:false}}; card.hass=mk();
-const stop={disabled:q("[data-stop]").disabled, hang:q("[data-spk-mute-row]").style.display!=="none", bat:q("[data-spk-mute]").checked};
-const a0=calls.length; q("[data-stop]").click(); const sw=q("[data-spk-mute]"); sw.checked=true; sw.dispatchEvent(new Event("change"));
+const ap=()=>q("[data-spk-mute]").getAttribute("aria-pressed")==="true";
+const stop={disabled:q("[data-stop]").disabled, hang:q("[data-spk-mute]").style.display!=="none", bat:ap()};
+const a0=calls.length; q("[data-stop]").click(); q("[data-spk-mute]").click();
 stop.goi=JSON.stringify(calls.slice(a0)); calls.length=a0;
 states["media_player.r1_loa"]={state:"idle",attributes:{supported_features:8,is_volume_muted:true}}; card.hass=mk();
-stop.dungKhiIdle=q("[data-stop]").disabled; stop.tat=q("[data-spk-mute]").checked;
+stop.dungKhiIdle=q("[data-stop]").disabled; stop.tat=ap(); stop.icon=q("[data-spk-mute] ha-icon").getAttribute("icon");
 states["media_player.r1_loa"]={state:"playing",attributes:{supported_features:0}}; card.hass=mk();
-stop.anKhiKhongHoTro=q("[data-spk-mute-row]").style.display==="none";
-// 8) Nút «Đóng ADB mạng…»: hỏi xác nhận (nêu ưu/nhược); huỷ thì KHÔNG gọi gì, đồng ý thì bấm button.r1_dong_adb.
-add("button.r1_dong_adb","dong_adb","unknown"); card.hass=mk();
-const adb={hang:q("[data-adb-row]").style.display!=="none", chu:q("[data-adb-dong]").textContent};
-let hoi=""; window.confirm=function(m){hoi=m; return false;};
-const b0=calls.length; q("[data-adb-dong]").click(); adb.huy=calls.length-b0; adb.hoi=hoi;
-window.confirm=function(){return true;}; q("[data-adb-dong]").click(); adb.goi=JSON.stringify(calls.slice(b0)); calls.length=b0;
-const antes=calls.length; const cd=q('[data-conn="airplay"]'); cd.checked=true; cd.dispatchEvent(new Event("change"));
-kn.goi=JSON.stringify(calls.slice(antes)); calls.length=antes;      // giữ nguyên danh sách lệnh của các bước trước cho phần kiểm cũ
-setTimeout(()=>{document.getElementById("out").textContent=JSON.stringify({truoc,loi,nghe,gui,la:lạ,calls,het,hong,dai,rong,kn,stop,adb,
+stop.anKhiKhongHoTro=q("[data-spk-mute]").style.display==="none";
+setTimeout(()=>{document.getElementById("out").textContent=JSON.stringify({truoc,loi,nghe,gui,la:lạ,calls,het,hong,dai,rong,stop,
  eq:!!q("[data-eq] r1-eq-card"), xss:sr.innerHTML.includes("<img src=x"), title:q("[data-music-text]").textContent});},150);
 </script>"""
 
@@ -209,37 +198,28 @@ def test_giao_dien_the_dam_thoai_trang_thai_mic_nut_va_thuc_the_den_muon(tmp_pat
     assert r["truoc"] is True and r["loi"] is None              # thực thể đến muộn không làm hỏng thẻ
     nghe = {k: v for k, v in r["nghe"].items() if k not in ("tipLoa", "tipHa")}
     assert nghe == {"mic": "Đang nghe", "status": "listening", "holdDisabled": False,
-                         "alwaysDisabled": False, "pauseDisabled": False, "playDisabled": True,
+                         "alwaysDisabled": False, "ppDisabled": False, "ppIcon": "mdi:pause",
                          "noTalkButton": True}                  # không còn nút «Đàm thoại» / «Kết thúc»
     assert "chưa gửi tiếng nào" in r["nghe"]["tipLoa"]           # từ đánh thức trên loa: đúng là chưa gửi
     assert "LIÊN TỤC" in r["nghe"]["tipHa"] and "dò từ đánh thức" in r["nghe"]["tipHa"]   # chế độ HA: luồng chảy liên tục
     assert r["gui"]["mic"] == "Đang gửi" and r["gui"]["status"] == "sending"
     assert r["gui"]["holdDisabled"] is True and r["gui"]["alwaysDisabled"] is True
     assert r["gui"]["holdTitle"] == "Đang có phiên" and r["gui"]["refused"]
-    assert r["gui"]["pauseDisabled"] is True and r["gui"]["playDisabled"] is False
+    assert r["gui"]["ppDisabled"] is False and r["gui"]["ppIcon"] == "mdi:play"      # một nút, đổi biểu tượng như thẻ YouTube
     assert r["la"] == {"mic": "Không rõ", "status": "unknown"}   # không đọc được ≠ «Tắt»
     # Mic đi bằng ĐIỆN THOẠI (WebSocket) nên bấm «Giữ để nói»/«Bật mic luôn» không còn gọi dịch vụ đàm thoại của HA;
     # chỉ nút nhạc gọi dịch vụ. Khi có phiên Assist chiếm chỗ thì các nút mic không làm gì.
     assert r["calls"] == [["media_player", "media_pause", {"entity_id": "media_player.r1_loa"}],
                           ["media_player", "media_play", {"entity_id": "media_player.r1_loa"}]]
     assert r["eq"] is True and r["xss"] is False                # nhúng thẻ EQ; tên bài không thành HTML
-    # loa im thì nói vì sao; đang phát thì kèm thời lượng (185 giây = 3:05); không có lý do thì như cũ
-    assert r["het"] == "Bài vừa rồi đã hết bài" and "lỗi phát" in r["hong"]
-    assert r["dai"] == "Đang phát — A (3:05)" and r["rong"] == "Không có nhạc đang phát"
+    # Chữ hiện chỉ là tên bài (hoặc «Lỗi phát»); lý do loa im và thời lượng (185 giây = 3:05) nằm ở dấu chỉ khi rê chuột
+    assert r["het"] == {"t": "", "tip": "Bài vừa rồi đã hết bài"} and r["hong"]["t"] == "Lỗi phát" and "lỗi phát" in r["hong"]["tip"]
+    assert r["dai"] == {"t": "A", "tip": "Đang phát (3:05)"} and r["rong"] == {"t": "", "tip": "Không có nhạc đang phát"}
     sp = r["stop"]
     assert sp["disabled"] is False and sp["hang"] is True and sp["bat"] is False
     assert json.loads(sp["goi"]) == [["media_player", "media_stop", {"entity_id": "media_player.r1_loa"}],
                                      ["media_player", "volume_mute", {"entity_id": "media_player.r1_loa", "is_volume_muted": True}]]
-    assert sp["dungKhiIdle"] is True and sp["tat"] is True and sp["anKhiKhongHoTro"] is True
-    ad = r["adb"]
-    assert ad["hang"] is True and "Đóng ADB" in ad["chu"] and ad["huy"] == 0
-    assert all(k in ad["hoi"] for k in ("ƯU", "NHƯỢC", "MỞ LẠI", "rút điện"))
-    assert json.loads(ad["goi"]) == [["button", "press", {"entity_id": "button.r1_dong_adb"}]]
-    kn = r["kn"]
-    assert kn["sec"] and kn["dlna"] is True and kn["airplay"] is False
-    assert kn["btOff"] is False, "Bluetooth «unknown» (ADB chưa đọc được) vẫn phải bấm được"
-    assert "đã nối (SSDP unicast)" in kn["note"] and "Bluetooth chưa đọc được" in kn["note"]
-    assert json.loads(kn["goi"]) == [["switch", "turn_on", {"entity_id": "switch.r1_airplay"}]]
+    assert sp["dungKhiIdle"] is True and sp["tat"] is True and sp["icon"] == "mdi:volume-off" and sp["anKhiKhongHoTro"] is True
 
 
 def _chay_chrome_den_khi_xong(page, thoi_gian=40):

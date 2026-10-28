@@ -8,7 +8,7 @@ Nơi chỉnh, theo thứ tự nên dùng:
 
 | Nơi | Dùng khi |
 |---|---|
-| Thẻ `r1-card` (tab Đàm thoại / EQ / Cài đặt) | Hằng ngày: bấm, kéo, thử ngay |
+| Thẻ `r1-card` (tab Đàm thoại / EQ / Chức năng / Cài đặt) | Hằng ngày: bấm, kéo, thử ngay |
 | Trang thiết bị Phicomm R1 (các thực thể) | Đưa vào tự động hoá, kịch bản |
 | Tuỳ chọn tích hợp (Cài đặt → Thiết bị & dịch vụ → Phicomm R1 Speaker → Cấu hình) | IP loa, địa chỉ HA, ghép lại APK |
 | Dịch vụ HA (`r1_speaker.*`) | Tự động hoá |
@@ -67,9 +67,10 @@ Hai chế độ, **bạn chọn một** (ô «Chế độ đóng ADB» ở tuỳ
 | DLNA, AirPlay | switch | Cho loa nhận nhạc qua DLNA / AirPlay | |
 | Đóng ADB mạng (tới lần khởi động lại loa) | button | Loa thôi nghe cổng ADB mạng 5555 ngay (dịch vụ `usb:` của adbd, như `adb usb`), rồi HA thử nối lại để xác nhận; còn nghe thì báo lỗi chứ không nói «đã đóng». Có tác dụng tới lần khởi động lại sau: **rút điện loa rồi cắm lại là mở lại**. Xem mục «Chọn: đóng ADB hay giữ ADB» ở mục 1 |
 | Lần báo thức kế tiếp | sensor | Lúc kêu kế tiếp của mọi báo thức/nhắc nhở; thuộc tính liệt kê từng cái (`id`, `gio`, `ngay`, `nhan`, `ke_tiep`), cái đang kêu và hẹn giờ tắt nhạc. Báo thức/nhắc nhở/hẹn giờ chạy bằng HA, lưu qua khởi động lại, thay cho báo thức đám mây của hãng. Mỗi lần kêu/tắt/hoãn phát sự kiện `r1_speaker_bao_thuc` |
+| Hoãn báo thức (phút) | number | Báo thức đang kêu được hoãn (nút trên thẻ, hành động phím `bao_thuc_hoan`, dịch vụ `bao_thuc_hoan` không nêu `phut`) thì báo lại sau chừng này phút. 1–120, mặc định 9, nhớ qua khởi động lại |
 | Tắt báo thức đang kêu | button | Im báo thức hoặc nhắc nhở đang kêu (cùng việc với dịch vụ `bao_thuc_tat` và hành động phím `bao_thuc_dung`) |
 | APK trên loa | sensor | Phiên bản APK và khả năng nó báo (`den`, `am_luong`, `bluetooth`, `he_thong`, `phim`); `cu` = APK trước 1.3, `mat_ket_noi` = chưa nối |
-| Phím loa: nhấn đơn, Phím loa: nhấn đúp, Phím loa: nhấn ba lần, Phím loa: nhấn giữ | select | Hành động khi bấm nút giữa theo từng cử chỉ. Mặc định: đơn = bật/tắt mic, đúp = bật/tắt Bluetooth (như APK cũ), ba lần và giữ = không làm gì. Danh sách hành động lấy từ bảng trong `phim.py`: **thêm hành động mới = viết một hàm và gắn `@hanh_dong`**, nó tự có trong cả bốn ô chọn |
+| Phím loa: nhấn đơn, Phím loa: nhấn đúp, Phím loa: nhấn ba lần, Phím loa: nhấn giữ | select | Hành động khi bấm nút giữa theo từng cử chỉ. Mặc định theo nút giữa của app AI box: **1 lần** = tắt báo thức đang kêu, không có thì bật/tắt đàm thoại; **2 lần** = bật/tắt Assist (từ đánh thức); **3 lần** = bật/tắt Bluetooth; **giữ** = bật/tắt đèn theo nhạc (AI box đòi giữ 3 giây, ở đây ngưỡng giữ là 0,8 giây). Muốn như APK cũ (đơn = tắt mic, đúp = Bluetooth) thì đổi ở bốn ô chọn. **Nguồn phím** (Tuỳ chọn → «Nguồn phím»): `adb` (mặc định; HA đọc `getevent` qua ADB, cần ADB mạng mở và giữ MỘT luồng ADB liên tục nên máy khác `adb connect` phải đợi), `apk` (APK 1.3 qua dịch vụ trợ năng) hoặc `tat`. Danh sách hành động lấy từ bảng trong `phim.py`: **thêm hành động mới = viết một hàm và gắn `@hanh_dong`**, nó tự có trong cả bốn ô chọn |
 | Phím loa | event | Mỗi cử chỉ phát một sự kiện (`don`, `doi`, `ba`, `giu`) kèm mã phím; dùng làm điều kiện kích hoạt trong tự động hoá, kể cả cho mã phím khác 195 |
 | Dừng nhạc | button | Nút Stop ở trang thiết bị (gọi `media_player.media_stop` của loa, tự gửi lại nếu loa bỏ qua). Hộp điều khiển chuẩn của Home Assistant chỉ hiện Stop khi loa không hỗ trợ Tạm dừng nên không đặt cạnh nút Phát/Tạm dừng được; biểu tượng loa cạnh thanh âm lượng là nút **Tắt tiếng loa** | |
 | Bluetooth | switch | Bật/tắt Bluetooth của loa. Trạng thái đọc qua ADB (`settings get global bluetooth_on`), lệnh đi qua `send_message` what=64 (chưa kiểm trên loa thật); sau lệnh tích hợp đọc lại để xác nhận. Cùng DLNA và AirPlay hiện ở thẻ R1 (mục «Kết nối loa») để bật/tắt từng kết nối khi dò lỗi; công tắc DLNA khai thuộc tính `renderer` (đã nối bằng đường nào, hoặc đã thử những đường nào mà hỏng) | |
@@ -87,7 +88,7 @@ Hai chế độ, **bạn chọn một** (ô «Chế độ đóng ADB» ở tuỳ
 | Từ đánh thức | binary_sensor | Bật thoáng chốc khi có trigger từ đánh thức | |
 | Dịch vụ đèn | binary_sensor | Đường ADB tới loa (chạy hiệu ứng đèn, cài ứng dụng, đọc thông tin) có dùng được không; thuộc tính `duong_adb` = `server` hoặc `direct` (mục 5) | tắt = lỗi ADB gần nhất, xem thuộc tính `loi` |
 | Chuẩn bị loa (ẩn ứng dụng gốc) | button | Ẩn (`pm hide`, đảo được) bảy ứng dụng gốc của hãng gây nhiễu, hiện lại `ijetty` và `netctl`, khởi chạy `EchoService`; dịch vụ tương ứng `prepare_speaker` (`reboot: true` để khởi động lại luôn). Làm sau khi cài ứng dụng, trước khi khởi động lại loa | cần ADB (mục 5) |
-| Khởi động lại loa | button | Gửi lệnh `reboot` cho loa qua ADB (loa lên lại sau khoảng nửa phút, APK tự nối về HA, HA áp lại đèn) | cần ADB (mục 5) |
+| Khởi động lại loa | button | Gửi lệnh `reboot` cho loa qua ADB (loa lên lại sau khoảng nửa phút, APK tự nối về HA, HA áp lại đèn); ADB mạng hỏng hoặc đóng thì nút tự chuyển sang cổng 8080 (tin `shell` với lệnh `stop adbd&&start adbd&&adb reboot` của app AI box). Đã thử trên loa thật 28/10/2026 khi ADB mạng còn mở (loa tắt sau ~10 giây, lên lại sau ~30 giây); **chưa thử khi ADB mạng đã đóng**. `reboot` và `setprop sys.powerctl reboot` qua cổng 8080 KHÔNG có hiệu lực (lệnh chạy dưới uid `system`, không phải root) | ADB (mục 5) hoặc cổng 8080 |
 | Ứng dụng: *tên ứng dụng* | update | Một thực thể cho mỗi ứng dụng cài lên loa (trình phát, thiết bị, APK mic): phiên bản đã cài, bản đi kèm, nút **Cài đặt** (xem [CAI-UNG-DUNG.md](CAI-UNG-DUNG.md)) | đọc mỗi giờ |
 | CPU của loa | sensor | % CPU dùng, kèm số nhân, tần số, tải 1/5/15 phút và tiến trình nặng nhất ([THONG-TIN-HE-THONG.md](THONG-TIN-HE-THONG.md)) | 0–100 %, đọc qua ADB mỗi 60 giây |
 | RAM của loa | sensor | % RAM đang dùng (không tính bộ nhớ đệm), kèm tổng, đang dùng, khả dụng, đệm (MB) | 0–100 % |
@@ -104,8 +105,8 @@ Hai chế độ, **bạn chọn một** (ô «Chế độ đóng ADB» ở tuỳ
 
 **Cài tích hợp là tự thêm thẻ**: khi HA khởi động xong, tích hợp tự đăng ký tài nguyên `/r1_speaker/r1-card.js?v=<phiên bản>`
 (đổi `?v=` mỗi lần cập nhật để trình duyệt bỏ bản cũ) và gỡ ba tài nguyên thẻ con cũ nếu bạn từng thêm tay. **Chỉ có MỘT thẻ**
-`r1-card` (3 tab, tự nạp thẻ đàm thoại/EQ/cài đặt), nên bộ chọn thẻ chỉ hiện «R1 (gộp, tab)». Chỉ cần thêm thẻ
-`type: custom:r1-card` (nhiều loa: thêm `device_id`). Bảng điều khiển ở chế độ YAML thì danh sách tài nguyên chỉ-đọc: khi đó tự
+`r1-card` (4 tab, tự nạp thẻ đàm thoại/EQ/chức năng/cài đặt), nên bộ chọn thẻ chỉ hiện «R1 (gộp, tab)». Chỉ cần thêm thẻ
+`type: custom:r1-card` (nhiều loa: thẻ tự hiện hàng chọn loa theo tên thiết bị cho tab EQ, Chức năng, Cài đặt; hoặc ghim một loa bằng `device_id`; đổi tên loa ở trang thiết bị của HA thì thẻ theo). Tab **Chức năng**: bật/tắt DLNA, AirPlay, Bluetooth, nút «Đóng ADB mạng…», danh sách và đặt báo thức, ô «Hoãn (phút)». Tab **Đàm thoại** chưa theo hàng chọn loa: khi có nhiều loa nó điều khiển loa đầu tiên (theo mã thiết bị); đàm thoại nhiều loa (gộp tiếng giữa các loa) chưa làm. Bảng điều khiển ở chế độ YAML thì danh sách tài nguyên chỉ-đọc: khi đó tự
 thêm `/r1_speaker/r1-card.js` (Mô-đun JavaScript). Tên loa và hàng tab luôn hiện; nội dung từng tab đóng sẵn, bấm tab để mở.
 Nếu thẻ báo «Custom element not found»: tải lại cưỡng bức, xoá đệm giao diện, hoặc thêm `?v=<số>` sau địa chỉ tài nguyên.
 
@@ -413,7 +414,7 @@ nút Thử.
 | `bao_thuc_dat` | Thêm/sửa **báo thức**: `gio` (HH:MM), `ngay` (mon…sun; rỗng = một lần), `nhan`, `loai` (`tts` đọc lời hoặc `media` phát địa chỉ âm thanh), `noi_dung`, `lap_s`, `toi_da_s`, `am_luong`, `bat`, `id` (có thì sửa) |
 | `nhac_nho` | **Nhắc nhở** một lần: `noi_dung` + `sau_phut` hoặc `luc`; kêu xong tự xoá |
 | `bao_thuc_xoa` / `bao_thuc_bat_tat` | Xoá / bật-tắt một báo thức theo `id` (lấy ở thuộc tính của «Lần báo thức kế tiếp») |
-| `bao_thuc_tat` / `bao_thuc_hoan` | Tắt báo thức đang kêu / hoãn báo lại sau `phut` (mặc định 9) |
+| `bao_thuc_tat` / `bao_thuc_hoan` | Tắt báo thức đang kêu / hoãn báo lại sau `phut` (không nêu thì dùng «Hoãn báo thức (phút)», mặc định 9) |
 | `hen_gio_tat_nhac` / `huy_hen_gio_tat_nhac` | Sau `phut` phút nhỏ dần âm lượng (`lam_mo_giay`, qua APK) rồi dừng nhạc và trả âm lượng cũ / huỷ hẹn giờ |
 | `phim_do` | **Dò phím**: `giay` giây báo MỌI phím (không nuốt) để biết mã phím; mỗi phím phát sự kiện `r1_speaker_phim_do` |
 

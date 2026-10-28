@@ -28,8 +28,10 @@ _LOGGER = logging.getLogger(__name__)
 #: Bốn cử chỉ gán được hành động; ``nhan_ngan`` (firmware báo thêm) chỉ phát sự kiện.
 CU_CHI = ("don", "doi", "ba", "giu")
 CU_CHI_SU_KIEN = CU_CHI + ("nhan_ngan",)
-#: Mặc định giữ đúng hành vi cũ của APK: nhấn đơn = bật/tắt mic, nhấn đúp = bật/tắt Bluetooth.
-MAC_DINH = {"don": "bat_tat_mic", "doi": "bat_tat_bluetooth", "ba": "khong_lam_gi", "giu": "khong_lam_gi"}
+#: Mặc định theo nút giữa của app AI box (``ChatActivity.onKeyUp``, mã dịch ngược): 1 lần = tắt báo thức đang kêu, không thì bật/tắt phiên
+#: trò chuyện; 2 lần = bật/tắt từ đánh thức (ở đây: công tắc Assist); 3 lần = bật/tắt Bluetooth; giữ = bật/tắt đèn (AI box đòi giữ 3 giây,
+#: ở đây ngưỡng giữ là ``NGUONG_GIU_MS``). Muốn hành vi APK cũ (đơn = tắt mic, đúp = Bluetooth) thì đổi ở bốn ô chọn.
+MAC_DINH = {"don": "bao_thuc_hoac_dam_thoai", "doi": "bat_tat_assist", "ba": "bat_tat_bluetooth", "giu": "bat_tat_den_nhac"}
 MA_NUT_GIUA = 195
 #: Đường thô: trong khoảng này (ms) sau lần nhả, nhấn tiếp thì tính cùng một cử chỉ nhiều lần; giữ quá ngưỡng này (ms) là «giữ».
 KHOANG_NHAN_MS = 450
@@ -110,6 +112,25 @@ async def _bat_tat_bluetooth(ctx: PhimCtx) -> None:
 
 @hanh_dong("bat_tat_dam_thoai", vi="Bật/tắt đàm thoại (bộ đàm)", en="Toggle intercom")
 async def _bat_tat_dam_thoai(ctx: PhimCtx) -> None:
+    await _doi_cong_tat(ctx, "intercom_open")
+
+
+@hanh_dong("bat_tat_assist", vi="Bật/tắt Assist (từ đánh thức)", en="Toggle Assist (wake word)")
+async def _bat_tat_assist(ctx: PhimCtx) -> None:
+    await _doi_cong_tat(ctx, "assist")
+
+
+@hanh_dong("bat_tat_den_nhac", vi="Bật/tắt đèn theo nhạc", en="Toggle music light")
+async def _bat_tat_den_nhac(ctx: PhimCtx) -> None:
+    await _doi_cong_tat(ctx, "music_light")
+
+
+@hanh_dong("bao_thuc_hoac_dam_thoai", vi="Tắt báo thức đang kêu; không có thì bật/tắt đàm thoại", en="Dismiss ringing alarm, else toggle intercom")
+async def _bao_thuc_hoac_dam_thoai(ctx: PhimCtx) -> None:
+    bt = getattr(ctx.coordinator, "bao_thuc", None)
+    if bt is not None and bt.dang_keu is not None:
+        await bt.tat()
+        return
     await _doi_cong_tat(ctx, "intercom_open")
 
 
@@ -275,9 +296,10 @@ class Phim:
 
     def noi(self, mic_server) -> list[Callable[[], None]]:
         """Nghe kết nối mic: trả các hàm gỡ nghe."""
-        return [mic_server.add_phim_tho_listener(self._tu_tho)]
+        return [mic_server.add_phim_tho_listener(self.tu_tho)]
 
-    def _tu_tho(self, ma: int, xuong: bool) -> None:
+    def tu_tho(self, ma: int, xuong: bool) -> None:
+        """Phím thô (nhấn/nhả) từ APK (trợ năng) hoặc từ ADB (``phim_adb``): HA nhận diện cử chỉ rồi chạy hành động."""
         self.hass.bus.async_fire("r1_speaker_phim_do", {"entry_id": self.entry.entry_id, "phim": ma, "xuong": xuong})   # dò phím: luôn báo thô
         (self._nd.xuong if xuong else self._nd.len)(ma)
 

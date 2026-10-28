@@ -55,6 +55,10 @@ class R1State:
     eq_preset: int | None = None
 
 
+#: Lệnh khởi động lại loa của app AI box (``cj.java:39``): khởi động lại adbd cục bộ rồi ``adb reboot`` ngay trên loa.
+REBOOT_SHELL = "stop adbd&&start adbd&&adb reboot"
+
+
 def build_message(msg_type: str, params: dict[str, Any] | None = None) -> str:
     """Dựng khung JSON gửi loa.
 
@@ -235,15 +239,25 @@ class R1Client:
 
     async def async_send(self, msg_type: str, params: dict[str, Any] | None = None) -> None:
         """Gửi một lệnh (loa không trả xác nhận). Lỗi mạng → R1Error."""
+        await self._send_raw(build_message(msg_type, params))
+
+    async def _send_raw(self, khung: str) -> None:
         try:
             async with asyncio.timeout(RESPONSE_TIMEOUT * 2):
                 ws = await self._open()
                 try:
-                    await ws.send_str(build_message(msg_type, params))
+                    await ws.send_str(khung)
                 finally:
                     await ws.close()
         except (aiohttp.ClientError, OSError, TimeoutError, ValueError) as exc:
             raise R1Error(f"{self.url}: {exc!r}") from exc
+
+    async def reboot_shell(self) -> None:
+        """Khởi động lại loa qua tin ``shell`` của cổng 8080 (không cần ADB mạng). ĐÃ KIỂM trên loa thật 28/10/2026: loa tắt sau
+        khoảng 10 giây, lên lại sau khoảng nửa phút, thời gian bật máy về 32 giây. Lệnh chạy dưới uid ``system`` (không phải root),
+        nên ``reboot`` và ``setprop sys.powerctl reboot`` bị bỏ qua lặng lẽ; chỉ lệnh dưới đây (do app AI box dùng) có hiệu lực.
+        Khung gửi phẳng, đúng như đã thử (không kèm ``data``)."""
+        await self._send_raw(json.dumps({"type": "shell", "type_id": "ha", "shell": REBOOT_SHELL}))
 
     # ── lệnh đã chứng minh bằng mã ──────────────────────────────────────────
     # Đã XÁC NHẬN bằng ghi thật trên loa (21/10/2026, đọc lại bằng get_eq_config, đã trả về

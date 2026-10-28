@@ -1,4 +1,4 @@
-"""Nút «Khởi động lại loa»: gửi lệnh reboot qua ADB (dùng chung kết nối với đèn và bộ cài ứng dụng)."""
+"""Nút «Khởi động lại loa»: gửi lệnh reboot qua ADB (dùng chung kết nối với đèn và bộ cài ứng dụng); ADB hỏng thì qua cổng 8080."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .adb_client import AdbError
+from .client import R1Error
 from .const import DOMAIN
 from .coordinator import R1ConfigEntry
 from .entity import preregister
@@ -118,5 +119,10 @@ class R1RebootButton(ButtonEntity):
     async def async_press(self) -> None:
         try:
             await self._entry.runtime_data.apps.dev.reboot()
+            return
         except (AdbError, OSError, TimeoutError) as exc:
-            raise HomeAssistantError(f"Không khởi động lại được loa qua ADB: {exc or type(exc).__name__}") from exc
+            loi_adb = exc or type(exc).__name__
+        try:                                                        # ADB mạng đóng/hỏng: đi đường cổng 8080
+            await self._entry.runtime_data.client.reboot_shell()
+        except R1Error as exc:
+            raise HomeAssistantError(f"Không khởi động lại được loa (ADB: {loi_adb}; cổng 8080: {exc})") from exc

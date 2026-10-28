@@ -39,6 +39,9 @@
       "mic_gain": {
         "name": "Tăng mic"
       },
+      "hoan_phut": {
+        "name": "Hoãn báo thức"
+      },
       "music_light_luma": {
         "name": "Độ sáng đèn nhạc"
       },
@@ -273,7 +276,8 @@
           "adb_server": "Địa chỉ adb-server (tuỳ chọn; để TRỐNG = nối thẳng tới IP của loa, cổng 5555)",
           "adb_mode": "Cách nối ADB tới loa: auto (tự nhận diện), server (qua adb-server), direct (nối thẳng loa)",
           "adb_tu_dong_dong": "Chế độ «đóng ADB»: tự đóng ADB mạng của loa khi APK đã nối. ƯU: chặn botnet cùng mạng. NHƯỢC: mất đèn tự do, cài ứng dụng, khởi động lại từ HA, thông tin hệ thống, công tắc Bluetooth; mở lại bằng cách rút điện loa",
-          "phim_ma": "Mã phím HA chạy hành động theo cử chỉ (cách nhau dấu phẩy; 195 = nút giữa; mã khác chỉ phát sự kiện)"
+          "phim_ma": "Mã phím HA chạy hành động theo cử chỉ (cách nhau dấu phẩy; 195 = nút giữa; mã khác chỉ phát sự kiện)",
+          "phim_nguon": "Nguồn phím: adb (getevent qua ADB, không cần APK mới), apk (dịch vụ trợ năng của APK 1.3) hoặc tat"
         }
       },
       "nang_cao": {

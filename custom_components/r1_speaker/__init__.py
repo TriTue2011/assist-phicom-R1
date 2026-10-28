@@ -28,7 +28,7 @@ from homeassistant.helpers.typing import ConfigType
 from . import cai_ung_dung, den_chinh, giao_dien, lenh_apk, media_player, nang_cao
 from .client import R1Client
 from .const import ADB_PORT
-from .const import (CARD_GOP_URL, CARD_URL, CONF_INTERCOM_KEY, CONF_MIC_CHUA_GHEP, CONF_MIC_LISTEN_KEY, CONF_MIC_LISTEN_PORT, DOMAIN, SETTINGS_CARD_URL, TALK_CARD_URL,
+from .const import (CARD_GOP_URL, CARD_URL, CHUCNANG_CARD_URL, CONF_INTERCOM_KEY, CONF_MIC_CHUA_GHEP, CONF_MIC_LISTEN_KEY, CONF_MIC_LISTEN_PORT, DOMAIN, SETTINGS_CARD_URL, TALK_CARD_URL,
                     WAKE_SPEAKER)
 from .cong_vao import PingView, WakeView
 from .dam_thoai_ws import DamThoaiWsView
@@ -52,7 +52,8 @@ from .mic import R1Mic
 from .mic_server import R1MicServer
 from .playback import R1Playback
 from .phim import Phim, dang_ky_dich_vu as dang_ky_dich_vu_phim
-from .settings import (adb_settings, adb_tu_dong_dong, phim_ma, DuplexSettings, TalkSettings, agc_settings, cong_nghe_trong, limiter_settings, mic_host_hieu_luc, noise_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
+from .phim_adb import PhimAdb
+from .settings import (adb_settings, adb_tu_dong_dong, phim_ma, phim_nguon, DuplexSettings, TalkSettings, agc_settings, cong_nghe_trong, limiter_settings, mic_host_hieu_luc, noise_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
                        speaker_port, wake_mode)
 from .song_cong import DuplexView, R1Duplex
 
@@ -66,6 +67,7 @@ PLATFORMS = [Platform.ASSIST_SATELLITE, Platform.BINARY_SENSOR, Platform.BUTTON,
 _WWW = Path(__file__).parent / "www"
 _CARDS = ((CARD_URL, _WWW / "r1-eq-card.js"), (TALK_CARD_URL, _WWW / "r1-talk-card.js"),
           (SETTINGS_CARD_URL, _WWW / "r1-settings-card.js"),
+          (CHUCNANG_CARD_URL, _WWW / "r1-chucnang-card.js"),
           (CARD_GOP_URL, _WWW / "r1-card.js"))
 
 
@@ -281,8 +283,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
         entry.async_on_unload(go)
 
     async def _bao_cau_hinh_phim() -> None:
-        await coordinator.mic_server.gui_phim_cau_hinh(sorted(phim_ma(entry)), False)
+        # Nguồn phím là ADB hoặc tắt: báo APK KHÔNG nhận phím nào (không nuốt, không báo), để một lần bấm không chạy hai lần.
+        await coordinator.mic_server.gui_phim_cau_hinh(sorted(phim_ma(entry)) if phim_nguon(entry) == "apk" else [], False)
     coordinator.mic_server.khi_ket_noi = _bao_cau_hinh_phim            # APK nối vào thì báo mã phím do HA xử lý
+    # Nguồn phím mặc định: ADB (getevent), không cần APK mới.
+    entry.async_create_background_task(
+        hass, PhimAdb(adb_dev, coordinator.phim, lambda: phim_nguon(entry) == "adb" and not adb_tu_dong_dong(entry)).chay(),
+        "r1_speaker nhận phím qua ADB")
     # Chế độ «đóng ADB» (người dùng chọn ở tuỳ chọn): chỉ đóng khi APK đã nối ổn định; đọc tuỳ chọn mỗi nhịp nên bật/tắt có hiệu lực ngay.
     entry.async_create_background_task(
         hass, TuDongDongAdb(adb_dev, coordinator.mic_server, lambda: adb_tu_dong_dong(entry)).chay(), "r1_speaker tự đóng ADB")

@@ -66,7 +66,7 @@ Cài đặt → Âm thanh → «Cài đặt nâng cao» (dịch vụ `r1_speaker
 Đổi một mục nạp lại tích hợp để áp dụng (mic nối lại sau vài giây). Vẫn còn ở Tuỳ chọn → «Chỉnh thông số nâng cao».
 
 **Nhiều loa:** thêm tích hợp lần nữa với IP loa khác. Mỗi loa có khoá, cổng nghe, phiên song công, đèn và thực
-thể riêng (tên thêm hậu tố `_2`, `_3`…). Thẻ nhận `device_id` để chọn loa. Dịch vụ nhận `entity_id` của loa cần
+thể riêng (tên thêm hậu tố `_2`, `_3`…). Thẻ gộp tự hiện hàng chọn loa (theo tên thiết bị, đổi tên ở trang thiết bị của HA) khi có từ hai loa; có thể ghim một loa bằng `device_id`. Dịch vụ nhận `entity_id` của loa cần
 điều khiển.
 
 Giá trị bằng mặc định **không được lưu**: khi sau này đo xong và đổi mặc định, các mục bạn chưa
@@ -76,7 +76,7 @@ chỉnh tay tự theo.
 
 Tích hợp **tự đăng ký tài nguyên Lovelace** `/r1_speaker/r1-card.js?v=<phiên bản>` khi HA khởi động xong (cách của tích hợp YouTube;
 đổi phiên bản trong `manifest.json` là `?v=` đổi theo, trình duyệt bỏ bản cũ) và gỡ ba tài nguyên thẻ con cũ nếu còn. Chỉ có **một thẻ**
-`type: custom:r1-card` (thẻ gộp, tự nạp thẻ đàm thoại/EQ/cài đặt). KHÔNG dùng `add_extra_js_url`: nạp sớm làm giao diện HA không thấy thẻ
+`type: custom:r1-card` (thẻ gộp, tự nạp thẻ đàm thoại/EQ/chức năng/cài đặt). KHÔNG dùng `add_extra_js_url`: nạp sớm làm giao diện HA không thấy thẻ
 («Custom element not found»). Chế độ YAML thì danh sách tài nguyên chỉ-đọc: tự thêm `/r1_speaker/r1-card.js` (Mô-đun JavaScript).
 
 Thêm thẻ (chế độ YAML):

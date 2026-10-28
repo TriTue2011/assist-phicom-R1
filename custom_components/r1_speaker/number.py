@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from homeassistant.components.number import NumberEntity, NumberMode, RestoreNumber
-from homeassistant.const import EntityCategory, UnitOfSoundPressure
+from homeassistant.const import EntityCategory, UnitOfSoundPressure, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -12,7 +12,7 @@ from .const import (DEFAULT_MIC_GAIN_DB, EQ_BAND_NAMES, EQ_BANDS, EQ_MAX, EQ_MIN
                     MUSIC_LIGHT_CHROMA, MUSIC_LIGHT_LUMA, MUSIC_LIGHT_RANGE, STRENGTH_MAX, STRENGTH_MIN, VOL_MAX,
                     VOL_MIN)
 from .coordinator import R1ConfigEntry, R1Coordinator
-from .entity import R1Entity, R1MicEntity, R1MusicLightEntity, preregister
+from .entity import R1Entity, R1MicEntity, R1MusicLightEntity, device_info, preregister
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
@@ -30,7 +30,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
         R1MusicLightNumber(c, "music_light_chroma", MUSIC_LIGHT_CHROMA),
     ])
     preregister(hass, entry, "number", f"{entry.entry_id}_mic_gain", "r1_tang_mic")
-    async_add_entities([R1MicGain(entry), R1LightMaster(entry)])
+    preregister(hass, entry, "number", f"{entry.entry_id}_hoan_phut", "r1_hoan_bao_thuc")
+    async_add_entities([R1MicGain(entry), R1LightMaster(entry), R1HoanBaoThuc(entry)])
 
 
 class R1Volume(R1Entity, NumberEntity):
@@ -247,4 +248,42 @@ class R1MicGain(R1MicEntity, RestoreNumber):
 
     async def async_set_native_value(self, value: float) -> None:
         self.mic.set_gain(value)
+        self.async_write_ha_state()
+
+
+class R1HoanBaoThuc(RestoreNumber):
+    """«Hoãn báo thức (phút)»: báo thức đang kêu được hoãn (nút trên thẻ, hành động phím, dịch vụ ``bao_thuc_hoan`` không nêu số phút) thì
+    báo lại sau chừng này phút. Mặc định 9; nhớ giá trị đã chỉnh qua lần khởi động HA."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_translation_key = "hoan_phut"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_native_min_value = 1
+    _attr_native_max_value = 120
+    _attr_native_step = 1
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    _attr_mode = NumberMode.BOX
+
+    def __init__(self, entry: R1ConfigEntry) -> None:
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_hoan_phut"
+        self._attr_device_info = device_info(entry)
+
+    @property
+    def _bt(self):
+        return self._entry.runtime_data.bao_thuc
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        cu = await self.async_get_last_number_data()
+        if cu is not None and cu.native_value is not None:
+            self._bt.hoan_phut = min(max(float(cu.native_value), 1), 120)
+
+    @property
+    def native_value(self) -> float:
+        return self._bt.hoan_phut
+
+    async def async_set_native_value(self, value: float) -> None:
+        self._bt.hoan_phut = float(value)
         self.async_write_ha_state()

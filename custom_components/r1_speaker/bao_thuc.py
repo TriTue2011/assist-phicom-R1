@@ -83,6 +83,7 @@ class BaoThuc:
         self.hen_gio_luc: datetime | None = None
         self.tren_doi: list[Callable[[], None]] = []
         self._am_luong_cu: int | None = None
+        self.hoan_phut: float = HOAN_MAC_DINH_PHUT              # «hoãn» không nêu số phút thì báo lại sau chừng này (thực thể số ``hoan_phut`` đổi)
         self._noi_dung_keu: dict[str, Any] | None = None       # bản sao báo thức đang kêu (nhắc nhở một lần đã bị xoá khỏi danh sách)
 
     # ── Lưu và xếp lịch ─────────────────────────────────────────
@@ -265,8 +266,9 @@ class BaoThuc:
         await self._tra_am_luong()
         self.hass.bus.async_fire(SU_KIEN, {"entry_id": self.entry.entry_id, "id": i, "trang_thai": "tat"})
 
-    async def hoan(self, phut: float = HOAN_MAC_DINH_PHUT) -> None:
-        """Hoãn báo thức đang kêu: im đi và báo lại sau ``phut`` phút (như nhắc nhở một lần cùng nội dung)."""
+    async def hoan(self, phut: float | None = None) -> None:
+        """Hoãn báo thức đang kêu: im đi và báo lại sau ``phut`` phút (không nêu thì ``hoan_phut``), như nhắc nhở một lần cùng nội dung."""
+        phut = self.hoan_phut if phut is None else phut
         i, a = self.dang_keu, self._noi_dung_keu
         if i is None or a is None:
             return
@@ -390,7 +392,7 @@ def dang_ky_dich_vu(hass: HomeAssistant) -> None:
         await _bt_cua(hass, call.data["entity_id"]).tat()
 
     async def _hoan(call: ServiceCall) -> None:
-        await _bt_cua(hass, call.data["entity_id"]).hoan(call.data.get("phut", HOAN_MAC_DINH_PHUT))
+        await _bt_cua(hass, call.data["entity_id"]).hoan(call.data.get("phut"))
 
     async def _hen_gio(call: ServiceCall) -> None:
         await _bt_cua(hass, call.data["entity_id"]).hen_gio_tat_nhac(call.data["phut"], call.data.get("lam_mo_giay", 20))

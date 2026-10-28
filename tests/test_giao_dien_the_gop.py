@@ -21,12 +21,12 @@ PAGE = """<!doctype html><meta charset="utf-8"><body><div id="out">CHUA CHAY</di
 <script>
 // Bản CŨ còn trong bộ nhớ đệm trình duyệt đã đăng ký sẵn các tên cố định (không có nút mới):
 // thẻ gộp KHÔNG được dùng chúng.
-["r1-eq-card", "r1-talk-card", "r1-settings-card"].forEach((t) => customElements.define(t,
+["r1-eq-card", "r1-talk-card", "r1-settings-card", "r1-chucnang-card"].forEach((t) => customElements.define(t,
   class extends HTMLElement { setConfig() { this.old = true; } set hass(h) {} }));
 window.R1_NAP = () => Promise.resolve();      // test: ba thẻ con nạp bằng <script> bên dưới
 </script>
 <script src="file://@EQ@"></script><script src="file://@TALK@"></script>
-<script src="file://@SETTINGS@"></script><script src="file://@GOP@"></script>
+<script src="file://@SETTINGS@"></script><script src="file://@CHUCNANG@"></script><script src="file://@GOP@"></script>
 <script>(async () => {
 const FN=["cho","nghe","nghi","phan_hoi","dam_thoai","phat_nhac","loi","tat_mic"];
 const prof={}; FN.forEach(k=>prof[k]={enabled:true,rim:false,color:"#0000ff",effect:"none",brightness:60,mac_dinh:true});
@@ -52,7 +52,7 @@ const tabs=[...sr.querySelectorAll(".tabs .tab")];
 const trang=()=>({thanVao:vis(card._body), talk:vis(card._parts.talk), eq:vis(card._parts.eq), settings:vis(card._parts.settings)});
 const dau=trang();
 const moThe=trang();                                              // tên loa + hàng tab LUÔN hiện; nội dung vẫn đóng
-const tenLoa=q(".tieude").textContent, soTab=sr.querySelectorAll(".tabs .tab").length;
+const tenLoa=q(".tieude").textContent, tenTab=tabs.map(b=>b.textContent), soTab=tenTab.length;
 tabs.find(b=>b.textContent==="Đàm thoại").click();
 const t=card._parts.talk.shadowRoot;
 const talk={...trang(), giu:!!t.querySelector("[data-hold]"), luon:!!t.querySelector("[data-always]"),
@@ -67,7 +67,7 @@ const eq=trang();
 tabs.find(b=>b.textContent==="EQ").click();                       // bấm lại: đóng
 const dongLai=trang();
 const ver=q(".ver").textContent;
-document.getElementById("out").textContent=JSON.stringify({dau,moThe,talk,caiDat,eq,dongLai,ver,tenLoa,soTab});
+document.getElementById("out").textContent=JSON.stringify({dau,moThe,talk,caiDat,eq,dongLai,ver,tenLoa,soTab,tenTab});
 })();</script>"""
 
 
@@ -79,7 +79,7 @@ def test_giao_dien_the_gop_dong_mac_dinh_va_khong_trung_cai_dat(tmp_path):
     page = tmp_path / "gop.html"
     page.write_text(PAGE.replace("@EQ@", str(WWW / "r1-eq-card.js")).replace(
         "@TALK@", str(WWW / "r1-talk-card.js")).replace(
-        "@SETTINGS@", str(WWW / "r1-settings-card.js")).replace("@GOP@", str(tmp_path / "gop.js")),
+        "@SETTINGS@", str(WWW / "r1-settings-card.js")).replace("@CHUCNANG@", str(WWW / "r1-chucnang-card.js")).replace("@GOP@", str(tmp_path / "gop.js")),
         encoding="utf-8")
     out = subprocess.run(
         [CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--allow-file-access-from-files",
@@ -90,7 +90,7 @@ def test_giao_dien_the_gop_dong_mac_dinh_va_khong_trung_cai_dat(tmp_path):
     r = json.loads(html_lib.unescape(m.group(1)))
     assert r["dau"] == {"thanVao": True, "talk": False, "eq": False, "settings": False}    # hàng tab hiện, NỘI DUNG đóng hết
     assert r["moThe"] == r["dau"]                                                           # chưa bấm tab nào: vẫn đóng
-    assert r["tenLoa"] == "Loa R1" and r["soTab"] == 3                                      # tên loa và ba tab luôn hiện
+    assert r["tenLoa"] == "Loa R1" and r["tenTab"] == ["Đàm thoại", "EQ", "Chức năng", "Cài đặt"]   # tên loa và bốn tab luôn hiện
     assert r["talk"]["talk"] and not r["talk"]["eq"] and not r["talk"]["settings"]        # chỉ một tab
     assert r["talk"]["giu"] and r["talk"]["luon"] and r["talk"]["mute"]                  # nút mới + Tắt mic
     assert not r["talk"]["eqNhung"]                                                       # EQ không nhúng
@@ -106,7 +106,7 @@ def test_giao_dien_the_gop_dong_mac_dinh_va_khong_trung_cai_dat(tmp_path):
 PAGE_LUI = """<!doctype html><meta charset="utf-8"><body><div id="out">CHUA CHAY</div>
 <script>
 // Lớp đệm vẫn trả BẢN CŨ: không thẻ con nào xuất lớp mới (window.R1_THE trống), chỉ có thẻ cũ đã đăng ký.
-["r1-eq-card", "r1-talk-card", "r1-settings-card"].forEach((t) => customElements.define(t,
+["r1-eq-card", "r1-talk-card", "r1-settings-card", "r1-chucnang-card"].forEach((t) => customElements.define(t,
   class extends HTMLElement { setConfig() {} set hass(h) {} }));
 window.R1_NAP = () => Promise.resolve();
 </script>
@@ -132,5 +132,45 @@ def test_giao_dien_the_gop_dung_tam_the_cu_va_noi_ro_khi_lop_dem_chan_ban_moi(tm
     m = re.search(r'<div id="out">(.*?)</div>', out.stdout, re.S)
     assert m, out.stderr[-500:]
     r = json.loads(html_lib.unescape(m.group(1)))
-    assert r["loi"] is None and r["tabs"] == 3                        # thẻ vẫn dựng được, không hỏng
-    assert "DÙNG BẢN CŨ của: talk, eq, settings" in r["ver"]           # và nói rõ đang dùng bản cũ
+    assert r["loi"] is None and r["tabs"] == 4                        # thẻ vẫn dựng được, không hỏng
+    assert "DÙNG BẢN CŨ của: talk, eq, chucnang, settings" in r["ver"]           # và nói rõ đang dùng bản cũ
+
+
+PAGE_NHIEU_LOA = PAGE.split("<script>(async () => {")[0] + """<script>(async () => {
+const entities={}, states={}, calls=[];
+const add=(id,tk,dev)=>{entities[id]={platform:"r1_speaker",translation_key:tk,device_id:dev};states[id]={state:"7",attributes:{min:0,max:15,step:1}};};
+["d1","d2"].forEach(d=>{add("number.r1_am_luong_"+d,"volume",d); add("sensor.r1_cai_dat_"+d,"settings",d);});
+const devices={d1:{name:"Phicomm R1"},d2:{name:"Phicomm R1",name_by_user:"Bếp"}};
+const hass={entities,states,devices,language:"vi",callService:(d,s,x)=>calls.push([d,s,x])};
+const tao=async (cfg)=>{const c=document.createElement("r1-card"); document.body.appendChild(c); c.setConfig(cfg); c.hass=hass; await c._san; return c;};
+const chips=(c)=>[...c.shadowRoot.querySelectorAll(".tabs.loa .tab")].map(b=>b.textContent+(b.classList.contains("sel")?"*":""));
+const dev=(c)=>({eq:c._parts.eq._config.device_id||null, settings:c._parts.settings._config.device_id||null, chucnang:c._parts.chucnang._config.device_id||null, talk:c._parts.talk._config.device_id||null});
+const c=await tao({});
+const dau={chips:chips(c), dev:dev(c)};
+c.shadowRoot.querySelectorAll(".tabs.loa .tab")[1].click();
+const sau={chips:chips(c), dev:dev(c)};
+const ghim=await tao({device_id:"d2"});
+const g={chips:chips(ghim), dev:dev(ghim)};
+document.getElementById("out").textContent=JSON.stringify({dau,sau,g});
+})();</script>"""
+
+
+@pytest.mark.skipif(CHROME is None, reason="cần Chrome/Chromium")
+def test_the_gop_co_hai_loa_thi_chon_loa_cho_eq_va_cai_dat_con_ghim_device_id_thi_khong_hien_hang_chon(tmp_path):
+    (tmp_path / "gop.js").write_text((WWW / "r1-card.js").read_text(encoding="utf-8"), encoding="utf-8")
+    page = tmp_path / "nhieu.html"
+    page.write_text(PAGE_NHIEU_LOA.replace("@EQ@", str(WWW / "r1-eq-card.js")).replace(
+        "@TALK@", str(WWW / "r1-talk-card.js")).replace(
+        "@SETTINGS@", str(WWW / "r1-settings-card.js")).replace("@CHUCNANG@", str(WWW / "r1-chucnang-card.js")).replace("@GOP@", str(tmp_path / "gop.js")), encoding="utf-8")
+    out = subprocess.run(
+        [CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--allow-file-access-from-files",
+         "--virtual-time-budget=3000", "--dump-dom", f"file://{page}"], capture_output=True, text=True, timeout=60)
+    m = re.search(r'<div id="out">(.*?)</div>', out.stdout, re.S)
+    assert m, out.stderr[-500:]
+    r = json.loads(html_lib.unescape(m.group(1)))
+    # Tên là tên thiết bị trong HA (đổi tên ở trang thiết bị thì thẻ theo); loa đầu được chọn sẵn
+    assert r["dau"]["chips"] == ["Phicomm R1*", "Bếp"] and r["dau"]["dev"] == {"eq": "d1", "settings": "d1", "chucnang": "d1", "talk": None}
+    # Chọn loa 2: EQ, Chức năng và Cài đặt đổi theo; Đàm thoại giữ cách chọn riêng
+    assert r["sau"]["chips"] == ["Phicomm R1", "Bếp*"] and r["sau"]["dev"] == {"eq": "d2", "settings": "d2", "chucnang": "d2", "talk": None}
+    # Ghim device_id trong cấu hình thẻ: không hiện hàng chọn, cả ba tab theo loa đó
+    assert r["g"]["chips"] == [] and r["g"]["dev"] == {"eq": "d2", "settings": "d2", "chucnang": "d2", "talk": "d2"}

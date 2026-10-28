@@ -9,8 +9,9 @@ from homeassistant.helpers import entity_registry as er
 from custom_components.r1_speaker import phim as P
 from custom_components.r1_speaker.phim import NhanDien
 
-from .test_den_nhac import _khung_xuong, _noi_apk, _them_co_dau_nhan
-from .test_mic_server import khung_json
+from .test_den_nhac import _cong_trong, _khung_xuong, _noi_apk, _them_co_dau_nhan
+from .test_mic_server import KHOA, khung_json
+from .test_song_cong import _them
 
 
 class GioGia:
@@ -115,9 +116,10 @@ def test_them_hanh_dong_moi_chi_can_dang_ky_mot_ham_va_trung_ten_bi_chan():
 
 def test_hanh_dong_tich_hop_day_du_va_mac_dinh_giu_hanh_vi_cu():
     for ten in ("khong_lam_gi", "bat_tat_mic", "bat_tat_bluetooth", "phat_tam_dung", "dung_nhac", "bai_ke", "bai_truoc", "tang_am_luong",
-                "giam_am_luong", "tat_tieng_loa", "bao_thuc_dung", "bao_thuc_hoan", "hen_gio_tat_nhac_30", "bat_tat_dam_thoai"):
+                "giam_am_luong", "tat_tieng_loa", "bao_thuc_dung", "bao_thuc_hoan", "hen_gio_tat_nhac_30", "bat_tat_dam_thoai",
+                "bat_tat_assist", "bat_tat_den_nhac", "bao_thuc_hoac_dam_thoai"):
         assert ten in P.danh_sach(), ten
-    assert P.MAC_DINH["don"] == "bat_tat_mic" and P.MAC_DINH["doi"] == "bat_tat_bluetooth"      # như APK cũ: đơn = mic, đúp = Bluetooth
+    assert P.MAC_DINH == {"don": "bao_thuc_hoac_dam_thoai", "doi": "bat_tat_assist", "ba": "bat_tat_bluetooth", "giu": "bat_tat_den_nhac"}  # như AI box
     assert set(P.MAC_DINH.values()) <= set(P.danh_sach())
 
 
@@ -155,6 +157,32 @@ async def test_chon_hanh_dong_cho_cu_chi_roi_bam_phim_chay_dung_hanh_dong_va_pha
     ev = reg.async_get_entity_id("event", "r1_speaker", f"{e.entry_id}_phim")
     st = hass.states.get(ev)
     assert st.attributes["event_type"] == "ba" and st.attributes["phim"] == 195
+
+
+async def test_mac_dinh_bon_cu_chi_chay_dung_thuc_the_nhu_ai_box_va_nhan_mot_lan_uu_tien_tat_bao_thuc(hass, r1):
+    """1 lần = tắt báo thức đang kêu, không thì đàm thoại; 2 lần = Assist; 3 lần = Bluetooth; giữ = đèn theo nhạc."""
+    e, phim, _, _p = await _lien_ket(hass, r1)
+    reg = er.async_get(hass)
+    toggle = []
+    hass.services.async_register("switch", "toggle", lambda c: toggle.append(c.data["entity_id"]))
+    ent = lambda khoa: reg.async_get_entity_id("switch", "r1_speaker", f"{e.entry_id}_{khoa}")   # noqa: E731
+
+    for cu_chi, khoa in (("doi", "assist"), ("ba", "bluetooth"), ("giu", "music_light"), ("don", "intercom_open")):
+        toggle.clear()
+        phim._cu_chi_that(195, cu_chi)
+        await hass.async_block_till_done()
+        assert toggle == [ent(khoa)] and toggle[0], (cu_chi, khoa)
+
+    bt, tat = e.runtime_data.bao_thuc, []
+
+    async def tat_gia():
+        tat.append(1)
+
+    bt.tat, bt.dang_keu = tat_gia, "bt1"                    # báo thức đang kêu: nhấn 1 lần chỉ tắt báo thức
+    toggle.clear()
+    phim._cu_chi_that(195, "don")
+    await hass.async_block_till_done()
+    assert tat == [1] and toggle == []
 
 
 async def test_phim_khac_ma_hanh_dong_chi_phat_su_kien_khong_chay_hanh_dong(hass, r1):
@@ -215,13 +243,26 @@ async def test_phim_tho_tu_apk_qua_ket_noi_mic_that_thanh_cu_chi_doi_va_khung_sa
     writer.close()
 
 
-async def test_apk_noi_vao_thi_nhan_cau_hinh_phim_tu_ha(hass, r1):
-    e, phim, mic, port = await _lien_ket(hass, r1)
-    reader, writer = await _noi_apk(e, port)
+async def _khung_cau_hinh_phim(reader) -> dict:
     khung = {}
     for _ in range(6):                                   # HA gửi xuống vài khung sau khi nối (đèn, âm lượng...): tìm khung cấu hình phím
         khung = json.loads(await _khung_xuong(reader, ca_bat_tay=True))
         if khung.get("type") == "phim_cau_hinh":
             break
-    assert khung == {"type": "phim_cau_hinh", "ma": [195], "do": False}
+    return khung
+
+
+async def test_nguon_phim_mac_dinh_adb_thi_khong_dong_ma_phim_voi_apk(hass, r1):
+    """Nguồn phím mặc định là ADB (``phim_adb``): HA báo APK danh sách RỖNG để APK tự xử lý phím cũ, tránh một phím chạy hai lần."""
+    e, phim, mic, port = await _lien_ket(hass, r1)
+    reader, writer = await _noi_apk(e, port)
+    assert await _khung_cau_hinh_phim(reader) == {"type": "phim_cau_hinh", "ma": [], "do": False}
+    writer.close()
+
+
+async def test_nguon_phim_apk_thi_apk_nhan_cau_hinh_phim_tu_ha(hass, r1):
+    port = _cong_trong()
+    e = await _them(hass, r1, mic_host="127.0.0.1", mic_port=9, mic_listen_port=port, mic_listen_key=KHOA, phim_nguon="apk")
+    reader, writer = await _noi_apk(e, port)
+    assert await _khung_cau_hinh_phim(reader) == {"type": "phim_cau_hinh", "ma": [195], "do": False}
     writer.close()

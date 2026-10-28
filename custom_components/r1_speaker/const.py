@@ -194,6 +194,9 @@ CONF_ADB_MODE = "adb_mode"
 CONF_ADB_TU_DONG = "adb_tu_dong_dong"
 #: Mã phím (cách nhau bằng dấu phẩy) mà HA chạy hành động theo cử chỉ; mã khác chỉ phát sự kiện ``event.r1_phim``. 195 = nút giữa (đo thật).
 CONF_PHIM_MA = "phim_ma"
+#: Nguồn phím: ``adb`` (getevent qua ADB, không cần APK mới; mặc định) hoặc ``apk`` (dịch vụ trợ năng của APK 1.3) hoặc ``tat``.
+CONF_PHIM_NGUON = "phim_nguon"
+DEFAULT_PHIM_NGUON = "adb"
 DEFAULT_PHIM_MA = "195"
 #: Trống = không dùng adb-server, nối thẳng tới IP của loa (cổng 5555). Chỉ điền khi thật sự có adb-server (chế độ server/auto).
 DEFAULT_ADB_SERVER = ""
@@ -242,6 +245,9 @@ TALK_CARD_URL = "/r1_speaker/r1-talk-card.js"
 
 #: Thẻ cài đặt (nhóm Âm thanh / Ánh sáng / Kết nối), ẨN cho tới khi bấm nút mở.
 SETTINGS_CARD_URL = "/r1_speaker/r1-settings-card.js"
+
+#: Thẻ «Chức năng» (bật/tắt kết nối DLNA/AirPlay/Bluetooth, đặt báo thức); chỉ được thẻ gộp nạp, không là tài nguyên riêng.
+CHUCNANG_CARD_URL = "/r1_speaker/r1-chucnang-card.js"
 
 # ── Đèn LED theo chức năng (den.py / den_port.py / hieu_ung.py; xem docs/DEN-LED.md) ────────
 #: Chức năng «lỗi» sáng ngần này giây sau mỗi lần lỗi rồi trả về chức năng đúng lúc đó.

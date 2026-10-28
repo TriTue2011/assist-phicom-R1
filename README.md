@@ -6,7 +6,7 @@ Kho này biến loa **Phicomm R1** thành một thiết bị đầy đủ của 
 
 1. **Tích hợp HA `r1_speaker`** (`custom_components/r1_speaker/`): EQ, âm lượng, DLNA/AirPlay; phát tiếng của HA (TTS, nhạc) ra loa; vệ tinh Assist với từ đánh thức;
    bộ đàm; **đèn LED** (13 hiệu ứng, mỗi hiệu ứng có thông số riêng, mục Thử riêng); **cài ứng dụng lên loa qua ADB** (kể cả loa mới tinh); nút khởi động lại loa;
-   cảm biến CPU/RAM/bộ nhớ/WiFi của loa; thẻ Lovelace `r1-card` (đàm thoại, EQ, cài đặt); icon riêng (`brand/`; HA có hỗ trợ thư mục này tự nạp, đã thấy trong 2026.10.3, bản cũ hơn chưa kiểm).
+   cảm biến CPU/RAM/bộ nhớ/WiFi của loa; thẻ Lovelace `r1-card` (đàm thoại, EQ, chức năng, cài đặt); icon riêng (`brand/`; HA có hỗ trợ thư mục này tự nạp, đã thấy trong 2026.10.3, bản cũ hơn chưa kiểm).
 2. **APK `vn.r1.bodam`** (`apk/`): ứng dụng Android nhỏ trên loa, lấy tiếng mic gửi về HA **chỉ khi người dùng bật**; nút giữa bật/tắt mic.
 
 > **Đọc trước khi làm theo.** Đây là dự án thử nghiệm. Phần lớn mã được kiểm bằng loa giả trên máy phát triển; các điểm đã kiểm trên **loa thật** và điểm **chưa kiểm** được ghi rõ ở từng mục và ở
@@ -24,7 +24,7 @@ Không cần cài `adb` hay chạy lệnh nào trên máy tính: tích hợp t�
 4. Mở thiết bị **Phicomm R1** → ở ba thực thể **«Ứng dụng: …»** (trình phát, thiết bị và giọng nói, mic) bấm **Cài đặt** lần lượt.
    Tích hợp tự **ẩn các ứng dụng gốc** của hãng và tự cấu hình APK mic, bạn không phải làm gì thêm.
 5. Bấm nút **Khởi động lại loa**, đợi **1–2 phút** (cổng điều khiển trên loa lên sau khoảng 100 giây).
-6. **Kiểm:** nói gần loa, `sensor.r1_trang_thai_mic` phải chuyển **«gui»**. Rồi thêm thẻ `type: custom:r1-card` vào bảng điều khiển (3 tab: Đàm thoại, EQ, Cài đặt).
+6. **Kiểm:** nói gần loa, `sensor.r1_trang_thai_mic` phải chuyển **«gui»**. Rồi thêm thẻ `type: custom:r1-card` vào bảng điều khiển (4 tab: Đàm thoại, EQ, Chức năng, Cài đặt).
 
 > Loa vừa reset: cổng ADB mạng `5555` của loa phải mở thì bước 4 mới chạy được (chưa kiểm trên loa vừa reset). Mở rồi mà báo bận thì tắt mọi công cụ `adb` khác: loa chỉ nhận **một** kết nối ADB.
 
@@ -102,7 +102,7 @@ Tích hợp mang sẵn 3 ứng dụng (`custom_components/r1_speaker/apk/`, danh
 - Cài xong tích hợp tự **«Chuẩn bị loa»**: ẩn các ứng dụng gốc gây nhiễu (giống chương trình *Bo Cai R1*). Cũng có nút **«Chuẩn bị loa (ẩn ứng dụng gốc)»** nếu cần chạy riêng. Cài mà không ẩn thì loa chập chờn (cổng 8080 không trả lời, tự khởi động lại).
 - Tệp được kiểm **sha256** trước khi đẩy; sai thì không đẩy gì.
 - `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (loa đang có bản ký khác): chỉ khi đặt `force: true` tích hợp mới gỡ bản cũ rồi cài lại.
-- Nút **Khởi động lại loa** (`button.r1_khoi_dong_lai`) gửi lệnh `reboot` qua ADB.
+- Nút **Khởi động lại loa** (`button.r1_khoi_dong_lai`) gửi lệnh `reboot` qua ADB; ADB hỏng hoặc đóng thì qua cổng 8080 (tin `shell`, như app AI box; đã thử khi ADB còn mở, chưa thử khi đã đóng).
 
 Chi tiết: [docs/CAI-UNG-DUNG.md](docs/CAI-UNG-DUNG.md). Cài APK bằng tay (cách cũ, không cần nữa): [docs/CAI-APK.md](docs/CAI-APK.md).
 **Đã kiểm trên loa thật:** cài đè APK mic 1.2, tự chạy sau khởi động lại, tự nối lại HA. **Chưa kiểm trên loa thật:** bấm «Cài đặt» cho `unisound` từ HA, và toàn bộ trình tự trên loa vừa reset.

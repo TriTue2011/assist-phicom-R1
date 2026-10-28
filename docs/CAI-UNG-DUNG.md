@@ -49,7 +49,7 @@ Tên gói và tên tệp đều qua bộ lọc trước khi vào lệnh; khoá n
 
 ## Nút khởi động lại loa
 
-Thực thể `button.r1_khoi_dong_lai` («Khởi động lại loa») gửi lệnh `reboot` qua ADB. Sau khi loa lên lại, APK tự nối về HA (đã kiểm) và HA tự áp lại đèn.
+Thực thể `button.r1_khoi_dong_lai` («Khởi động lại loa») gửi lệnh `reboot` qua ADB; ADB mạng hỏng hoặc đóng thì nút tự chuyển sang cổng 8080 (tin `shell` với lệnh `stop adbd&&start adbd&&adb reboot` của app AI box). Đã thử trên loa thật 28/10/2026 khi ADB mạng còn mở (loa tắt sau ~10 giây, lên lại sau ~30 giây); **chưa thử khi ADB mạng đã đóng**. `reboot` và `setprop sys.powerctl reboot` qua cổng 8080 KHÔNG có hiệu lực (lệnh chạy dưới uid `system`, không phải root). Sau khi loa lên lại, APK tự nối về HA (đã kiểm) và HA tự áp lại đèn.
 
 ## Loa mới tinh: thứ tự đề nghị
 
