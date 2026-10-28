@@ -66,6 +66,57 @@ class TrangThaiDmr:
     uri: str | None = None
 
 
+def gio_tua(giay: float, thap_phan: bool) -> str:
+    """Đích tua ``REL_TIME`` dạng ``H:MM:SS`` (hoặc ``H:MM:SS.mmm`` khi ``thap_phan``). Thư viện UPnP cắt xuống số nguyên giây nên
+    mọi lần tua đều lệch tới 1 giây; ở đây tự định dạng: có phần thập phân (đúng đặc tả) hoặc làm tròn GẦN NHẤT."""
+    giay = max(0.0, float(giay))
+    if not thap_phan:
+        giay = float(round(giay))
+    h, m = int(giay // 3600), int(giay % 3600 // 60)
+    s = giay % 60
+    return f"{h}:{m:02d}:{s:06.3f}" if thap_phan else f"{h}:{m:02d}:{int(s):02d}"
+
+
+class UocViTri:
+    """Ước vị trí phát CHÍNH XÁC hơn 1 giây từ ``RelTime`` của renderer (UPnP chỉ báo số NGUYÊN giây, làm tròn xuống).
+
+    Vì sao: ``youtube`` đồng bộ nhiều loa bằng vị trí mà loa báo; vị trí cắt xuống số nguyên lệch trung bình nửa giây và dao động
+    ±1 giây theo thời điểm hỏi, nên loa R1 bị «đo sai rồi chỉnh theo số sai» và trôi dần (chủ máy 28/10/2026: «lúc đầu đồng bộ, sau lệch
+    dần»). Cách làm: gọi θ = vị trí thật − đồng hồ đơn điệu. Mỗi lần đọc n (nguyên) ở lúc t cho ràng buộc θ ∈ [n−t, n+1−t). GIAO các ràng
+    buộc theo thời gian thì khoảng θ co lại nhanh (vài lần hỏi là còn cỡ 0,1–0,2 giây); ước = giữa khoảng. Hai ràng buộc không giao
+    nhau (tua, đổi bài, tạm dừng, loa chạy lệch nhịp) thì bỏ khoảng cũ và bắt đầu lại từ lần đọc mới.
+    """
+
+    DUNG_SAI_S = 0.15
+
+    def __init__(self) -> None:
+        self._lo: float | None = None
+        self._hi: float | None = None
+
+    def reset(self) -> None:
+        self._lo = self._hi = None
+
+    @property
+    def do_rong(self) -> float | None:
+        return None if self._lo is None else self._hi - self._lo
+
+    def them(self, doc_giay: float | None, t: float) -> float | None:
+        """Đưa một lần đọc (giây nguyên, hoặc None) ở lúc đồng hồ đơn điệu ``t``; trả vị trí ước (giây) tại ``t``."""
+        if doc_giay is None:
+            self.reset()
+            return None
+        n = float(int(doc_giay))
+        lo, hi = n - t, n + 1.0 - t
+        if self._lo is not None:
+            nlo, nhi = max(self._lo, lo), min(self._hi, hi)
+            if nlo <= nhi:
+                lo, hi = nlo, nhi
+            elif nlo - nhi <= self.DUNG_SAI_S:
+                lo = hi = (nlo + nhi) / 2                    # lệch nhẹ do loa chạy nhanh/chậm: co về điểm giữa, không bỏ lịch sử
+        self._lo, self._hi = lo, hi
+        return (lo + hi) / 2 + t
+
+
 class _Nhan(asyncio.DatagramProtocol):
     def __init__(self, host: str, xong: asyncio.Future) -> None:
         self._host, self._xong = host, xong
@@ -134,6 +185,7 @@ class R1Dmr:
         self.mo_ta_cuoi: str | None = None     # địa chỉ mô tả lần nối thành công gần nhất (đúng tới khi loa khởi động lại)
         self.cach_tim: str | None = None
         self.chan_doan: list[str] = []         # lần tìm gần nhất hỏng ở đâu (để báo lỗi)
+        self.tua_thap_phan = True              # loa nhận đích tua có phần thập phân giây (tự hạ xuống nguyên giây nếu loa từ chối)
 
     @property
     def da_noi(self) -> bool:
@@ -251,7 +303,16 @@ class R1Dmr:
         async def viec(dev: DmrDevice) -> None:
             if not dev.has_seek_rel_time:
                 raise UpnpError("renderer không hỗ trợ tua")
-            await dev.async_seek_rel_time(timedelta(seconds=giay))
+            tua = dev.device.service(AVT).action("Seek")
+            if self.tua_thap_phan:
+                try:
+                    await tua.async_call(InstanceID=0, Unit="REL_TIME", Target=gio_tua(giay, True))
+                    return
+                except UpnpError as exc:
+                    # Loa từ chối đích có phần thập phân: nhớ, từ nay làm tròn gần nhất tới giây (chính xác hơn cắt xuống).
+                    _LOGGER.info("Loa %s không nhận đích tua thập phân (%s): chuyển sang nguyên giây", self._host, type(exc).__name__)
+                    self.tua_thap_phan = False
+            await tua.async_call(InstanceID=0, Unit="REL_TIME", Target=gio_tua(giay, False))
         await self._goi(viec)
 
     async def async_doc(self) -> TrangThaiDmr:

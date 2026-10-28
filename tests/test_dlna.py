@@ -111,7 +111,7 @@ async def test_trang_thai_tien_do_thoi_luong_hien_tren_thuc_the(hass, r1, dmr):
     await _cho_state(hass, "playing")
     await asyncio.sleep(0.2)
     st = hass.states.get(LOA)
-    assert st.attributes.get("media_duration") == 180 and st.attributes.get("media_position") == 5
+    assert st.attributes.get("media_duration") == 180 and 5 <= st.attributes.get("media_position") < 6   # ước trong khoảng nguyên giây đọc được
     assert "idle_reason" not in st.attributes
 
 

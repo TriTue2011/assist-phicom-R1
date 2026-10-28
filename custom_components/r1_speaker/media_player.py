@@ -7,7 +7,7 @@ Hợp đồng ``play_media`` (``tts.speak`` cũng đi đường này):
  - DLNA của loa đang tắt → gửi ``Set_DLNA_Open``, rồi chờ renderer lên tối đa ``DLNA_READY_TIMEOUT`` giây; hết giờ → ``HomeAssistantError``.
  - ``media-source://`` được giải ra URL, URL tương đối được đổi thành địa chỉ HA tới được từ loa.
  - Báo tin (TTS / ``announce``): tạm dừng nhạc, phát tin, rồi nền theo dõi tin xong và khôi phục nhạc (``giu_nhac``).
-Trạng thái chỉ được hỏi lại có chu kỳ KHI ĐANG PHÁT (3 giây; 1 giây khi đang báo tin) và sau mỗi lệnh; idle/tạm dừng thì không hỏi nền.
+Trạng thái chỉ được hỏi lại có chu kỳ KHI ĐANG PHÁT (2,9 giây; 1 giây khi đang báo tin) và sau mỗi lệnh; idle/tạm dừng thì không hỏi nền.
 ``idle_reason`` (``finished`` / ``stopped`` / ``interrupted`` / ``error``) khai khi idle để tích hợp phát nhạc phân biệt Stop với hết bài.
 Âm lượng dùng đường APK có sẵn (``number``).
 """
@@ -18,6 +18,7 @@ import asyncio
 import functools
 import logging
 import time
+from dataclasses import replace
 from typing import Any
 
 from homeassistant.components.media_player import (
@@ -41,7 +42,7 @@ from homeassistant.util import dt as dt_util
 
 from . import const
 from .const import DLNA_READY_TIMEOUT, DOMAIN
-from .dmr import R1Dmr, R1DmrError, TrangThaiDmr
+from .dmr import R1Dmr, R1DmrError, TrangThaiDmr, UocViTri
 from .coordinator import R1ConfigEntry, R1Coordinator
 from .client import R1Error
 from .entity import R1Entity
@@ -53,7 +54,9 @@ _LOGGER = logging.getLogger(__name__)
 #: sẽ cho ``media_player.phicomm_r1_loa``, nên đặt sẵn tên gợi ý khi đăng ký lần đầu.
 SUGGESTED_OBJECT_ID = "r1_loa"
 #: Hỏi lại trạng thái renderer khi đang phát nhạc / khi đang báo tin (giây).
-CHAM_NHAC = 3.0
+# KHÔNG đặt chu kỳ là số nguyên giây: RelTime báo nguyên giây, hỏi đúng bội số nguyên thì luôn ở cùng một pha và ``UocViTri`` không co lại
+# được (sai kẹt ~0,3 giây); chu kỳ lẻ làm pha đổi dần nên ước chính xác dần.
+CHAM_NHAC = 2.9
 CHAM_TIN = 1.0
 #: False: AI box đã gỡ → cổng nhạc 8082 không còn → không đăng ký dịch vụ nhạc.
 MUSIC_SERVICES = False
@@ -135,6 +138,8 @@ class R1Player(R1Entity, MediaPlayerEntity):
         self._nhanh = False                  # đang báo tin: hỏi lại trạng thái dày hơn
         self._cham: asyncio.Task | None = None
         self._dang_dong_bo = False           # một lượt đọc theo chu kỳ coordinator đang chạy
+        self._uoc = UocViTri()               # vị trí chính xác hơn 1 giây từ RelTime nguyên giây
+        self._ghi_luc = 0.0                  # lúc (đồng hồ đơn điệu) ghi trạng thái gần nhất
 
     @property
     def _dmr(self) -> R1Dmr:
@@ -207,8 +212,8 @@ class R1Player(R1Entity, MediaPlayerEntity):
         return (self._uri or self._tt.uri) if self._tt.state != "idle" else None
 
     @property
-    def media_position(self) -> int | None:
-        return None if self._tt.position is None else int(self._tt.position)
+    def media_position(self) -> float | None:
+        return None if self._tt.position is None else round(self._tt.position, 1)
 
     @property
     def media_position_updated_at(self):
@@ -239,17 +244,35 @@ class R1Player(R1Entity, MediaPlayerEntity):
                 self._ly_do = "error" if tt.loi else "finished"        # renderer tự dừng: không do lệnh của ta
         else:
             self._ly_do = None
+        now_m = time.monotonic()
+        now_u = dt_util.utcnow()
+        # Vị trí: RelTime chỉ có số NGUYÊN giây (cắt xuống) → ước chính xác hơn bằng giao các ràng buộc (UocViTri). Chỉ khi đang phát;
+        # tạm dừng/dừng/đổi trạng thái thì ước bắt đầu lại (đồng hồ không còn chạy cùng nhịp với vị trí).
+        if tt.state == "playing" and tt.position is not None and cu.state == "playing" and cu.uri == tt.uri:
+            uoc = self._uoc.them(tt.position, now_m)
+        else:
+            self._uoc.reset()
+            uoc = self._uoc.them(tt.position, now_m) if tt.state == "playing" and tt.position is not None else None
+        if uoc is not None:
+            tt = replace(tt, position=uoc)
         du_kien = None
         if cu.position is not None and cu.state == "playing" and self._tt_utc is not None:
-            du_kien = cu.position + (dt_util.utcnow() - self._tt_utc).total_seconds()
-        nhay = tt.position is not None and (du_kien is None or abs(tt.position - du_kien) > 2.5)
-        self._tt, self._tt_utc = tt, dt_util.utcnow()
+            du_kien = cu.position + (now_u - self._tt_utc).total_seconds()
+        # Ghi lại khi vị trí đã lệch khỏi lời khai cũ (ngoại suy) quá 0,3 giây, hoặc đã 15 giây chưa làm mới: để người đọc
+        # (youtube đồng bộ nhiều loa) luôn có cặp (vị trí, thời điểm) mới — trước đây chỉ ghi khi nhảy 2,5 giây nên cặp cũ dần sai.
+        nhay = tt.position is not None and (du_kien is None or abs(tt.position - du_kien) > 0.3
+                                            or now_m - self._ghi_luc >= 15.0)
+        thay = (tt.state, tt.uri, tt.duration) != (cu.state, cu.uri, cu.duration)
+        if thay or nhay:
+            self._tt, self._tt_utc, self._ghi_luc = tt, now_u, now_m
+        else:
+            self._tt = replace(tt, position=cu.position)             # giữ cặp (vị trí, thời điểm) đã khai: không ghi
         if tt.state not in ("playing", "buffering") and self._cham is not None and self._cham is not asyncio.current_task():
             # Không còn phát: vòng hỏi lại thôi ngay, không thức thêm lượt. Bỏ tham chiếu NGAY: tác vụ đã huỷ chưa «xong» cho tới
             # vòng lặp kế, nên giữ lại thì ``_bat_dau_cham`` tưởng nó còn sống và không bật vòng mới khi nhạc phát lại.
             cham, self._cham = self._cham, None
             cham.cancel()
-        if (tt.state, tt.uri, tt.duration) != (cu.state, cu.uri, cu.duration) or nhay:
+        if thay or nhay:
             self.async_write_ha_state()
 
     async def _doc(self) -> TrangThaiDmr | None:

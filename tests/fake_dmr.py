@@ -21,6 +21,7 @@ _ACTIONS = {
         "Play": (["InstanceID", "Speed"], {}),
         "Stop": (["InstanceID"], {}),
         "Pause": (["InstanceID"], {}),
+        "Seek": (["InstanceID", "Unit", "Target"], {}),
         "GetTransportInfo": (["InstanceID"], {
             "CurrentTransportState": "STOPPED", "CurrentTransportStatus": "OK",
             "CurrentSpeed": "1"}),
@@ -54,7 +55,7 @@ _STATE_VARS = {
             "NextAVTransportURI": "string", "NextAVTransportURIMetaData": "string",
             "CurrentTrack": "ui4", "CurrentTrackDuration": "string",
             "CurrentTrackMetaData": "string", "CurrentTrackURI": "string",
-            "RelativeTimePosition": "string", "AbsoluteTimePosition": "string",
+            "RelativeTimePosition": "string", "AbsoluteTimePosition": "string", "A_ARG_TYPE_SeekMode": "string", "A_ARG_TYPE_SeekTarget": "string",
             "RelativeCounterPosition": "i4", "AbsoluteCounterPosition": "i4",
             "RecordStorageMedium": "string", "RecordMediumWriteStatus": "string",
             "A_ARG_TYPE_InstanceID": "ui4", "A_ARG_TYPE_Speed": "string"},
@@ -73,7 +74,7 @@ _REL = {"AVT": {"InstanceID": "A_ARG_TYPE_InstanceID", "Speed": "A_ARG_TYPE_Spee
                 "WriteStatus": "RecordMediumWriteStatus", "Track": "CurrentTrack",
                 "TrackDuration": "CurrentTrackDuration", "TrackMetaData": "CurrentTrackMetaData",
                 "TrackURI": "CurrentTrackURI", "RelTime": "RelativeTimePosition",
-                "AbsTime": "AbsoluteTimePosition", "RelCount": "RelativeCounterPosition",
+                "AbsTime": "AbsoluteTimePosition", "Unit": "A_ARG_TYPE_SeekMode", "Target": "A_ARG_TYPE_SeekTarget", "RelCount": "RelativeCounterPosition",
                 "AbsCount": "AbsoluteCounterPosition"},
         "RC": {"InstanceID": "A_ARG_TYPE_InstanceID", "Channel": "A_ARG_TYPE_Channel",
                "CurrentVolume": "Volume", "DesiredVolume": "Volume",
@@ -91,9 +92,13 @@ def _scpd(svc: str) -> str:
                         f"<relatedStateVariable>{_REL[svc][a]}</relatedStateVariable></argument>"
                         for a in outs)
         actions.append(f"<action><name>{name}</name><argumentList>{args}</argumentList></action>")
+    cho_phep = {"A_ARG_TYPE_SeekMode": ("REL_TIME", "TRACK_NR")}           # loa thật khai các kiểu tua hỗ trợ
     variables = "".join(
         f'<stateVariable sendEvents="{"no" if v.startswith("A_ARG") else "yes"}">'
-        f"<name>{v}</name><dataType>{t}</dataType></stateVariable>"
+        f"<name>{v}</name><dataType>{t}</dataType>"
+        + (("<allowedValueList>" + "".join(f"<allowedValue>{x}</allowedValue>" for x in cho_phep[v]) + "</allowedValueList>")
+           if v in cho_phep else "")
+        + "</stateVariable>"
         for v, t in _STATE_VARS[svc].items())
     return ('<?xml version="1.0"?><scpd xmlns="urn:schemas-upnp-org:service-1-0">'
             "<specVersion><major>1</major><minor>0</minor></specVersion>"
@@ -124,6 +129,8 @@ class FakeDMR:
         #: trạng thái truyền tải giả: Play → PLAYING, Pause → PAUSED_PLAYBACK, Stop → STOPPED (test đặt tay để mô phỏng hết bài)
         self.transport_state = "STOPPED"
         self.transport_status = "OK"
+        #: True: loa từ chối đích tua có phần thập phân (SOAP lỗi 711), chỉ nhận nguyên giây
+        self.tu_choi_thap_phan = False
         self.uri = ""
         self.port = 0
         self._runner = None
@@ -157,6 +164,12 @@ class FakeDMR:
                 r"<(\w+)>([^<]*)</\1>", body) if m.group(1) not in ("Body", "Envelope")}
             from html import unescape
             self.actions.append((action, {k: unescape(v) for k, v in args.items()}))
+            if action == "Seek" and self.tu_choi_thap_phan and "." in args.get("Target", ""):
+                return web.Response(status=500, content_type="text/xml", text=(
+                    '<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><s:Fault>'
+                    "<faultcode>s:Client</faultcode><faultstring>UPnPError</faultstring><detail>"
+                    '<UPnPError xmlns="urn:schemas-upnp-org:control-1-0"><errorCode>711</errorCode>'
+                    "<errorDescription>Illegal seek target</errorDescription></UPnPError></detail></s:Fault></s:Body></s:Envelope>"))
             if action == "SetAVTransportURI":
                 self.uri = args.get("CurrentURI", "")
             elif action == "Play":

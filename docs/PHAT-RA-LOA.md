@@ -14,11 +14,18 @@ trước đó phải thêm tay tích hợp `dlna_dmr`).
 3. Phát bằng UPnP AV (`SetAVTransportURI` + `Play`), tạm dừng/phát tiếp/dừng/tua cũng qua đó. Thư viện `async_upnp_client` có sẵn
    trong Home Assistant lo phần SOAP.
 4. Trạng thái (`playing` / `paused` / `idle`), tên bài, **thời lượng**, vị trí và **lý do idle** hiện ngay trên `media_player.r1_loa`
-   và trên thẻ R1. Hỏi lại renderer có chu kỳ chỉ **khi đang phát** (3 giây; 1 giây khi đang báo tin) và theo chu kỳ 10 giây
+   và trên thẻ R1. Hỏi lại renderer có chu kỳ chỉ **khi đang phát** (2,9 giây; 1 giây khi đang báo tin) và theo chu kỳ 10 giây
    của tích hợp khi DLNA bật (để thấy cả nhạc do thiết bị khác bật). Idle/tạm dừng thì không hỏi nền.
 
 `tts.speak` và `media_player.play_media` đều đi đường này; `media-source://` được giải ra URL, URL tương đối được đổi thành địa chỉ
 HA mà loa tới được. Âm lượng chỉnh bằng `number.phicomm_r1_volume` (đường APK có sẵn).
+
+## Vị trí chính xác và tua mịn (0.6.2)
+
+UPnP chỉ báo vị trí bằng số NGUYÊN giây (cắt xuống), nên đọc thẳng thì lệch trung bình nửa giây và dao động ±1 giây. `youtube` dùng vị trí để đồng bộ
+nhiều loa, nên số thô làm R1 «đo sai rồi chỉnh theo số sai» và trôi dần. Thực thể nay **ước vị trí chính xác hơn** (giao các ràng buộc theo thời gian,
+sai số cỡ 0,1–0,3 giây sau vài lần hỏi), ghi lại khi lệch quá 0,3 giây hoặc 15 giây một lần, và chu kỳ hỏi là 2,9 giây (không phải số nguyên giây, để
+pha đổi dần). Tua gửi đích có phần thập phân (`0:00:42.370`); loa từ chối thì tự làm tròn GẦN NHẤT tới giây (thư viện mặc định cắt xuống) và nhớ.
 
 ## Lý do idle (`idle_reason`)
 

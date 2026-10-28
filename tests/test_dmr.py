@@ -177,3 +177,69 @@ async def test_loi_neu_ro_da_thu_nhung_cach_nao_va_goi_y_mang(hass):
         assert cach in t
     assert "UDP 1900" in t and "tường lửa" in t
     assert d.chan_doan and len(d.chan_doan) == 5
+
+
+# ── UocViTri: vị trí chính xác hơn 1 giây từ RelTime nguyên giây ─────────────────────────────────
+def _mo_phong(theta, so_lan, cach, *, toc_do=1.0, t0=1000.0):
+    """Loa thật có vị trí = theta + (t - t0)*toc_do; chỉ báo phần NGUYÊN (cắt xuống). Trả (sai số tuyệt đối từng lần ước)."""
+    from custom_components.r1_speaker.dmr import UocViTri
+    u, sai = UocViTri(), []
+    for k in range(so_lan):
+        t = t0 + k * cach
+        that = theta + (t - t0) * toc_do
+        uoc = u.them(int(that), t)
+        sai.append(abs(uoc - that))
+    return sai
+
+
+def test_uoc_vi_tri_co_dan_ve_duoi_300ms_sau_vai_lan_hoi():
+    # lần đầu chỉ biết trong [n, n+1) → sai tới 0,5 giây; vài lần hỏi ở pha khác nhau thì co lại
+    sai = _mo_phong(theta=37.31, so_lan=20, cach=3.17)
+    assert sai[0] <= 0.5 + 1e-9
+    assert max(sai[8:]) < 0.3, sai
+
+
+def test_uoc_vi_tri_tot_hon_cat_xuong_so_nguyen():
+    """So với cách cũ (báo số nguyên cắt xuống: sai trung bình ~0,5 giây, tới 1 giây)."""
+    sai = _mo_phong(theta=12.8, so_lan=40, cach=2.9)
+    sai_cu = [abs(int(12.8 + k * 2.9) - (12.8 + k * 2.9)) for k in range(40)]
+    assert sum(sai[10:]) / len(sai[10:]) < 0.15 < sum(sai_cu) / len(sai_cu)
+
+
+def test_uoc_vi_tri_loa_chay_lech_nhip_van_theo_kip_khong_troi_xa():
+    sai = _mo_phong(theta=5.4, so_lan=400, cach=3.0, toc_do=1.0004)         # chạy nhanh hơn 0,04%: 0,5 giây sau ~20 phút
+    assert max(sai[50:]) < 0.8                                               # có thể co/giãn lại nhưng không trôi mãi
+
+
+def test_uoc_vi_tri_tua_hay_doi_bai_thi_bat_dau_lai():
+    from custom_components.r1_speaker.dmr import UocViTri
+    u = UocViTri()
+    for k in range(10):
+        u.them(int(50.0 + k * 3.0), 100.0 + k * 3.0)
+    uoc = u.them(5, 200.0)                                                   # tua về giây 5: không giao được → lấy lần đọc mới
+    assert 5.0 <= uoc <= 6.0
+    assert u.them(None, 201.0) is None and u.do_rong is None
+
+
+# ── tua có phần thập phân (đồng bộ nhiều loa cần chỉnh mịn hơn 1 giây) ──────────────────────────
+def test_gio_tua_dinh_dang_thap_phan_va_lam_tron_gan_nhat():
+    from custom_components.r1_speaker.dmr import gio_tua
+    assert gio_tua(12.34, True) == "0:00:12.340" and gio_tua(3725.5, True) == "1:02:05.500"
+    assert gio_tua(12.6, False) == "0:00:13" and gio_tua(12.4, False) == "0:00:12"     # làm tròn GẦN NHẤT, không cắt xuống
+    assert gio_tua(-3, True) == "0:00:00.000"
+
+
+async def test_tua_gui_dich_thap_phan_khi_loa_nhan(dmr, fake):
+    await dmr.async_phat("http://ha/a.mp3", "x")
+    await dmr.async_tua(42.37)
+    assert fake.called("Seek")[-1]["Target"] == "0:00:42.370" and fake.called("Seek")[-1]["Unit"] == "REL_TIME"
+
+
+async def test_tua_loa_tu_choi_thap_phan_thi_ha_xuong_nguyen_giay_va_nho(dmr, fake):
+    fake.tu_choi_thap_phan = True
+    await dmr.async_phat("http://ha/a.mp3", "x")
+    await dmr.async_tua(42.6)
+    assert fake.called("Seek")[-1]["Target"] == "0:00:43" and dmr.tua_thap_phan is False   # tròn gần nhất, không phải 42
+    n = len(fake.called("Seek"))
+    await dmr.async_tua(10.2)
+    assert len(fake.called("Seek")) == n + 1 and fake.called("Seek")[-1]["Target"] == "0:00:10"   # nhớ: không thử thập phân nữa
