@@ -18,6 +18,8 @@ import struct
 import time
 from dataclasses import dataclass, field
 
+from .const import ADB_QUEUE_TOI_DA_KHUC
+
 _LOGGER = logging.getLogger(__name__)
 
 MODE_AUTO, MODE_SERVER, MODE_DIRECT = "auto", "server", "direct"
@@ -142,7 +144,12 @@ class _DirectTransport:
                     st.ack.set()
                 elif cmd == A_WRTE:
                     st.remote = a0
-                    st.q.put_nowait(data)
+                    if st.q.qsize() >= ADB_QUEUE_TOI_DA_KHUC:
+                        # Không ai đọc luồng này mà loa vẫn đẩy: đóng luồng, không để RAM tăng vô hạn.
+                        _LOGGER.warning("ADB: luồng %s đầy %d khúc chưa đọc — đóng luồng", st.local, st.q.qsize())
+                        st.dong_tu_xa()
+                    else:
+                        st.q.put_nowait(data)
                     await self.gui(A_OKAY, st.local, st.remote)
                 elif cmd == A_CLSE:
                     st.dong_tu_xa()

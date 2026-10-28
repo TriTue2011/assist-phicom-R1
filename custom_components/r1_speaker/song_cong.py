@@ -43,6 +43,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 
 from . import const
+from .hang_doi import day_bo_cu_nhat
 from .cong_vao import tu_choi_401, xac_thuc
 from .dam_thoai import R1SessionBusy, R1Talk
 from .intercom import level_db
@@ -319,7 +320,7 @@ class R1Duplex:
             self._unsub_link()
             self._unsub_link = None
         if self._hang is not None:
-            self._hang.put_nowait(None)      # bơm phát kết thúc → async_play đóng kênh
+            day_bo_cu_nhat(self._hang, None)      # bơm phát kết thúc → async_play đóng kênh
             self._hang = None
         if self._release is not None:
             self._release()
@@ -396,13 +397,13 @@ class R1Duplex:
         elif bay_gio >= self._phone_noi_den:
             return
         if self._hang is None:
-            self._hang = asyncio.Queue()
+            self._hang = asyncio.Queue(maxsize=const.PLAY_QUEUE_CHUNKS)
             self._play_task = self.hass.async_create_background_task(
                 self._phat(), "r1_speaker duplex play")
         self._last_play = time.monotonic()
         if self._aec is not None:
             self._aec.day_ref(pcm)           # tham chiếu cho khử vọng
-        self._hang.put_nowait(pcm)
+        day_bo_cu_nhat(self._hang, pcm)
 
     async def _nguon(self, hang: asyncio.Queue) -> AsyncIterator[bytes]:
         while (khuc := await hang.get()) is not None:

@@ -28,6 +28,30 @@ Nội dung chuyển từ README: trạng thái đã kiểm, chạy test, cấu t
   (việc này đang được làm, chưa hoàn thành).
 
 
+## 8b. Quy tắc tài nguyên (RAM, CPU, kết nối, luồng)
+
+Tích hợp chạy **trong tiến trình Home Assistant dùng chung**: một chỗ ngốn tài nguyên là cả Home Assistant đầy RAM rồi bị khởi
+động lại (đã xảy ra thật: vòng nghe quay không nghỉ, PCM tích tụ). Mọi mã mới phải theo các quy tắc sau; ba quy tắc đầu có
+test canh bằng AST (`tests/test_quy_tac_tai_nguyen.py`).
+
+1. **Hàng đợi luôn có trần.** Mọi `asyncio.Queue` phải có `maxsize`; đầy thì bỏ khúc **cũ nhất** (`hang_doi.day_bo_cu_nhat`),
+   không chặn bên đẩy và không để RAM tăng. Tiếng PCM 16 kHz mono ≈ 32 KB/giây: hàng đợi không trần phình vài chục MB mỗi
+   phút nếu kênh phát tắc. Luồng ADB ghép kênh có trần riêng (`ADB_QUEUE_TOI_DA_KHUC`, vượt thì đóng luồng).
+2. **Không chặn vòng lặp sự kiện.** Không `time.sleep`, `requests`, `urllib.request`, `subprocess.run/call/check_*` trong mã
+   bất đồng bộ. Đọc tệp và việc nặng đi qua `hass.async_add_executor_job` hoặc `loop.run_in_executor`.
+3. **Không tự mở luồng.** Không `threading.Thread(...)` hay `ThreadPoolExecutor`: dùng luồng có trần của Home Assistant
+   (executor), và chỉ cho việc thật sự chặn.
+4. **Mở nhanh, đóng nhanh.** Kết nối tới loa (ADB, TCP phát tiếng) mở khi cần, đóng ngay khi xong, đóng trong `finally`; không
+   giữ kết nối rảnh. Kết nối ADB chỉ giữ ngắn (nhả sau vài giây không dùng); mỗi lượt phát tiếng mở một kết nối rồi đóng khi hết
+   tiếng. Ngoại lệ có chủ đích và ghi rõ: máy chủ nghe mic (loa nối vào, một luồng).
+5. **Lỗi lặp thì nghỉ tăng dần.** Việc lặp lại khi lỗi (nối lại, chạy lượt pipeline…) phải nghỉ giữa các lần và tăng khoảng
+   nghỉ (2, 4, 8… có trần); không thử lại liên tục, không bật đèn hay gọi ADB mỗi vòng, chỉ báo lỗi một lần cho cả chuỗi.
+   Mọi vòng `while True` phải có chỗ `await` thật (nhường vòng lặp sự kiện).
+6. **Tác vụ nền có chủ.** Tạo bằng `async_create_background_task`, lưu tham chiếu, huỷ khi gỡ tích hợp/đóng phiên; không để tác
+   vụ mồ côi.
+7. **Dữ liệu tích luỹ có trần.** Danh sách, từ điển, bộ đệm giữ theo thời gian phải có giới hạn số mục hoặc tuổi; nhật ký chỉ
+   ghi **kiểu lỗi** một lần, không ghi mỗi vòng.
+
 ## 9. Chạy test
 
 ```bash

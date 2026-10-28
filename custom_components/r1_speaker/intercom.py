@@ -30,7 +30,8 @@ from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, INTERCOM_RATE, MIC_QUEUE_CHUNKS, MIC_RATE
+from .const import DOMAIN, INTERCOM_RATE, MIC_QUEUE_CHUNKS, MIC_RATE, PLAY_QUEUE_CHUNKS
+from .hang_doi import day_bo_cu_nhat
 from .cong_vao import tu_choi_401, xac_thuc
 from .dam_thoai import R1SessionBusy
 from .mic import R1Mic
@@ -174,21 +175,21 @@ class R1Intercom:
         """Nhận một khúc PCM16 mono ở ``INTERCOM_RATE``."""
         step = self._gate.feed(pcm)
         if step.opened:
-            self._hang = asyncio.Queue()
+            self._hang = asyncio.Queue(maxsize=PLAY_QUEUE_CHUNKS)
             nha_mic = self.mic.hold()
             # Tác vụ NỀN (không để async_block_till_done / khởi động HA chờ cả cuộc nói).
             self._viec.add(t := self.hass.async_create_background_task(
                 self._phat(self._hang, nha_mic), "r1_speaker intercom play"))
             t.add_done_callback(self._viec.discard)
         if step.audio and self._hang is not None:
-            self._hang.put_nowait(step.audio)
+            day_bo_cu_nhat(self._hang, step.audio)
         if step.closed:
             self.stop_talking()
 
     def stop_talking(self) -> None:
         """Đóng kênh phát (mic nhả sau ``tail_s``). Có tiếng tiếp thì mở lại."""
         if self._hang is not None:
-            self._hang.put_nowait(None)
+            day_bo_cu_nhat(self._hang, None)
             self._hang = None
         self._gate.reset()
 

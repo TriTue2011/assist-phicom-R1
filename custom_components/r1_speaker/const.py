@@ -107,6 +107,12 @@ DEFAULT_MIC_GAIN_DB = 12.0
 #: Hàng đợi mic về pipeline: ngần này khúc (MIC_CHUNK byte = 64 ms/khúc) → trễ tối đa ≈ 0,5 s.
 #: Đầy thì bỏ khúc CŨ NHẤT (luôn giữ tiếng mới nhất), không để đệm tích tụ thành trễ cả câu.
 MIC_QUEUE_CHUNKS = 8
+#: Hàng đợi tiếng đi VỀ loa (đàm thoại, song công): trần số khúc. Đầy thì bỏ khúc cũ nhất (hang_doi.day_bo_cu_nhat), không
+#: để kênh phát tắc làm RAM phình (PCM 16 kHz mono ≈ 32 KB/giây).
+PLAY_QUEUE_CHUNKS = 200
+#: Một luồng ADB ghép kênh (adb_client) chứa tối đa ngần này khúc chưa ai đọc; vượt thì đóng luồng đó với cảnh báo thay vì
+#: để RAM tăng vô hạn.
+ADB_QUEUE_TOI_DA_KHUC = 4096
 
 # ── Khử tạp âm phía HA (noise_suppress.py), chạy sau amplify, trước các listener ─────────
 CONF_NOISE_ENABLE = "noise_suppress"
