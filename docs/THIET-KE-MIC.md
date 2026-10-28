@@ -32,8 +32,7 @@ Số liệu đo (chỉ đọc, qua ADB, đợt trước) và phân tích tĩnh c
 3. Uid 2000 có đọc được `/dev/snd/pcmC2D0c` hay không (nhóm `audio`/quyền thư mục).
 4. RAM và CPU còn trống thực tế khi loa đang phát nhạc.
 5. Có chỗ ghi nào cho uid 2000 để đặt một chương trình (ví dụ `/data/local/tmp`) và có chạy được
-   tệp thực thi từ đó không. SELinux đang ở `permissive` (theo thuộc tính khởi động) nên
-   khó chặn, nhưng chưa kiểm.
+   tệp thực thi từ đó không. SELinux đang ở `Enforcing` (đo trên loa thật 28/10/2026: `getenforce`; ghi «permissive» ở bản trước là sai): ứng dụng thường không ghi được `/sys/class/leds/...`, chỉ domain shell của ADB ghi được.
 6. Cách cài một APK: `pm` hỏng qua adb, chưa biết `adb install` có chạy không.
 7. Voicebot đang cấu hình đi nhánh nào. Phân tích tĩnh thấy một nhánh khác gửi âm thanh mic
    không mã hoá ra máy chủ ngoài mạng. **Trước khi bật bất cứ thứ gì dùng mic, phải biết

@@ -174,6 +174,12 @@ Loa R1 không có cảm biến nhiệt và không có pin. Chi tiết: [docs/THO
 Bộ cài ứng dụng và đèn chạy qua **ADB, không mã hoá và không xác thực** (loa `ro.adb.secure=0`): **bất kỳ máy nào trong mạng LAN nối được cổng 5555 đều chạy được lệnh shell trên loa.**
 Chỉ dùng trong mạng tin cậy, **không mở cổng 5555 ra Internet**; nếu dùng adb-server dạng container, chỉ mở nó ở `127.0.0.1` của máy HA. Phía tích hợp, lệnh gửi lên loa luôn có dạng cố định
 (script `r1den.sh` với tham số đã lọc; `pm install`/`pm uninstall` với tên gói và tệp trong danh sách; `reboot`), không có đường nào cho chuỗi tuỳ ý vào shell của loa.
+**Nên khoá cổng 5555 chỉ cho Home Assistant** (botnet nhắm cổng ADB không xác thực của TV box đã lây qua đường này; kho này đo thấy loa có `ro.debuggable=1`
+nên `adb root` nhiều khả năng chạy được, tức là cổng mở có thể là quyền root; chưa thử). Ở router/tường lửa: cho phép `<IP-HA>` → `<IP-loa>:5555`, chặn mọi nguồn khác
+tới cổng đó. Ví dụ RouterOS: `/ip firewall filter add chain=forward action=accept protocol=tcp src-address=<IP-HA> dst-address=<IP-loa> dst-port=5555 place-before=0`
+rồi `add chain=forward action=drop protocol=tcp dst-address=<IP-loa> dst-port=5555 place-before=1`. Nếu loa và HA cùng một bridge/VLAN thì gói không đi qua
+firewall của router: bật `use-ip-firewall` của bridge hoặc đặt loa ở VLAN IoT riêng. Kiểm bằng `nc -zv <IP-loa> 5555` từ một máy khác (phải bị chặn) và
+xem đèn vẫn điều khiển được từ HA. Đèn tự do, khởi động lại, trạng thái Bluetooth và cài ứng dụng còn phụ thuộc ADB nên chưa tắt hẳn ADB được.
 Trang kết nối WiFi gửi mật khẩu WiFi qua HTTP thường tới loa trong mạng riêng của loa: làm bước này ở nhà.
 
 ## 13. Phát triển và kiểm thử
