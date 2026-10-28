@@ -47,6 +47,8 @@
       dt_https: "Trình duyệt chỉ cho dùng mic khi mở Home Assistant bằng https (địa chỉ ngoài hoặc https trong nhà).",
       dt_err: "Không mở được mic điện thoại", dt_busy: "Loa đang có kênh khác (điện thoại khác hoặc phiên đang mở).",
       dt_fail: "Không mở được phiên đàm thoại với loa.", dt_ended: "Phiên đàm thoại đã đóng.", dt_lost: "Đã ngắt kết nối.",
+      hoi: "Nối các loa với nhau", hoi_bat: "Nối các loa", hoi_tat: "Ngắt nối", hoi_chung: "Cùng một phòng (chống hú)", hoi_dang: "Đang nối",
+      hoi_can2: "Chọn từ 2 loa trở lên để nối", hoi_loi: "Không nối được",
     },
     en: {
       title: "R1 speaker — Talk", hold: "Hold to talk", holding: "🔴 Talking — release to listen", always: "Mic always on", mic: "Mic",
@@ -77,6 +79,8 @@
       dt_https: "The browser only allows the microphone when Home Assistant is opened over https.",
       dt_err: "Could not open the phone microphone", dt_busy: "The speaker already has another channel (another phone or an open session).",
       dt_fail: "Could not open an intercom session with the speaker.", dt_ended: "The intercom session closed.", dt_lost: "Disconnected.",
+      hoi: "Link the speakers", hoi_bat: "Link speakers", hoi_tat: "Unlink", hoi_chung: "Same room (anti-howl)", hoi_dang: "Linked",
+      hoi_can2: "Select 2 or more speakers to link", hoi_loi: "Could not link",
     },
   };
 
@@ -114,6 +118,23 @@
     };
   }
 
+  /* Các loa R1 của HA: [{id: mã thiết bị, ent: một thực thể của loa, ten}], xếp theo mã thiết bị (cùng thứ tự thẻ gộp). Tên là tên thiết bị
+   * trong HA (đổi tên ở trang thiết bị thì thẻ theo); trùng tên thì thêm số thứ tự. */
+  function discoverLoa(hass) {
+    var reg = (hass && hass.entities) || {}, theo = {};
+    Object.keys(reg).forEach(function (id) {
+      var e = reg[id];
+      if (!e || e.platform !== PLATFORM || !e.device_id) return;
+      var d = theo[e.device_id] || (theo[e.device_id] = { id: e.device_id, ent: id });
+      if (e.translation_key === "intercom_open" && id.indexOf("switch.") === 0) d.ent = id;
+    });
+    var ids = Object.keys(theo).sort();
+    var ten = ids.map(function (id) { var dv = ((hass && hass.devices) || {})[id] || {}; return dv.name_by_user || dv.name || "Phicomm R1"; });
+    return ids.map(function (id, i) {
+      return { id: id, ent: theo[id].ent, ten: ten.filter(function (x) { return x === ten[i]; }).length > 1 ? ten[i] + " (" + (i + 1) + ")" : ten[i] };
+    });
+  }
+
   /* Dữ liệu thuần cho thẻ (kiểm được bằng Node): không đụng DOM. */
   function buildModel(hass, config) {
     config = config || {};
@@ -129,6 +150,7 @@
       raw: st ? st.state : null, session: a.phien || null, mode: a.che_do_tu_danh_thuc || null,
       muted_audio: a.bo_tieng === true, speakerSide: a.phia_loa || null,
       refused: Number(a.so_lan_tu_choi || 0), lastRefusal: a.tu_choi_gan_nhat || null,
+      hoi: a.hoi_thoai || null,
     };
     var ist = stateOf(hass, ent.intercom);
     var inSession = !!mic.session;
@@ -196,7 +218,10 @@
     ".ctl{display:grid;place-items:center;width:36px;height:36px;padding:0;border:0;border-radius:50%;color:var(--primary-text-color);background:transparent;--mdc-icon-size:22px}",
     ".ctl.main{width:42px;height:42px;margin:0 2px;color:var(--text-primary-color,#fff);background:var(--primary-color,#03a9f4);--mdc-icon-size:26px}",
     ".ctl.stop{color:var(--error-color,#db4437)}", ".ctl.on{color:var(--primary-color,#03a9f4)}",
-    ".mus .row{justify-content:flex-start}", ".mt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.9em;opacity:.85}",
+    ".chips{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px}",
+    ".chip{padding:4px 12px;border-radius:16px;font-size:.85rem;background:transparent;color:inherit}",
+    ".chip.on{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff)}",
+    ".chung{font-size:.85rem}", ".mus .row{justify-content:flex-start}", ".mt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.9em;opacity:.85}",
     // Nhấn GIỮ trên màn hình cảm ứng: không có touch-action:none thì trình duyệt điện thoại bắt đầu cuộn/menu
     // giữ lâu và HUỶ thao tác (pointercancel) ngay, nên «giữ để nói» không giữ được.
     "button[data-hold]{touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}",
@@ -222,6 +247,9 @@
       super();
       this._config = {};
       this._sig = null;
+      this._loa = [];                 // các loa của HA (discoverLoa)
+      this._chon = [];                // mã thiết bị các loa đang CHỌN để đàm thoại (theo thứ tự danh sách)
+      this._chung = false;            // «cùng một phòng»: nối loa kiểu quyền nói
       if (this.attachShadow) this.attachShadow({ mode: "open" });
     }
 
@@ -232,14 +260,37 @@
 
     _call(domain, service, data) { return this._hass.callService(domain, service, data); }
 
+    /* Cấu hình dùng để dựng mô hình: có từ hai loa thì trạng thái, nhạc, âm lượng hiện của loa ĐẦU trong số đang chọn. */
+    _cfg() {
+      var c = Object.assign({}, this._config);
+      if (!c.device_id && this._loa.length >= 2 && this._chon.length) c.device_id = this._chon[0];
+      return c;
+    }
+
+    /* Thực thể (một thực thể bất kỳ của mỗi loa) của các loa đang chọn: dịch vụ và WebSocket tìm loa từ đó. */
+    _entChon() {
+      var self = this;
+      return this._chon.map(function (id) { var l = self._loa.filter(function (x) { return x.id === id; })[0]; return l && l.ent; }).filter(Boolean);
+    }
+
+    /* Lựa chọn hợp lệ: chỉ giữ loa còn tồn tại, trống thì chọn loa đầu; thẻ ghim ``device_id`` thì chỉ loa đó. */
+    _hopLe() {
+      var ghim = this._config.device_id, co = this._loa.map(function (l) { return l.id; });
+      if (ghim) { this._chon = [ghim]; return; }
+      var chon = this._chon.filter(function (id) { return co.indexOf(id) >= 0; });
+      this._chon = chon.length ? chon : co.slice(0, 1);
+    }
+
     _render() {
       if (!this._hass || !this.shadowRoot) return;
-      var m = buildModel(this._hass, this._config);
+      this._loa = this._config.device_id ? [] : discoverLoa(this._hass);
+      this._hopLe();
+      var m = buildModel(this._hass, this._cfg());
       var t = TEXT[lang(this._hass)];
       // Dựng lại khi bộ thực thể (hoặc ngôn ngữ) đổi — kể cả lúc đầu chưa thấy thực thể nào rồi mới
       // có (HA khởi động / đăng ký thực thể đến muộn): không bao giờ cập nhật lên DOM chưa dựng.
       var sig = JSON.stringify([m.found, m.mic.entity, m.talk.entity, m.music.entity,
-        m.mute.entity, m.wake.entity, m.showEq, lang(this._hass)]);
+        m.mute.entity, m.wake.entity, m.showEq, lang(this._hass), this._loa.map(function (l) { return l.id + "|" + l.ten; }), this._chon]);
       if (sig !== this._sig) {
         this._sig = sig;
         this._eq = null;
@@ -253,7 +304,14 @@
 
     _html(m, t) {
       if (!m.found) return '<ha-card><div class="warn">' + esc(t.none) + "</div></ha-card>";
-      return '<ha-card><h2>' + esc(t.title) + "</h2>" +
+      var chips = this._loa.length >= 2 ? '<div class="chips" data-loa-bar>' + this._loa.map(function (l) {
+        var on = this._chon.indexOf(l.id) >= 0;
+        return '<button class="chip' + (on ? " on" : "") + '" data-loa="' + esc(l.id) + '" aria-pressed="' + (on ? "true" : "false") + '">' + esc(l.ten) + "</button>";
+      }, this).join("") + "</div>" : "";
+      var hoi = this._loa.length >= 2 ? '<section data-hoi-sec><b>' + esc(t.hoi) + '</b><div class="row"><button data-hoi-bat>' + esc(t.hoi_bat) + "</button>" +
+        '<label class="chung"><input type="checkbox" data-hoi-chung> ' + esc(t.hoi_chung) + '</label></div><div class="tip" data-hoi-status></div>' +
+        '<div class="warn" data-hoi-err style="display:none"></div></section>' : "";
+      return '<ha-card><h2>' + esc(t.title) + "</h2>" + chips +
         '<div class="mic" data-mic data-status="unknown"><span class="dot"></span>' +
         '<span>' + esc(t.mic) + ': <b data-mic-text></b></span></div>' +
         '<div class="tip" data-mic-tip></div>' +
@@ -267,7 +325,7 @@
         '<span class="val" data-vol-val></span></div><div class="note" data-vol-off style="display:none">' + esc(t.vol_off) + "</div>" +
         '<div class="row"><label>' + esc(t.gain_nghe) + '</label><input type="range" data-nghe-gain min="100" max="800" step="50">' +
         '<span class="val" data-gain-val></span></div></section>' +
-        '<div class="row" data-ng-row style="display:none"><button class="sec" data-nghe>' + esc(t.ng_on) + "</button>" +
+        hoi + '<div class="row" data-ng-row style="display:none"><button class="sec" data-nghe>' + esc(t.ng_on) + "</button>" +
         '<span data-ng-muc class="muc"></span></div><div class="tip" data-ng-status></div>' +
         '<div class="row"><label>' + esc(t.mute) + '</label><ha-switch data-mute></ha-switch></div>' +
         '<div class="note" data-pending style="display:none">' + esc(t.pending) + "</div>" +
@@ -280,7 +338,7 @@
       var root = this.shadowRoot, self = this;
       var on = function (sel, fn) { var el = root.querySelector(sel); if (el) el.addEventListener("click", fn); };
       // Mọi nút đọc mô hình MỚI NHẤT lúc bấm (thực thể có thể đổi sau lần dựng).
-      var now = function () { return buildModel(self._hass, self._config); };
+      var now = function () { return buildModel(self._hass, self._cfg()); };
       // Giữ để nói (đúng như bộ đàm camera của c2a): giữ nút = mic ĐIỆN THOẠI đi ra loa, thả = nghe lại loa.
       // Lần giữ đầu mở kênh (xin mic, nối WebSocket) ngay trong cử chỉ bấm; kênh mở sẵn thì lần sau nói được liền.
       var hold = root.querySelector("[data-hold]");
@@ -330,6 +388,28 @@
       var gs = root.querySelector("[data-nghe-gain]");
       if (gs) gs.addEventListener("input", function () { self._datGain(Number(gs.value)); });
       on("[data-nghe]", function () { if (self._ng) self._ngDong(); else self._ngMo(); });
+      root.querySelectorAll("[data-loa]").forEach(function (b) {              // chọn loa để đàm thoại (một hay nhiều)
+        b.addEventListener("click", function () {
+          var id = b.dataset.loa, dang = self._chon.indexOf(id) >= 0;
+          if (dang && self._chon.length === 1) return;                      // luôn còn ít nhất một loa
+          var moi = dang ? self._chon.filter(function (x) { return x !== id; }) : self._chon.concat(id);
+          self._chon = self._loa.map(function (l) { return l.id; }).filter(function (x) { return moi.indexOf(x) >= 0; });
+          self._dtDong(); self._ngDong();                                   // đổi bộ loa thì phiên đang mở không còn đúng đích
+          self._sig = null; self._render();
+        });
+      });
+      var chung = root.querySelector("[data-hoi-chung]");
+      if (chung) chung.addEventListener("change", function () { self._chung = chung.checked; });
+      on("[data-hoi-bat]", function () {                                    // nối / ngắt các loa với nhau (HA trộn tiếng làm trung gian)
+        var m = now(), err = root.querySelector("[data-hoi-err]");
+        err.style.display = "none";
+        var ds = self._entChon();
+        var r = m.mic.hoi ? self._call("r1_speaker", "stop_conference", { entity_id: ds[0] })
+          : (ds.length >= 2 ? self._call("r1_speaker", "start_conference", { entity_ids: ds, che_do: self._chung ? "quyen_noi" : "tron" }) : null);
+        if (r && r.catch) r.catch(function (e) {
+          err.textContent = (self._t || TEXT.vi).hoi_loi + ": " + ((e && (e.message || e.code)) || e); err.style.display = "";
+        });
+      });
       var sw = root.querySelector("[data-mute]");
       if (sw) sw.addEventListener("change", function () {
         var m = now();
@@ -343,7 +423,7 @@
           !customElements.get("r1-eq-card")) return;
       this._eq = document.createElement("r1-eq-card");
       var cfg = {};
-      if (this._config.device_id) cfg.device_id = this._config.device_id;
+      if (this._cfg().device_id) cfg.device_id = this._cfg().device_id;
       this._eq.setConfig(cfg);
       host.appendChild(this._eq);
     }
@@ -420,7 +500,7 @@
     }
 
     _ngMo() {
-      var self = this, t = this._t || TEXT.vi, m = buildModel(this._hass, this._config);
+      var self = this, t = this._t || TEXT.vi, m = buildModel(this._hass, this._cfg());
       var eid = m.mic.entity || m.talk.entity;
       this._ngLoi = "";
       if (!eid) return;
@@ -498,7 +578,7 @@
 
     /* Gọi TRONG cử chỉ bấm: AudioContext tạo và resume ngay đây (iOS/Android chỉ cho phát khi bắt đầu từ cử chỉ). */
     _dtMo() {
-      var self = this, t = this._t || TEXT.vi, m = buildModel(this._hass, this._config);
+      var self = this, t = this._t || TEXT.vi, m = buildModel(this._hass, this._cfg());
       var eid = m.mic.entity || m.talk.entity;
       this._dtLoi = "";
       if (!eid) return;
@@ -507,7 +587,11 @@
       try { dt.ac = this._taoAc(); this._chuoiAm(dt); }
       catch (e) { this._dtDong(t.dt_err + ": " + (e && e.message ? e.message : e)); return; }
       this._dtHienThi();
-      this._hass.callWS({ type: "auth/sign_path", path: "/api/r1_speaker/dam_thoai/" + eid + "/ws", expires: 30 })
+      var dsEnt = this._entChon();
+      var duong = dsEnt.length >= 2                                           // nhiều loa: một WebSocket tới phòng đàm thoại (HA trộn tiếng)
+        ? "/api/r1_speaker/hoi_thoai/ws?" + dsEnt.map(function (e) { return "e=" + encodeURIComponent(e); }).join("&") + (this._chung ? "&che_do=quyen_noi" : "")
+        : "/api/r1_speaker/dam_thoai/" + eid + "/ws";
+      this._hass.callWS({ type: "auth/sign_path", path: duong, expires: 30 })
         .then(function (r) {
           if (!r || self._dt !== dt) return;
           var ws = new WebSocket((location.protocol === "https:" ? "wss:" : "ws:") + "//" + location.host + r.path);
@@ -665,6 +749,15 @@
       var q = function (s) { return root.querySelector(s); };
       q("[data-mic]").dataset.status = m.mic.status;
       q("[data-mic-text]").textContent = t[m.mic.status];
+      var hs = q("[data-hoi-sec]");
+      if (hs) {
+        var hoi = m.mic.hoi, bat = q("[data-hoi-bat]"), ck = q("[data-hoi-chung]");
+        bat.textContent = hoi ? t.hoi_tat : t.hoi_bat;
+        bat.disabled = !hoi && this._chon.length < 2;
+        ck.checked = hoi ? hoi.che_do === "quyen_noi" : this._chung;
+        ck.disabled = !!hoi;
+        q("[data-hoi-status]").textContent = hoi ? t.hoi_dang + ": " + hoi.loa.join(", ") : (this._chon.length < 2 ? t.hoi_can2 : "");
+      }
       // Chế độ «ha»: luồng mic chảy liên tục về HA để HA dò từ đánh thức, nên «Đang nghe» KHÔNG có nghĩa là chưa gửi gì.
       q("[data-mic-tip]").textContent = (m.mic.status === "listening" && m.mic.mode !== "speaker"
         ? t.listening_tip_ha : t[m.mic.status + "_tip"]) || "";
@@ -742,6 +835,6 @@
   }
 
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { buildModel: buildModel, discover: discover, TEXT: TEXT, STATUS: STATUS };
+    module.exports = { discoverLoa: discoverLoa, buildModel: buildModel, discover: discover, TEXT: TEXT, STATUS: STATUS };
   }
 })();

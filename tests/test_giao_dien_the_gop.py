@@ -149,9 +149,12 @@ const c=await tao({});
 const dau={chips:chips(c), dev:dev(c)};
 c.shadowRoot.querySelectorAll(".tabs.loa .tab")[1].click();
 const sau={chips:chips(c), dev:dev(c)};
+const tabBtn=(c,ten)=>[...c.shadowRoot.querySelectorAll(".tabs:not(.loa) .tab")].find(b=>b.textContent===ten);
+const hien=(c)=>c.shadowRoot.querySelector(".tabs.loa").style.display!=="none";
+const hienLoa={dau:hien(c)}; tabBtn(c,"Đàm thoại").click(); hienLoa.talk=hien(c); tabBtn(c,"EQ").click(); hienLoa.eq=hien(c);
 const ghim=await tao({device_id:"d2"});
 const g={chips:chips(ghim), dev:dev(ghim)};
-document.getElementById("out").textContent=JSON.stringify({dau,sau,g});
+document.getElementById("out").textContent=JSON.stringify({dau,sau,g,hienLoa});
 })();</script>"""
 
 
@@ -172,5 +175,7 @@ def test_the_gop_co_hai_loa_thi_chon_loa_cho_eq_va_cai_dat_con_ghim_device_id_th
     assert r["dau"]["chips"] == ["Phicomm R1*", "Bếp"] and r["dau"]["dev"] == {"eq": "d1", "settings": "d1", "chucnang": "d1", "talk": None}
     # Chọn loa 2: EQ, Chức năng và Cài đặt đổi theo; Đàm thoại giữ cách chọn riêng
     assert r["sau"]["chips"] == ["Phicomm R1", "Bếp*"] and r["sau"]["dev"] == {"eq": "d2", "settings": "d2", "chucnang": "d2", "talk": None}
+    # Mở tab Đàm thoại thì ẩn hàng chọn MỘT loa (tab đó có hàng chọn nhiều loa riêng); mở tab khác thì hiện lại
+    assert r["hienLoa"] == {"dau": True, "talk": False, "eq": True}
     # Ghim device_id trong cấu hình thẻ: không hiện hàng chọn, cả ba tab theo loa đó
     assert r["g"]["chips"] == [] and r["g"]["dev"] == {"eq": "d2", "settings": "d2", "chucnang": "d2", "talk": "d2"}

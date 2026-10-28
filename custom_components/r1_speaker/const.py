@@ -97,6 +97,8 @@ DEFAULT_DUPLEX_DUCK_DB = -45.0
 
 #: Sự kiện phiên song công mở/đóng (kèm lý do đóng).
 EVENT_DUPLEX = f"{DOMAIN}_duplex"
+#: Phòng đàm thoại nhiều loa mở/đóng (``su_kien``: mo|dong; kèm ``ma`` và ``loa``).
+EVENT_HOI_THOAI = f"{DOMAIN}_hoi_thoai"
 
 #: Luồng mic hợp đồng: PCM16 mono 16 kHz little-endian — đúng định dạng Assist đòi.
 MIC_RATE = 16000

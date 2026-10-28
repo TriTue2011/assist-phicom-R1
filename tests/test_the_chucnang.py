@@ -69,8 +69,10 @@ async def test_lenh_cua_the_chay_dung_dich_vu_that_them_tat_xoa_bao_thuc_va_cong
         await hass.async_block_till_done()
         return call
 
-    call = await chay({"type": "al_them", "form": {"gio": "06:30", "ngay": ["mon", "fri", "x"], "nhan": "Dậy", "loai": "tts", "noi_dung": "Đến giờ dậy"}})
+    call = await chay({"type": "al_them", "form": {"gio": "06:30", "ngay": ["mon", "fri", "x"], "nhan": "Dậy", "loai": "tts", "noi_dung": "Đến giờ dậy",
+                                                    "tts": "tts.google_vi"}})
     assert call[1] == "bao_thuc_dat" and call[2]["ngay"] == ["mon", "fri"]                      # ngày lạ bị bỏ ở thẻ
+    assert call[2]["tts"] == "tts.google_vi"                                                      # máy TTS đi kèm và dịch vụ HA thật nhận
     (a,) = _mo_hinh(hass)["alarms"]["list"]
     assert (a["gio"], a["ngay"], a["nhan"], a["bat"]) == ("06:30", ["mon", "fri"], "Dậy", True)
     await chay({"type": "al_bat", "id": a["id"], "on": False})
@@ -82,6 +84,14 @@ async def test_lenh_cua_the_chay_dung_dich_vu_that_them_tat_xoa_bao_thuc_va_cong
     await chay({"type": "hoan_dat", "value": "15"})
     assert _mo_hinh(hass)["alarms"]["hoan"]["value"] == 15
     assert _node("c.makeCall(i.m,{type:'hoan_dat',value:0})", m=m) is None and _node("c.makeCall(i.m,{type:'hoan_dat',value:121})", m=m) is None
+    # máy TTS chỉ đi kèm loại «đọc lời nhắn» và phải đúng dạng tts.<tên>
+    def them(**f):
+        return _node("c.makeCall(i.m,{type:'al_them',form:Object.assign({gio:'07:00',ngay:[]},i.f)})", m=m, f=f)[2]
+    assert them(loai="tts", tts="tts.piper").get("tts") == "tts.piper"
+    assert "tts" not in them(loai="media", tts="tts.piper", noi_dung="media-source://media_source/local/a.mp3")     # âm thanh: không kèm máy TTS
+    assert them(loai="media", noi_dung="media-source://media_source/local/a.mp3")["noi_dung"] == "media-source://media_source/local/a.mp3"
+    for sai in ("", "light.den", "tts.", "tts.a b", "TTS.x"):
+        assert "tts" not in them(loai="tts", tts=sai), sai
     # giờ sai: thẻ KHÔNG gọi gì
     assert _node("c.makeCall(i.m,{type:'al_them',form:{gio:'25:00',ngay:[],loai:'tts'}})", m=m) is None
     # công tắc kết nối và nút Đóng ADB
@@ -166,3 +176,101 @@ def test_giao_dien_the_chucnang_hien_ket_noi_va_bao_thuc_va_moi_thao_tac_chi_la_
     assert r["hoanGiaTri"] == "9" and r["hoanTitle"] == "Hoãn 9"
     assert json.loads(r["hoanDat"]) == [["number", "set_value", {"entity_id": "number.r1_hoan_bao_thuc", "value": 5}]]
     assert json.loads(r["hoanSai"]) == []                                       # 0 phút: không gọi dịch vụ
+
+
+PAGE_MEDIA = """<!doctype html><meta charset="utf-8"><body><div id="out">CHUA CHAY</div>
+<script src="file://@CARD@"></script>
+<script>
+const entities={}, states={}, calls=[], ws=[];
+const add=(id,tk,state,attrs)=>{entities[id]={platform:"r1_speaker",translation_key:tk,device_id:"d1"}; states[id]={state,attributes:attrs||{}};};
+add("sensor.r1_bao_thuc_ke_tiep","bao_thuc_ke_tiep","unknown",{bao_thuc:[],dang_keu:null});
+states["tts.piper"]={state:"unknown",attributes:{friendly_name:"Piper"}};
+states["tts.google_vi"]={state:"unknown",attributes:{friendly_name:"Google VI"}};
+const MP3={title:"chuong.mp3",media_content_id:"media-source://media_source/local/chuong.mp3",can_play:true,can_expand:false};
+const CAY={
+ "":{title:"Phương tiện",media_content_id:"media-source://",children:[{title:"Phương tiện của tôi",media_content_id:"media-source://media_source",can_play:false,can_expand:true},
+   {title:"Mục lạ không phát được",media_content_id:"x",can_play:false,can_expand:false}]},
+ "media-source://media_source":{title:"Phương tiện của tôi",media_content_id:"media-source://media_source",children:[{title:"local",media_content_id:"media-source://media_source/local",can_play:false,can_expand:true}]},
+ "media-source://media_source/local":{title:"local",media_content_id:"media-source://media_source/local",children:[MP3]},
+};
+let hong=false;
+const hass={entities,states,language:"vi",callService:(d,s,x)=>calls.push([d,s,x]),
+  callWS:async (m)=>{ ws.push(JSON.stringify(m)); if (hong) throw new Error("không có quyền"); return CAY[m.media_content_id||""]; }};
+const card=document.createElement("r1-chucnang-card"); document.body.appendChild(card); card.setConfig({}); card.hass=hass;
+const sr=card.shadowRoot, q=s=>sr.querySelector(s), qa=s=>[...sr.querySelectorAll(s)];
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const nhap=(sel,v)=>{const e=q(sel); e.value=v; e.dispatchEvent(new Event("input"));};
+const chon=(sel,v)=>{const e=q(sel); e.value=v; e.dispatchEvent(new Event("change"));};
+(async()=>{
+ const tts={oTts:!!q("[data-f=tts]"), oPick:!!q("[data-media-pick]"), oNoiDung:!!q("[data-f=noi_dung]"),
+   tuyChon:qa("[data-f=tts] option").map(o=>o.value+"|"+o.textContent)};
+ chon("[data-f=tts]","tts.piper"); nhap("[data-f=noi_dung]","Dậy đi"); nhap("[data-f=gio]","06:30");
+ q("[data-al-them]").click();
+ const themTts=JSON.stringify(calls.splice(0));
+ chon("[data-f=loai]","media");
+ nhap("[data-f=link]","https://youtu.be/cu");                                   // link gõ trước, rồi chọn tệp: tệp thay link
+ const media={oTts:!!q("[data-f=tts]"), oPick:!!q("[data-media-pick]"), oNoiDung:!!q("[data-f=noi_dung]"), tuyChonRong:q("[data-media-pick]").value, docChi:q("[data-media-pick]").readOnly, oLink:!!q("[data-f=link]")};
+ q("[data-media-pick]").click(); await sleep(30);
+ const goc={ten:q(".mb .mt").textContent, muc:qa("[data-mb-i]").map(b=>b.textContent.trim()), lui:!!q("[data-mb-back]")};
+ q('[data-mb-i="0"]').click(); await sleep(30);
+ const trongTmuc={ten:q(".mb .mt").textContent, muc:qa("[data-mb-i]").map(b=>b.textContent.trim()), lui:!!q("[data-mb-back]")};
+ q("[data-mb-back]").click(); await sleep(30);
+ const quayLai={ten:q(".mb .mt").textContent, muc:qa("[data-mb-i]").map(b=>b.textContent.trim())};
+ q('[data-mb-i="0"]').click(); await sleep(30);
+ q('[data-mb-i="0"]').click(); await sleep(30);                    // vào local
+ q('[data-mb-i="0"]').click(); await sleep(30);                    // chọn chuong.mp3
+ const chonXong={hop:!!q(".mb"), truong:q("[data-media-pick]").value, link:q("[data-f=link]").value};
+ nhap("[data-f=gio]","07:15");
+ q("[data-al-them]").click();
+ const themMedia=JSON.stringify(calls.splice(0));
+ // Dán link YouTube thì bỏ tệp đã chọn; link hợp lệ đi thẳng làm nội dung; link sai không gọi gì
+ for (let i=0;i<4;i++){ q(i===0?"[data-media-pick]":'[data-mb-i="0"]').click(); await sleep(30); }
+ const truocLink=q("[data-media-pick]").value;
+ nhap("[data-f=link]","https://youtu.be/dQw4w9WgXcQ"); nhap("[data-f=gio]","08:00");
+ const sauLink=q("[data-media-pick]").value;
+ nhap("[data-f=link]",""); q("[data-day=mon]").click(); const sauXoaLink=q("[data-media-pick]").value; q("[data-day=mon]").click();   // xoá link rồi dựng lại: tệp cũ KHÔNG hiện lại
+ nhap("[data-f=link]","https://youtu.be/dQw4w9WgXcQ"); nhap("[data-f=gio]","08:00");
+ q("[data-al-them]").click(); const themLink=JSON.stringify(calls.splice(0));
+ nhap("[data-f=link]","khong phai link"); nhap("[data-f=gio]","08:00"); q("[data-al-them]").click(); const linkSai=calls.length;
+ nhap("[data-f=link]","www.youtube.com/watch?v=abc"); q("[data-al-them]").click(); const linkKhongScheme=JSON.stringify(calls.splice(0));
+ hong=true; q("[data-media-pick]").click(); await sleep(30);
+ const loi={hop:!!q(".mb"), chu:(q(".mb .warn")||{}).textContent, muc:qa("[data-mb-i]").length};
+ q("[data-mb-close]").click();
+ document.getElementById("out").textContent=JSON.stringify({tts,themTts,media,goc,trongTmuc,quayLai,chonXong,themMedia,truocLink,sauLink,sauXoaLink,themLink,linkSai,linkKhongScheme,loi,dongHop:!q(".mb"),ws});
+})();
+</script>"""
+
+
+@pytest.mark.skipif(CHROME is None, reason="cần Chrome/Chromium")
+def test_giao_dien_the_chucnang_chon_may_tts_cho_loi_nhac_va_duyet_media_cho_am_thanh(tmp_path):
+    page = tmp_path / "media.html"
+    page.write_text(PAGE_MEDIA.replace("@CARD@", str(CARD)), encoding="utf-8")
+    out = subprocess.run([CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--allow-file-access-from-files",
+                          "--virtual-time-budget=4000", "--dump-dom", f"file://{page}"], capture_output=True, text=True, timeout=60)
+    m = re.search(r'<div id="out">(.*?)</div>', out.stdout, re.S)
+    assert m and m.group(1) != "CHUA CHAY", out.stderr[-500:]
+    r = json.loads(html_lib.unescape(m.group(1)))
+    sid = "sensor.r1_bao_thuc_ke_tiep"
+    # Loại «đọc lời nhắn»: có ô chọn máy TTS (mặc định + các máy tts của HA, xếp theo tên), không có ô chọn âm thanh
+    assert r["tts"]["oTts"] and r["tts"]["oNoiDung"] and not r["tts"]["oPick"]
+    assert r["tts"]["tuyChon"] == ["|Mặc định (Assist của loa)", "tts.google_vi|Google VI", "tts.piper|Piper"]
+    assert json.loads(r["themTts"]) == [["r1_speaker", "bao_thuc_dat", {"entity_id": sid, "gio": "06:30", "ngay": [], "loai": "tts", "bat": True,
+                                                                         "noi_dung": "Dậy đi", "tts": "tts.piper"}]]
+    # Loại «phát âm thanh»: không có ô máy TTS, ô chọn âm thanh chỉ đọc và bấm vào thì mở thư viện media của HA
+    assert not r["media"]["oTts"] and r["media"]["oPick"] and not r["media"]["oNoiDung"] and r["media"]["tuyChonRong"] == "" and r["media"]["docChi"] is True
+    assert r["goc"] == {"ten": "Phương tiện", "muc": ["Phương tiện của tôi"], "lui": False}          # mục không phát được, không mở được bị ẩn
+    assert r["trongTmuc"] == {"ten": "Phương tiện của tôi", "muc": ["local"], "lui": True}
+    assert r["quayLai"] == {"ten": "Phương tiện", "muc": ["Phương tiện của tôi"]}                        # Quay lại về thư mục trước, không gọi lại HA
+    assert r["media"]["oLink"] is True
+    assert r["chonXong"] == {"hop": False, "truong": "chuong.mp3", "link": ""}                      # chọn tệp thì ô link trống (chỉ một nguồn)                                      # chọn tệp: đóng hộp, ô hiện tên tệp
+    assert json.loads(r["themMedia"]) == [["r1_speaker", "bao_thuc_dat", {"entity_id": sid, "gio": "07:15", "ngay": [], "loai": "media", "bat": True,
+                                                                           "noi_dung": "media-source://media_source/local/chuong.mp3"}]]
+    assert r["truocLink"] == "chuong.mp3" and r["sauLink"] == "" and r["sauXoaLink"] == ""                                     # dán link thì bỏ tệp đã chọn
+    assert json.loads(r["themLink"]) == [["r1_speaker", "bao_thuc_dat", {"entity_id": sid, "gio": "08:00", "ngay": [], "loai": "media", "bat": True,
+                                                                          "noi_dung": "https://youtu.be/dQw4w9WgXcQ"}]]
+    assert r["linkSai"] == 0                                                                          # link không hợp lệ: không gọi dịch vụ
+    assert json.loads(r["linkKhongScheme"])[0][2]["noi_dung"] == "www.youtube.com/watch?v=abc"        # link YouTube dán không kèm https vẫn nhận
+    assert r["loi"]["hop"] and "không có quyền" in r["loi"]["chu"] and r["loi"]["muc"] == 0         # HA từ chối: báo lỗi rõ, không treo
+    assert r["dongHop"]
+    assert [json.loads(x) for x in r["ws"]][:2] == [{"type": "media_source/browse_media"},
+                                                       {"type": "media_source/browse_media", "media_content_id": "media-source://media_source"}]

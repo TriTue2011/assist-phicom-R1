@@ -114,6 +114,7 @@ class R1Card extends HTMLElement {
       this._parts[k].style.display = k === mo ? "" : "none";
       this._btn[k].classList.toggle("sel", k === mo);
     });
+    this._hienLoa();
   }
   /** Cấu hình thẻ con. ``device_id`` trong cấu hình thẻ gộp ghim MỘT loa cho cả ba tab; không ghim mà có nhiều loa thì EQ và
    * Cài đặt theo loa đang chọn ở hàng chọn loa. Đàm thoại giữ cách chọn riêng của nó. */
@@ -132,6 +133,8 @@ class R1Card extends HTMLElement {
     });
     return ids.map((id, i) => ({ id, ten: ten.filter((x) => x === ten[i]).length > 1 ? ten[i] + " (" + (i + 1) + ")" : ten[i] }));
   }
+  /* Hàng chọn MỘT loa (cho EQ, Chức năng, Cài đặt) ẩn khi mở tab Đàm thoại: tab đó có hàng chọn NHIỀU loa của riêng nó, hai hàng sẽ chồng nhau. */
+  _hienLoa() { if (this._loaBar) this._loaBar.style.display = this._coLoa && this._sel !== "talk" ? "" : "none"; }
   _capNhatLoa(hass) {
     if (!this._loaBar) return;
     const ds = this._config.device_id ? [] : this._loa(hass);
@@ -143,7 +146,8 @@ class R1Card extends HTMLElement {
     this._loaSig = sig;
     this._devCon = ds.length ? this._dev : undefined;
     this._loaBar.textContent = "";
-    this._loaBar.style.display = ds.length ? "" : "none";
+    this._coLoa = ds.length > 0;
+    this._hienLoa();
     ds.forEach((d) => {
       const b = document.createElement("button");
       b.className = "tab" + (d.id === this._dev ? " sel" : "");

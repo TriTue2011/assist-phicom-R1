@@ -10,6 +10,8 @@
   var PLATFORM = "r1_speaker";
   var DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
   var LINKS = ["dlna", "airplay", "bluetooth"];
+  var LINK = /^https?:\/\/\S+$/i;
+  var LINK_YOUTUBE = /^(?:www\.|m\.|music\.)?(?:youtube\.com\/|youtu\.be\/)\S+$/i;
 
   var TEXT = {
     vi: {
@@ -20,6 +22,8 @@
       alarms: "Báo thức", hoan: "Hoãn (phút)", ringing: "Đang kêu", stop: "Tắt", snooze: "Hoãn", once: "Một lần", none_alarm: "Chưa có báo thức",
       on_off: "Bật/tắt", del: "Xoá", add: "Thêm", time: "Giờ", label: "Nhãn", say: "Lời nhắn", url: "Địa chỉ âm thanh",
       tts: "Đọc lời nhắn", media: "Phát âm thanh", reminder: "Nhắc nhở",
+      tts_default: "Mặc định (Assist của loa)", media_pick: "Chọn âm thanh…", mb_back: "Quay lại", mb_close: "Đóng", mb_clear: "Bỏ chọn",
+      link_ph: "Hoặc dán link YouTube / địa chỉ âm thanh…", mb_empty: "Thư mục trống", mb_loading: "Đang tải…", mb_err: "Không mở được thư viện media",
       days: { mon: "T2", tue: "T3", wed: "T4", thu: "T5", fri: "T6", sat: "T7", sun: "CN" },
     },
     en: {
@@ -30,6 +34,8 @@
       alarms: "Alarms", hoan: "Snooze (min)", ringing: "Ringing", stop: "Stop", snooze: "Snooze", once: "Once", none_alarm: "No alarms yet",
       on_off: "On/off", del: "Delete", add: "Add", time: "Time", label: "Label", say: "Message", url: "Audio URL",
       tts: "Speak message", media: "Play audio", reminder: "Reminder",
+      tts_default: "Default (speaker's Assist)", media_pick: "Choose audio…", mb_back: "Back", mb_close: "Close", mb_clear: "Clear",
+      link_ph: "Or paste a YouTube link / audio URL…", mb_empty: "Empty folder", mb_loading: "Loading…", mb_err: "Could not open the media library",
       days: { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" },
     },
   };
@@ -94,9 +100,13 @@
                loai: a.loai || "tts", bat: a.bat !== false, luc: !a.gio };
     });
     var hs = stateOf(hass, ent.hoan);
+    var ttsList = Object.keys((hass && hass.states) || {}).filter(function (id) { return id.indexOf("tts.") === 0; }).map(function (id) {
+      var at = (hass.states[id] && hass.states[id].attributes) || {};
+      return { id: id, name: at.friendly_name || id };
+    }).sort(function (a, b) { return a.name.localeCompare(b.name); });
     return {
       found: !!(ent.alarms || LINKS.some(function (k) { return ent[k]; }) || ent.adb_dong),
-      links: links, adbDong: { entity: ent.adb_dong || null, present: !!ent.adb_dong },
+      ttsList: ttsList, links: links, adbDong: { entity: ent.adb_dong || null, present: !!ent.adb_dong },
       alarms: { entity: ent.alarms || null, present: !!ent.alarms, available: isUp(as), list: list, ringing: at.dang_keu || null,
                 hoan: { entity: ent.hoan || null, present: !!ent.hoan, available: isUp(hs), value: isUp(hs) ? Number(hs.state) : null } },
     };
@@ -125,13 +135,18 @@
       var d = { entity_id: sid, gio: f.gio, ngay: (f.ngay || []).filter(function (x) { return DAYS.indexOf(x) >= 0; }),
                 loai: f.loai === "media" ? "media" : "tts", bat: true };
       if (f.nhan) d.nhan = String(f.nhan).slice(0, 80);
-      if (f.noi_dung) d.noi_dung = String(f.noi_dung).slice(0, 500);
+      var link = String(f.link || "").trim();
+      if (d.loai === "media" && link) {                                         // link dán tay (YouTube hoặc địa chỉ âm thanh) thay cho tệp đã chọn
+        if (!LINK.test(link) && !LINK_YOUTUBE.test(link)) return null;
+        d.noi_dung = link.slice(0, 500);
+      } else if (f.noi_dung) d.noi_dung = String(f.noi_dung).slice(0, 500);
+      if (d.loai === "tts" && /^tts\.[a-z0-9_]+$/.test(f.tts || "")) d.tts = f.tts;
       return ["r1_speaker", "bao_thuc_dat", d];
     }
     return null;
   }
 
-  function initialForm() { return { gio: "07:00", ngay: [], nhan: "", loai: "tts", noi_dung: "" }; }
+  function initialForm() { return { gio: "07:00", ngay: [], nhan: "", loai: "tts", noi_dung: "", noi_dung_ten: "", link: "", tts: "" }; }
 
   function htmlLinks(m, t) {
     var any = LINKS.some(function (k) { return m.links[k].present; }) || m.adbDong.present;
@@ -154,7 +169,21 @@
     return '<button class="' + cls + '" ' + attr + ' title="' + esc(label) + '" aria-label="' + esc(label) + '"><ha-icon icon="' + icon + '"></ha-icon></button>';
   }
 
-  function htmlAlarms(m, t, form) {
+  /* Hộp duyệt media (thư viện media của HA, như khi phát bài nội bộ): danh sách thư mục/tệp, vào thư mục, chọn tệp phát được. */
+  function htmlMedia(mb, t) {
+    var top = mb.stack[mb.stack.length - 1];
+    var h = '<div class="mb"><div class="row">' + (mb.stack.length > 1 ? icBtn("ctl", "data-mb-back", "mdi:arrow-left", t.mb_back) : "") +
+      '<span class="mt">' + esc(top ? top.title : "") + "</span>" + icBtn("ctl", "data-mb-close", "mdi:close", t.mb_close) + "</div>";
+    if (mb.dang) h += '<div class="note">' + esc(t.mb_loading) + "</div>";
+    else if (mb.loi) h += '<div class="warn small">' + esc(t.mb_err + ": " + mb.loi) + "</div>";
+    else if (top && !top.items.length) h += '<div class="note">' + esc(t.mb_empty) + "</div>";
+    else if (top) top.items.forEach(function (it, i) {
+      h += '<button class="mi" data-mb-i="' + i + '"><ha-icon icon="' + (it.can_expand ? "mdi:folder" : "mdi:music-note") + '"></ha-icon><span>' + esc(it.title) + "</span></button>";
+    });
+    return h + "</div>";
+  }
+
+  function htmlAlarms(m, t, form, mb) {
     if (!m.alarms.present) return "";
     var h = "<section><b>" + esc(t.alarms) + "</b>";
     var H = m.alarms.hoan;
@@ -174,6 +203,7 @@
         '<input type="checkbox" data-al-bat="' + esc(a.id) + '" title="' + esc(t.on_off) + '"' + (a.bat ? " checked" : "") + ">" +
         icBtn("ctl", 'data-al-xoa="' + esc(a.id) + '"', "mdi:delete", t.del) + "</div>";
     });
+    if (mb) h += htmlMedia(mb, t);
     h += '<div class="form"><div class="row"><input type="time" data-f="gio" value="' + esc(form.gio) + '" aria-label="' + esc(t.time) + '"></div><div class="days">';
     DAYS.forEach(function (d) {
       h += '<button class="day' + (form.ngay.indexOf(d) >= 0 ? " on" : "") + '" data-day="' + d + '" aria-pressed="' + (form.ngay.indexOf(d) >= 0 ? "true" : "false") + '">' + esc(t.days[d]) + "</button>";
@@ -181,14 +211,21 @@
     h += '</div><div class="row"><input type="text" data-f="nhan" maxlength="80" placeholder="' + esc(t.label) + '" value="' + esc(form.nhan) + '">' +
       '<select data-f="loai"><option value="tts"' + (form.loai === "tts" ? " selected" : "") + ">" + esc(t.tts) + '</option><option value="media"' +
       (form.loai === "media" ? " selected" : "") + ">" + esc(t.media) + "</option></select></div>" +
-      '<div class="row"><input type="text" data-f="noi_dung" maxlength="500" placeholder="' + esc(form.loai === "media" ? t.url : t.say) + '" value="' + esc(form.noi_dung) + '">' +
+      (form.loai === "tts" ? '<div class="row"><select data-f="tts"><option value="">' + esc(t.tts_default) + "</option>" + m.ttsList.map(function (x) {
+        return '<option value="' + esc(x.id) + '"' + (form.tts === x.id ? " selected" : "") + ">" + esc(x.name) + "</option>";
+      }).join("") + "</select></div>" : "") +
+      (form.loai === "media"
+        ? '<div class="row"><input type="text" readonly data-media-pick class="pick" placeholder="' + esc(t.media_pick) + '" value="' + esc(form.noi_dung_ten || form.noi_dung) + '">' +
+          (form.noi_dung ? icBtn("ctl", "data-media-clear", "mdi:close", t.mb_clear) : "") + "</div>" +
+          '<div class="row"><input type="text" data-f="link" maxlength="500" placeholder="' + esc(t.link_ph) + '" value="' + esc(form.link) + '">'
+        : '<div class="row"><input type="text" data-f="noi_dung" maxlength="500" placeholder="' + esc(t.say) + '" value="' + esc(form.noi_dung) + '">') +
       icBtn("ctl main", "data-al-them", "mdi:plus", t.add) + "</div></div></section>";
     return h;
   }
 
-  function renderHtml(m, t, form) {
+  function renderHtml(m, t, form, mb) {
     if (!m.found) return '<ha-card><div class="warn">' + esc(t.none) + "</div></ha-card>";
-    return "<ha-card>" + htmlLinks(m, t) + htmlAlarms(m, t, form) + "</ha-card>";
+    return "<ha-card>" + htmlLinks(m, t) + htmlAlarms(m, t, form, mb) + "</ha-card>";
   }
 
   var CSS = [
@@ -204,7 +241,9 @@
     ".form{margin-top:10px}", ".days{display:flex;gap:4px;flex-wrap:wrap;margin:6px 0}",
     ".day{padding:4px 9px;border-radius:14px;font-size:.85em}", ".day.on{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff)}",
     "input[type=text],input[type=time],input[type=number],select{font:inherit;padding:6px;border-radius:8px;border:1px solid var(--divider-color,#bbb);background:transparent;color:inherit}",
-    "input[type=text]{flex:1;min-width:0}", "input[type=number]{width:5em}",
+    "input[type=text]{flex:1;min-width:0}", "input[type=number]{width:5em}", "input.pick{cursor:pointer}",
+    ".mb{margin:8px 0;padding:6px;border:1px solid var(--divider-color,#ccc);border-radius:8px;max-height:260px;overflow:auto}",
+    ".mi{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:0;border-radius:6px;padding:6px 8px}", ".mi ha-icon{--mdc-icon-size:20px}",
   ].join("");
 
   class R1ChucNangCard extends (typeof HTMLElement !== "undefined" ? HTMLElement : Object) {
@@ -229,12 +268,12 @@
     getCardSize() { return 8; }
     set hass(hass) { this._hass = hass; this._render(); }
 
-    _render() {
+    _render(force) {
       if (!this._hass || !this.shadowRoot) return;
       var ae = this.shadowRoot.activeElement;
-      if (this._html !== null && ae && /^(INPUT|SELECT)$/.test(ae.tagName)) { this._deferred = true; return; }
+      if (!force && this._html !== null && ae && /^(INPUT|SELECT)$/.test(ae.tagName)) { this._deferred = true; return; }
       this._deferred = false;
-      var html = "<style>" + CSS + "</style>" + renderHtml(buildModel(this._hass, this._config), TEXT[lang(this._hass)], this._form);
+      var html = "<style>" + CSS + "</style>" + renderHtml(buildModel(this._hass, this._config), TEXT[lang(this._hass)], this._form, this._mb);
       if (html === this._html) return;
       this._html = html;
       this.shadowRoot.innerHTML = html;
@@ -242,6 +281,22 @@
     }
 
     _call(c) { if (c) this._hass.callService(c[0], c[1], c[2]); }
+
+    /* Duyệt thư viện media của HA (``media_source/browse_media``): ``_mb`` = {stack: [{id, title, items}], dang, loi}. */
+    async _mbMo(id) {
+      this._mb = this._mb || { stack: [], dang: false, loi: "" };
+      var mb = this._mb;
+      mb.dang = true; mb.loi = "";
+      this._html = null; this._render(true);
+      try {
+        var r = await this._hass.callWS(id ? { type: "media_source/browse_media", media_content_id: id } : { type: "media_source/browse_media" });
+        mb.stack.push({ id: r.media_content_id, title: r.title || "", items: (r.children || []).filter(function (c) { return c.can_play || c.can_expand; }) });
+      } catch (e) {
+        mb.loi = (e && (e.message || e.code)) || String(e);
+        if (!mb.stack.length) mb.stack.push({ id: "", title: "", items: [] });
+      }
+      if (this._mb === mb) { mb.dang = false; this._html = null; this._render(true); }
+    }
 
     _bind() {
       var root = this.shadowRoot, self = this, t = TEXT[lang(this._hass)];
@@ -266,12 +321,42 @@
         el.addEventListener("click", function () { dispatch({ type: "al_xoa", id: el.dataset.alXoa }); });
       });
       all("[data-f]", function (el) {                               // bản nháp biểu mẫu sống qua các lần dựng lại
-        el.addEventListener("input", function () { self._form[el.dataset.f] = el.value; });
+        el.addEventListener("input", function () {
+          self._form[el.dataset.f] = el.value;
+          if (el.dataset.f === "link" && el.value) {                          // dán link thì bỏ tệp đã chọn (chỉ một nguồn); không dựng lại để khỏi mất con trỏ
+            self._form.noi_dung = ""; self._form.noi_dung_ten = "";
+            var pick = root.querySelector("[data-media-pick]");
+            if (pick) pick.value = "";
+          }
+        });
         el.addEventListener("change", function () {
           self._form[el.dataset.f] = el.value;
-          if (el.dataset.f === "loai") { self._html = null; self._render(); }   // đổi ô gợi ý (lời nhắn / địa chỉ âm thanh)
+          if (el.dataset.f === "loai") {                            // đổi loại: nội dung của loại kia không dùng được nữa
+            self._form.noi_dung = ""; self._form.noi_dung_ten = ""; self._form.link = ""; self._mb = null;
+            self._html = null; self._render(true);
+          }
         });
       });
+      all("[data-media-pick]", function (el) { el.addEventListener("click", function () { self._mb = null; self._mbMo(null); }); });
+      all("[data-media-clear]", function (el) {
+        el.addEventListener("click", function () { self._form.noi_dung = ""; self._form.noi_dung_ten = ""; self._html = null; self._render(true); });
+      });
+      all("[data-mb-i]", function (el) {
+        el.addEventListener("click", function () {
+          var top = self._mb && self._mb.stack[self._mb.stack.length - 1], it = top && top.items[Number(el.dataset.mbI)];
+          if (!it) return;
+          if (it.can_expand) { self._mbMo(it.media_content_id); return; }
+          self._form.noi_dung = it.media_content_id; self._form.noi_dung_ten = it.title || ""; self._form.link = "";
+          self._mb = null; self._html = null; self._render(true);
+        });
+      });
+      all("[data-mb-back]", function (el) {
+        el.addEventListener("click", function () {
+          if (self._mb) { self._mb.stack.pop(); if (!self._mb.stack.length) self._mb = null; }
+          self._html = null; self._render(true);
+        });
+      });
+      all("[data-mb-close]", function (el) { el.addEventListener("click", function () { self._mb = null; self._html = null; self._render(true); }); });
       all("[data-day]", function (el) {
         el.addEventListener("click", function () {
           var i = self._form.ngay.indexOf(el.dataset.day);
@@ -284,8 +369,8 @@
           var c = makeCall(now(), { type: "al_them", form: self._form });
           if (!c) return;
           self._call(c);
-          self._form.nhan = ""; self._form.noi_dung = "";
-          self._html = null; self._render();
+          self._form.nhan = ""; self._form.noi_dung = ""; self._form.noi_dung_ten = ""; self._form.link = "";
+          self._html = null; self._render(true);
         });
       });
     }

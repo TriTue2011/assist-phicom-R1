@@ -501,6 +501,10 @@
           "name": "Nội dung",
           "description": "Lời đọc (tts) hoặc địa chỉ âm thanh (media)."
         },
+        "tts": {
+          "name": "Máy TTS",
+          "description": "Máy đọc lời (thực thể tts) cho loại tts; bỏ trống thì đọc qua Assist của loa."
+        },
         "lap_s": {
           "name": "Kêu lại sau (giây)",
           "description": "5–600, mặc định 30."
@@ -526,6 +530,10 @@
         "noi_dung": {
           "name": "Lời nhắc",
           "description": "Nội dung đọc."
+        },
+        "tts": {
+          "name": "Máy TTS",
+          "description": "Máy đọc lời (thực thể tts) cho loại tts; bỏ trống thì đọc qua Assist của loa."
         },
         "sau_phut": {
           "name": "Sau (phút)",
@@ -648,6 +656,34 @@
         "giay": {
           "name": "Số giây",
           "description": "5–300, mặc định 60."
+        }
+      }
+    },
+    "start_conference": {
+      "name": "Mở phòng đàm thoại nhiều loa",
+      "description": "Nối các loa với nhau: HA trộn tiếng mic các loa rồi phát ra loa khác (mỗi loa nghe các loa còn lại, không nghe lại chính mình).",
+      "fields": {
+        "entity_ids": {
+          "name": "Các loa",
+          "description": "Từ 2 tới 6 loa (một thực thể bất kỳ của mỗi loa)."
+        },
+        "che_do": {
+          "name": "Chế độ",
+          "description": "tron (mặc định): ai nói cũng nghe, hợp khi mỗi loa một phòng. quyen_noi: mỗi lúc một loa giữ quyền nói, dùng khi hai loa chung một phòng để khỏi vòng hú."
+        },
+        "giua_cac_loa": {
+          "name": "Loa nghe nhau",
+          "description": "Mặc định bật."
+        }
+      }
+    },
+    "stop_conference": {
+      "name": "Đóng phòng đàm thoại nhiều loa",
+      "description": "Đóng phòng đang chứa loa này.",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Một thực thể bất kỳ của loa trong phòng."
         }
       }
     }

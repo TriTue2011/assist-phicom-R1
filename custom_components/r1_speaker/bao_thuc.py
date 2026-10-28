@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timedelta
@@ -33,6 +34,13 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 TOI_DA_BAO_THUC = 50
+#: Link YouTube (video, shorts, trực tiếp, danh sách): phát qua tích hợp YouTube Player vì renderer DLNA của loa không mở được trang YouTube.
+_YOUTUBE = re.compile(r"^(?:https?://)?(?:www\.|m\.|music\.)?(?:youtube\.com/(?:watch\?|shorts/|live/|embed/|playlist\?)|youtu\.be/)", re.I)
+YOUTUBE_DOMAIN = "tritue_youtube_player"
+
+
+def la_youtube(url: str) -> bool:
+    return bool(_YOUTUBE.match((url or "").strip()))
 SU_KIEN = "r1_speaker_bao_thuc"
 NGAY = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 LAP_MAC_DINH_S, TOI_DA_MAC_DINH_S, HOAN_MAC_DINH_PHUT = 30, 300, 9
@@ -214,9 +222,10 @@ class BaoThuc:
         lap = max(5, int(a.get("lap_s") or LAP_MAC_DINH_S))
         try:
             await self._dat_am_luong(a)
+            mot_lan = a.get("loai") == "media" and la_youtube(a.get("noi_dung") or "")       # bài dài: phát lại từ đầu mỗi lap_s giây là hỏng
             while self.hass.loop.time() < han:
                 await self._phat(a)
-                await asyncio.sleep(lap)
+                await asyncio.sleep(max(han - self.hass.loop.time(), 0) if mot_lan else lap)
             self.hass.bus.async_fire(SU_KIEN, {"entry_id": self.entry.entry_id, "id": a["id"], "nhan": a.get("nhan"), "trang_thai": "het_gio"})
         except asyncio.CancelledError:
             raise
@@ -233,14 +242,28 @@ class BaoThuc:
             loa = _thuc_the(self.hass, self.entry, "media_player")
             if loa is None:
                 raise RuntimeError("chưa có thực thể loa")
+            if la_youtube(a["noi_dung"]):
+                entries = self.hass.config_entries.async_entries(YOUTUBE_DOMAIN)
+                if not entries or not self.hass.services.has_service(YOUTUBE_DOMAIN, "play_on_players"):
+                    raise RuntimeError("chưa có tích hợp YouTube Player (tritue_youtube_player) để phát link YouTube")
+                await self.hass.services.async_call(YOUTUBE_DOMAIN, "play_on_players", {
+                    "entry_id": entries[0].entry_id, "source": "youtube", "target": a["noi_dung"].strip(), "entity_id": [loa]}, blocking=True)
+                return
             await self.hass.services.async_call("media_player", "play_media", {
                 "entity_id": loa, "media_content_id": a["noi_dung"], "media_content_type": "music"}, blocking=True)
+            return
+        loi_nhac = a.get("noi_dung") or a.get("nhan") or LOI_NHAC_MAC_DINH
+        if a.get("tts"):                                              # máy TTS do người dùng chọn: đọc qua tts.speak, phát lên loa này
+            loa = _thuc_the(self.hass, self.entry, "media_player")
+            if loa is None:
+                raise RuntimeError("chưa có thực thể loa")
+            await self.hass.services.async_call("tts", "speak", {
+                "entity_id": a["tts"], "media_player_entity_id": loa, "message": loi_nhac}, blocking=True)
             return
         sat = _thuc_the(self.hass, self.entry, "assist_satellite")
         if sat is None:
             raise RuntimeError("chưa có vệ tinh Assist của loa")
-        await self.hass.services.async_call("assist_satellite", "announce", {
-            "entity_id": sat, "message": a.get("noi_dung") or a.get("nhan") or LOI_NHAC_MAC_DINH}, blocking=True)
+        await self.hass.services.async_call("assist_satellite", "announce", {"entity_id": sat, "message": loi_nhac}, blocking=True)
 
     async def _dat_am_luong(self, a: dict[str, Any]) -> None:
         pc = a.get("am_luong")
@@ -259,11 +282,16 @@ class BaoThuc:
 
     async def tat(self) -> None:
         """Tắt báo thức đang kêu (không làm gì nếu không có cái nào đang kêu)."""
-        i = self.dang_keu
+        i, a = self.dang_keu, self._noi_dung_keu
         if i is None:
             return
         self._dung_keu()
         await self._tra_am_luong()
+        if a is not None and a.get("loai") == "media":                      # báo thức phát nhạc/YouTube: tắt báo thức thì dừng cả bài
+            loa = _thuc_the(self.hass, self.entry, "media_player")
+            if loa is not None:
+                with contextlib.suppress(Exception):
+                    await self.hass.services.async_call("media_player", "media_stop", {"entity_id": loa}, blocking=True)
         self.hass.bus.async_fire(SU_KIEN, {"entry_id": self.entry.entry_id, "id": i, "trang_thai": "tat"})
 
     async def hoan(self, phut: float | None = None) -> None:
@@ -274,7 +302,7 @@ class BaoThuc:
             return
         await self.tat()
         await self.nhac_nho(a.get("noi_dung") or a.get("nhan") or LOI_NHAC_MAC_DINH, sau_phut=phut, loai=a.get("loai", "tts"),
-                            lap_s=a.get("lap_s"), toi_da_s=a.get("toi_da_s"), am_luong=a.get("am_luong"))
+                            lap_s=a.get("lap_s"), toi_da_s=a.get("toi_da_s"), am_luong=a.get("am_luong"), tts=a.get("tts"))
         self.hass.bus.async_fire(SU_KIEN, {"entry_id": self.entry.entry_id, "id": i, "trang_thai": "hoan"})
 
     # ── Hẹn giờ tắt nhạc ────────────────────────────────────────
@@ -360,6 +388,7 @@ _KIEU = {
     vol.Optional("nhan"): vol.All(cv.string, vol.Length(max=80)),
     vol.Optional("loai"): vol.In(["tts", "media"]),
     vol.Optional("noi_dung"): vol.All(cv.string, vol.Length(max=500)),
+    vol.Optional("tts"): cv.entity_domain("tts"),                      # máy TTS đọc lời nhắn (loai=tts); bỏ trống = đọc qua Assist của loa
     vol.Optional("lap_s"): vol.All(vol.Coerce(int), vol.Range(min=5, max=600)),
     vol.Optional("toi_da_s"): vol.All(vol.Coerce(int), vol.Range(min=30, max=1800)),
     vol.Optional("am_luong"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
@@ -368,7 +397,7 @@ DAT_SCHEMA = vol.Schema({vol.Required("entity_id"): cv.entity_id, vol.Optional("
                          vol.Optional("ngay"): vol.All(cv.ensure_list, [vol.In(NGAY)]), vol.Optional("bat"): cv.boolean, **_KIEU})
 NHAC_SCHEMA = vol.Schema({vol.Required("entity_id"): cv.entity_id, vol.Required("noi_dung"): vol.All(cv.string, vol.Length(min=1, max=500)),
                           vol.Optional("sau_phut"): vol.All(vol.Coerce(float), vol.Range(min=0.1, max=10080)), vol.Optional("luc"): cv.datetime,
-                          vol.Optional("loai"): vol.In(["tts", "media"]), vol.Optional("lap_s"): _KIEU[vol.Optional("lap_s")],
+                          vol.Optional("loai"): vol.In(["tts", "media"]), vol.Optional("tts"): _KIEU[vol.Optional("tts")], vol.Optional("lap_s"): _KIEU[vol.Optional("lap_s")],
                           vol.Optional("toi_da_s"): _KIEU[vol.Optional("toi_da_s")], vol.Optional("am_luong"): _KIEU[vol.Optional("am_luong")]})
 
 

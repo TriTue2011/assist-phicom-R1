@@ -170,6 +170,12 @@ class R1Duplex:
         self._mic_seen = False               # phiên đã thấy mic nối thật chưa (để biết «đứt»)
         self._audio: list[Callable[[bytes], None]] = []
         self._on_change: list[Callable[[], None]] = []
+        self.phong = None                    # phòng đàm thoại nhiều loa đang dùng phiên này (hoi_thoai.Phong), None = không
+
+    def dat_phong(self, phong) -> None:
+        """Phòng đàm thoại nhiều loa (``hoi_thoai``) nhận/trả phiên này: báo trạng thái lên cảm biến mic."""
+        self.phong = phong
+        self._notify()
 
     # ── Người nghe ────────────────────────────────────────────────────────────
 
@@ -244,6 +250,7 @@ class R1Duplex:
             "song_cong_khung_chuyen": chuyen,
             "song_cong_khung_bo": max(0, vao - chuyen) + self.duck_dropped,
             "song_cong_ket_thuc_gan_nhat": self.last_end,
+            "hoi_thoai": self.phong.mo_ta() if self.phong is not None else None,
         }
 
     # ── Mở / đóng phiên ───────────────────────────────────────────────────────
@@ -389,15 +396,20 @@ class R1Duplex:
 
     # ── HA / điện thoại → loa ─────────────────────────────────────────────────
 
-    def feed_playback(self, pcm: bytes) -> None:
+    def feed_playback(self, pcm: bytes, *, vox: bool = True) -> None:
         """Bơm một khúc PCM16 16 kHz mono xuống loa. Phát LIÊN TỤC: khúc vào hàng là bơm
-        phát ghi ngay, không chờ, không cổng thoại, không giữ mic."""
+        phát ghi ngay, không chờ, không cổng thoại, không giữ mic.
+
+        ``vox=False``: tiếng KHÔNG phải của điện thoại (phòng đàm thoại nhiều loa đã trộn và lọc riêng từng nguồn): bỏ cổng VOX và không đụng tới
+        «quyền nói» của điện thoại; khử vọng (tham chiếu tiếng đã phát) vẫn áp dụng."""
         if not self.active:
             raise HomeAssistantError("Chưa mở phiên song công.")
         # VOX: «bật mic luôn» trên điện thoại gửi tiếng LIÊN TỤC, kể cả im lặng. Chỉ khúc có tiếng (hoặc đang giữ nút)
         # mới xuống loa và mới giữ quyền nói; im lặng thì bỏ (không xì xào ra loa, không chặn mic loa).
         bay_gio = time.monotonic()
-        if self.ptt or level_db(pcm) >= PHONE_VOX_DB:
+        if not vox:
+            pass
+        elif self.ptt or level_db(pcm) >= PHONE_VOX_DB:
             self._phone_noi_den = bay_gio + PHONE_HANG_S
             self._cap_nhat_huong()
         elif bay_gio >= self._phone_noi_den:

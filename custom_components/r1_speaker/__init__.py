@@ -32,6 +32,7 @@ from .const import (CARD_GOP_URL, CARD_URL, CHUCNANG_CARD_URL, CONF_INTERCOM_KEY
                     WAKE_SPEAKER)
 from .cong_vao import PingView, WakeView
 from .dam_thoai_ws import DamThoaiWsView
+from .hoi_thoai import HoiThoaiWsView, dang_ky_dich_vu as dang_ky_dich_vu_hoi_thoai
 from .ghep_khoa import GhepKhoaView
 from .nghe_ws import NgheWsView
 from .den import R1Lights, dang_ky_dich_vu as dang_ky_dich_vu_den
@@ -76,6 +77,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.http.register_view(MicView())
     hass.http.register_view(DuplexView())
     hass.http.register_view(DamThoaiWsView())
+    hass.http.register_view(HoiThoaiWsView())
     hass.http.register_view(GhepKhoaView())
     hass.http.register_view(NgheWsView())
     hass.http.register_view(WakeView())
@@ -84,6 +86,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     await giao_dien.dang_ky_tai_nguyen(hass)
     dang_ky_dich_vu_den(hass)
     dang_ky_dich_vu_bao_thuc(hass)
+    dang_ky_dich_vu_hoi_thoai(hass)
     dang_ky_dich_vu_phim(hass)
     den_chinh.dang_ky_dich_vu(hass)
     lenh_apk.dang_ky(hass)

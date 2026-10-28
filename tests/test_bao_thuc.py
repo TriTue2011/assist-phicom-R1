@@ -157,6 +157,109 @@ async def test_so_phut_hoan_la_thuc_the_so_va_hoan_khong_neu_so_phut_thi_dung_no
     await b.tat()
 
 
+async def test_chon_may_tts_thi_doc_qua_tts_speak_len_loa_khong_chon_thi_doc_qua_assist_cua_loa(hass, bt):
+    """Loại «đọc lời nhắn» có ô chọn máy TTS: có chọn thì ``tts.speak`` lên chính loa này; không chọn thì vẫn đọc qua vệ tinh Assist như cũ."""
+    e, b, phat, sk, _ = bt
+    goi = []
+    hass.services.async_register("tts", "speak", lambda c: goi.append(dict(c.data)))
+    loa = BT._thuc_the(hass, e, "media_player")
+    await b._phat({"loai": "tts", "noi_dung": "Dậy đi", "tts": "tts.google_vi"})
+    assert goi == [{"entity_id": "tts.google_vi", "media_player_entity_id": loa, "message": "Dậy đi"}] and phat == []
+    await b._phat({"loai": "tts", "noi_dung": "Dậy đi"})
+    assert phat == [("tts", "Dậy đi")] and len(goi) == 1
+    # dịch vụ chỉ nhận thực thể thuộc miền tts, và máy TTS được lưu cùng báo thức
+    import voluptuous as vol
+    sensor = er.async_get(hass).async_get_entity_id("sensor", "r1_speaker", f"{e.entry_id}_bao_thuc_ke_tiep")
+    with pytest.raises(vol.Invalid):
+        await hass.services.async_call("r1_speaker", "bao_thuc_dat", {"entity_id": sensor, "gio": "06:30", "tts": "light.den"}, blocking=True)
+    await hass.services.async_call("r1_speaker", "bao_thuc_dat", {"entity_id": sensor, "gio": "06:30", "nhan": "Dậy", "tts": "tts.google_vi"}, blocking=True)
+    assert [a["tts"] for a in b.ds.values()] == ["tts.google_vi"]
+
+
+async def test_hoan_giu_nguyen_may_tts_da_chon(hass, bt):
+    e, b, phat, sk, _ = bt
+    goi = []
+    hass.services.async_register("tts", "speak", lambda c: goi.append(dict(c.data)))
+    await b.nhac_nho("Họp lúc 9 giờ", sau_phut=1, tts="tts.google_vi")
+    await _tien(hass, 65)
+    for _ in range(100):
+        if goi:
+            break
+        await asyncio.sleep(0.01)
+    assert b.dang_keu is not None and goi
+    await b.hoan(5)
+    await hass.async_block_till_done()
+    assert [a.get("tts") for a in b.ds.values() if a.get("noi_dung") == "Họp lúc 9 giờ"] == ["tts.google_vi"]    # báo lại vẫn bằng máy TTS đó
+    await b.tat()
+
+
+def test_nhan_dien_link_youtube_khong_bi_lua_boi_ten_mien_gia():
+    for ok in ("https://www.youtube.com/watch?v=abc", "youtu.be/abc", " https://music.youtube.com/watch?v=1 ", "http://m.youtube.com/shorts/x",
+               "https://www.youtube.com/playlist?list=PL1", "HTTPS://WWW.YOUTUBE.COM/watch?v=a"):
+        assert BT.la_youtube(ok), ok
+    for sai in ("", "https://example.com/a.mp3", "https://notyoutube.com/watch?v=1", "https://youtube.com.evil.com/watch?v=1",
+                "media-source://media_source/local/a.mp3", "https://www.youtube.com/", "https://example.com/?u=https://youtu.be/x"):
+        assert not BT.la_youtube(sai), sai
+
+
+async def test_link_youtube_phat_qua_tich_hop_youtube_player_len_chinh_loa_khong_qua_play_media(hass, bt):
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    e, b, phat, sk, _ = bt
+    loa = BT._thuc_the(hass, e, "media_player")
+    yt = MockConfigEntry(domain=BT.YOUTUBE_DOMAIN, entry_id="yt1")
+    yt.add_to_hass(hass)
+    goi = []
+    hass.services.async_register(BT.YOUTUBE_DOMAIN, "play_on_players", lambda c: goi.append(dict(c.data)))
+    await b._phat({"loai": "media", "noi_dung": " https://youtu.be/dQw4w9WgXcQ "})
+    assert goi == [{"entry_id": "yt1", "source": "youtube", "target": "https://youtu.be/dQw4w9WgXcQ", "entity_id": [loa]}] and phat == []
+    await b._phat({"loai": "media", "noi_dung": "http://ha.local/chuong.mp3"})                       # địa chỉ khác: vẫn play_media như cũ
+    assert phat == [("media", "http://ha.local/chuong.mp3")] and len(goi) == 1
+
+
+async def test_link_youtube_ma_chua_cai_tich_hop_thi_bao_loi_ro_khong_am_tham(hass, bt):
+    e, b, phat, sk, _ = bt
+    with pytest.raises(RuntimeError, match="YouTube Player"):
+        await b._phat({"loai": "media", "noi_dung": "https://youtu.be/abc"})
+    assert phat == []
+
+
+async def test_vong_keu_link_youtube_phat_mot_lan_roi_cho_con_media_khac_phat_lai_moi_lap(hass, bt, monkeypatch):
+    import types
+    e, b, phat, sk, _ = bt
+    ngu = []
+
+    async def sleep(giay):
+        ngu.append(giay)
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(BT, "asyncio", types.SimpleNamespace(sleep=sleep, CancelledError=asyncio.CancelledError))
+    lan_phat = []
+
+    async def phat_gia(a):
+        lan_phat.append(a["noi_dung"])
+
+    b._phat = phat_gia
+    for nd in ("https://youtu.be/abc", "http://ha.local/a.mp3"):
+        ngu.clear()
+        with pytest.raises(asyncio.CancelledError):
+            await b._vong_keu({"id": "x", "loai": "media", "noi_dung": nd, "lap_s": 5, "toi_da_s": 120})
+        if "youtu" in nd:
+            assert 100 < ngu[0] <= 120                                    # chờ tới hết giờ, KHÔNG phát lại từ đầu sau 5 giây
+        else:
+            assert ngu[0] == 5                                            # chuông ngắn: lặp mỗi lap_s như cũ
+
+
+async def test_tat_bao_thuc_phat_nhac_thi_dung_ca_bai_con_bao_thuc_doc_loi_thi_khong_dung_nhac(hass, bt):
+    e, b, phat, sk, _ = bt
+    b.dang_keu, b._noi_dung_keu = "x", {"id": "x", "loai": "media", "noi_dung": "https://youtu.be/abc"}
+    await b.tat()
+    assert ("stop", None) in phat                                          # tắt báo thức → dừng bài đang phát
+    phat.clear()
+    b.dang_keu, b._noi_dung_keu = "y", {"id": "y", "loai": "tts", "noi_dung": "Dậy đi"}
+    await b.tat()
+    assert phat == []                                                      # lời nhắc TTS: không đụng tới nhạc
+
+
 async def test_kieu_media_phat_dia_chi_am_thanh_va_het_gio_thi_dung_lai(hass, bt):
     e, b, phat, sk, _ = bt
     a = await b.dat(gio=(dt_util.now() + timedelta(minutes=1)).strftime("%H:%M"), loai="media", noi_dung="http://ha.local/chuong.mp3", lap_s=5, toi_da_s=30)

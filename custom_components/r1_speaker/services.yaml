@@ -113,6 +113,28 @@ stop_duplex:
         entity:
           integration: r1_speaker
           domain: media_player
+start_conference:
+  fields:
+    entity_ids:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+          multiple: true
+    che_do:
+      selector:
+        select:
+          options: [tron, quyen_noi]
+    giua_cac_loa:
+      selector:
+        boolean:
+stop_conference:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
 set_main_light:
   fields:
     entity_id:
@@ -205,6 +227,10 @@ bao_thuc_dat:
     noi_dung:
       selector:
         text:
+    tts:
+      selector:
+        entity:
+          domain: tts
     lap_s:
       selector:
         number:
@@ -240,6 +266,10 @@ nhac_nho:
     luc:
       selector:
         datetime:
+    tts:
+      selector:
+        entity:
+          domain: tts
     loai:
       selector:
         select:

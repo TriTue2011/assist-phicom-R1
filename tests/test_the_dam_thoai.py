@@ -458,3 +458,83 @@ def test_giao_dien_nghe_tieng_trong_nha_chi_quan_tri_khong_xin_mic_dien_thoai(tm
     assert r["dung"]["ws"] is True and "Nghe tiếng trong nhà" in r["dung"]["nut"]
     assert "không có gì để nghe" in r["micTat"]["chu"]
     assert r["anTab"]["wsDong"] is True                                 # ẩn tab: ngừng nghe
+
+
+PAGE_NHIEU_LOA = """<!doctype html><meta charset="utf-8"><body><div id="out">CHUA CHAY</div>
+<script src="file://@EQ@"></script><script src="file://@CARD@"></script>
+<script>
+const entities={}, states={}, calls=[], wsPaths=[];
+function add(id,tk,state,dev,attrs){entities[id]={platform:"r1_speaker",translation_key:tk,device_id:dev}; states[id]={state,attributes:attrs||{}};}
+add("switch.r1_dam_thoai","intercom_open","off","d1",{giu_mo:false}); add("sensor.r1_mic_1","mic_status","nghe","d1",{phien:null});
+add("switch.r1_dam_thoai_2","intercom_open","off","d2",{giu_mo:false}); add("sensor.r1_mic_2","mic_status","tat","d2",{phien:null});
+const devices={d1:{name:"Phicomm R1"},d2:{name:"Phicomm R1",name_by_user:"Bếp"}};
+let hong=false;
+const mk=()=>({entities:{...entities},states:{...states},devices,language:"vi",
+  callService:(d,s,x)=>{calls.push([d,s,x]); return hong && s==="start_conference" ? Promise.reject(new Error("Bếp đang bận")) : undefined;},
+  callWS:(m)=>{wsPaths.push(m.path); return new Promise(()=>{});}});
+const mo=(cfg)=>{const c=document.createElement("r1-talk-card"); document.body.appendChild(c); c.setConfig(cfg||{}); c.hass=mk(); return c;};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+(async()=>{
+ const card=mo();
+ const sr=card.shadowRoot, q=s=>sr.querySelector(s), qa=s=>[...sr.querySelectorAll(s)];
+ const chips=()=>qa("[data-loa]").map(b=>b.textContent+(b.getAttribute("aria-pressed")==="true"?"*":""));
+ const nap=()=>{card.hass=mk();};
+ const mot={chips:chips(), mic:q("[data-mic-text]").textContent, bat:q("[data-hoi-bat]").disabled, tt:q("[data-hoi-status]").textContent};
+ q('[data-loa="d2"]').click(); nap();
+ const hai={chips:chips(), bat:q("[data-hoi-bat]").disabled, mic:q("[data-mic-text]").textContent};     // loa đầu vẫn là loa chính
+ q("[data-hoi-chung]").checked=true; q("[data-hoi-chung]").dispatchEvent(new Event("change"));
+ q("[data-hoi-bat]").click();
+ const nhieu=JSON.stringify(calls.splice(0));
+ await card._dtMo(); const duongNhieu=wsPaths.splice(0); const dtMo=card._dt!==null;
+ q('[data-loa="d1"]').click(); nap();                                                                   // bỏ chọn loa 1: chỉ còn loa 2
+ const dtDongKhiDoiLoa=card._dt===null;                                                                // đổi bộ loa thì phiên điện thoại đang mở bị đóng (không còn đúng đích)
+ const chonLoa2={chips:chips(), mic:q("[data-mic-text]").textContent, bat:q("[data-hoi-bat]").disabled};
+ await card._dtMo(); const duongMot=wsPaths.splice(0); card._dtDong();
+ const khong1=q('[data-loa="d2"]'); khong1.click();                                                    // không bỏ được loa cuối cùng
+ const conLai=chips();
+ q('[data-loa="d1"]').click(); nap();
+ states["sensor.r1_mic_1"]={state:"nghe",attributes:{phien:"song_cong",hoi_thoai:{ma:"x",loa:["Phicomm R1","Bếp"],che_do:"quyen_noi",dien_thoai:false,giua_cac_loa:true}}}; nap();
+ const dangNoi={bat:q("[data-hoi-bat]").textContent, tt:q("[data-hoi-status]").textContent, chung:q("[data-hoi-chung]").checked, khoaChung:q("[data-hoi-chung]").disabled};
+ q("[data-hoi-bat]").click();
+ const ngat=JSON.stringify(calls.splice(0));
+ states["sensor.r1_mic_1"]={state:"nghe",attributes:{phien:null}}; hong=true; nap();
+ q("[data-hoi-chung]").checked=false; q("[data-hoi-chung]").dispatchEvent(new Event("change"));
+ q("[data-hoi-bat]").click(); await sleep(30);
+ const loi={chu:q("[data-hoi-err]").textContent, hien:q("[data-hoi-err]").style.display!=="none"};
+ const ghim=mo({device_id:"d2"});
+ const g={chips:ghim.shadowRoot.querySelectorAll("[data-loa]").length, hoi:!!ghim.shadowRoot.querySelector("[data-hoi-sec]"), mic:ghim.shadowRoot.querySelector("[data-mic-text]").textContent};
+ const motLoa=(()=>{ for (const k of Object.keys(entities)) if (entities[k].device_id==="d2") delete entities[k]; for (const k of Object.keys(states)) if (/_2$|mic_2/.test(k)) delete states[k];
+   const c=mo(); return {chips:c.shadowRoot.querySelectorAll("[data-loa]").length, hoi:!!c.shadowRoot.querySelector("[data-hoi-sec]")}; })();
+ document.getElementById("out").textContent=JSON.stringify({dtMo,dtDongKhiDoiLoa,mot,hai,nhieu,duongNhieu,chonLoa2,duongMot,conLai,dangNoi,ngat,loi,g,motLoa});
+})();
+</script>"""
+
+
+@pytest.mark.skipif(CHROME is None, reason="cần Chrome/Chromium")
+def test_giao_dien_the_dam_thoai_nhieu_loa_chon_loa_noi_loa_va_duong_websocket(tmp_path):
+    page = tmp_path / "nhieu.html"
+    page.write_text(PAGE_NHIEU_LOA.replace("@EQ@", str(EQ)).replace("@CARD@", str(CARD)), encoding="utf-8")
+    out = subprocess.run(
+        [CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--allow-file-access-from-files",
+         "--virtual-time-budget=3000", "--dump-dom", f"file://{page}"], capture_output=True, text=True, timeout=60)
+    import html
+    import re
+    m = re.search(r'<div id="out">(.*?)</div>', out.stdout, re.S)
+    assert m and m.group(1) != "CHUA CHAY", out.stderr[-500:]
+    r = json.loads(html.unescape(m.group(1)))
+    # Từ hai loa: hàng chọn loa theo TÊN THIẾT BỊ; mặc định chọn loa đầu; chưa đủ hai loa thì chưa nối được
+    assert r["mot"] == {"chips": ["Phicomm R1*", "Bếp"], "mic": "Đang nghe", "bat": True, "tt": "Chọn từ 2 loa trở lên để nối"}
+    assert r["hai"] == {"chips": ["Phicomm R1*", "Bếp*"], "bat": False, "mic": "Đang nghe"}               # chọn thêm loa 2: nối được; trạng thái vẫn của loa đầu
+    assert json.loads(r["nhieu"]) == [["r1_speaker", "start_conference", {"entity_ids": ["switch.r1_dam_thoai", "switch.r1_dam_thoai_2"], "che_do": "quyen_noi"}]]
+    # Đàm thoại bằng điện thoại: từ hai loa đi đường PHÒNG (một WebSocket chứa mọi loa đã chọn), một loa đi đường cũ
+    assert r["duongNhieu"] == ["/api/r1_speaker/hoi_thoai/ws?e=switch.r1_dam_thoai&e=switch.r1_dam_thoai_2&che_do=quyen_noi"]
+    assert r["dtMo"] is True and r["dtDongKhiDoiLoa"] is True
+    assert r["chonLoa2"] == {"chips": ["Phicomm R1", "Bếp*"], "mic": "Tắt", "bat": True}                  # chọn loa nào thì đàm thoại loa đó (trạng thái mic của loa 2)
+    assert r["duongMot"] == ["/api/r1_speaker/dam_thoai/sensor.r1_mic_2/ws"]
+    assert r["conLai"] == ["Phicomm R1", "Bếp*"]                                                         # không bỏ được loa chọn cuối cùng
+    # Phòng đang mở (thuộc tính của cảm biến mic): nút thành «Ngắt nối», liệt kê loa, ô «cùng một phòng» phản ánh chế độ và bị khoá
+    assert r["dangNoi"] == {"bat": "Ngắt nối", "tt": "Đang nối: Phicomm R1, Bếp", "chung": True, "khoaChung": True}
+    assert json.loads(r["ngat"]) == [["r1_speaker", "stop_conference", {"entity_id": "switch.r1_dam_thoai"}]]
+    assert r["loi"] == {"chu": "Không nối được: Bếp đang bận", "hien": True}                              # HA từ chối: báo rõ, không im lặng
+    # Thẻ ghim device_id hoặc chỉ có một loa: không có hàng chọn loa, không có khu nối loa
+    assert r["g"] == {"chips": 0, "hoi": False, "mic": "Tắt"} and r["motLoa"] == {"chips": 0, "hoi": False}

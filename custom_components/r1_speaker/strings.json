@@ -501,6 +501,10 @@
           "name": "Content",
           "description": "Message (tts) or audio URL (media)."
         },
+        "tts": {
+          "name": "TTS engine",
+          "description": "TTS entity that reads the message (type tts); empty reads through the speaker's Assist."
+        },
         "lap_s": {
           "name": "Repeat every (s)",
           "description": "5–600, default 30."
@@ -526,6 +530,10 @@
         "noi_dung": {
           "name": "Message",
           "description": "What to say."
+        },
+        "tts": {
+          "name": "TTS engine",
+          "description": "TTS entity that reads the message (type tts); empty reads through the speaker's Assist."
         },
         "sau_phut": {
           "name": "After (min)",
@@ -648,6 +656,34 @@
         "giay": {
           "name": "Seconds",
           "description": "5–300, default 60."
+        }
+      }
+    },
+    "start_conference": {
+      "name": "Open a multi-speaker conference",
+      "description": "Link speakers: HA mixes the speakers' mics and plays the mix on the other speakers (each hears the others, never itself).",
+      "fields": {
+        "entity_ids": {
+          "name": "Speakers",
+          "description": "2 to 6 speakers (any entity of each speaker)."
+        },
+        "che_do": {
+          "name": "Mode",
+          "description": "tron (default): everyone hears everyone, for one speaker per room. quyen_noi: one speaker holds the floor at a time, for speakers sharing a room (avoids howling)."
+        },
+        "giua_cac_loa": {
+          "name": "Speakers hear each other",
+          "description": "On by default."
+        }
+      }
+    },
+    "stop_conference": {
+      "name": "Close the multi-speaker conference",
+      "description": "Close the conference this speaker is in.",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any entity of a speaker in the conference."
         }
       }
     }
