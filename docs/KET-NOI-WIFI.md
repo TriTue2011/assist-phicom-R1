@@ -6,7 +6,11 @@ Dùng cho **loa mới tinh** hoặc loa **vừa reset về cài đặt gốc** (
 
 ## Các bước
 
-1. **Cắm điện loa**, rồi **giữ nút trên loa 5–10 giây**: đèn **nhấp nháy** và loa phát ra âm thanh (loa chờ cấu hình). Lúc đó loa phát WiFi tên **`Phicomm_R1_XXXX`** (XXXX là mã riêng của loa). Đây là bước của chương trình *Bo Cai R1* (mục 1, đã chạy tốt 24/10/2026); chỉ cắm điện thì loa đã có WiFi nhà **không** phát mạng này.
+1. **Đưa loa vào chế độ chờ cấu hình** (làm một trong hai cách):
+   * **Loa cần reset** (theo chủ kho): **rút điện** loa → **giữ nút nguồn** → vẫn giữ, **cắm điện** → khi đèn hiện **đen, trắng, hồng** thì **nhả tay**.
+   * **Loa mới tinh**: **cắm điện loa**, rồi **giữ nút trên loa 5–10 giây**: đèn **nhấp nháy** và loa phát ra âm thanh.
+
+   Lúc đó loa phát WiFi tên **`Phicomm_R1_XXXX`** (XXXX là mã riêng của loa). Đây là bước của chương trình *Bo Cai R1* (mục 1, đã chạy tốt 24/10/2026); chỉ cắm điện thì loa đã có WiFi nhà **không** phát mạng này.
 2. **Tải tệp HTML về** điện thoại hoặc máy tính (từ kho GitHub: mở tệp → *Download raw file*), **trước khi** đổi WiFi, vì khi nối vào WiFi của loa
    bạn sẽ không có Internet.
 3. **Nối điện thoại/máy tính vào WiFi `Phicomm_R1_XXXX`.** Nên **tắt dữ liệu di động và VPN** để máy không đi đường khác (điện thoại hay tự chuyển sang
@@ -32,7 +36,7 @@ Dùng cho **loa mới tinh** hoặc loa **vừa reset về cài đặt gốc** (
 
 | Hiện tượng | Nguyên nhân thường gặp | Cách xử lý |
 |---|---|---|
-| Không thấy WiFi `Phicomm_R1_XXXX` | loa không ở chế độ chờ cấu hình (đã có WiFi, hoặc chưa reset) | reset loa về cài đặt gốc theo hướng dẫn của hãng, rồi cắm điện lại |
+| Không thấy WiFi `Phicomm_R1_XXXX` | loa không ở chế độ chờ cấu hình (đã có WiFi, hoặc chưa reset) | làm lại bước 1 (loa cần reset: rút điện, giữ nút nguồn, cắm điện, nhả khi đèn đen–trắng–hồng); xem thêm hướng dẫn của hãng, rồi cắm điện lại |
 | «Chưa tới được loa» | chưa nối đúng WiFi của loa; VPN hoặc dữ liệu di động đang bật; trình duyệt tự đổi mạng | nối lại WiFi `Phicomm_R1_XXXX`, tắt VPN và dữ liệu di động, thử lại bấm *Kiểm tra* |
 | Gửi xong mà `Phicomm_R1_XXXX` vẫn còn sau 30 giây | sai tên/mật khẩu WiFi nhà, hoặc sai loại mã hoá, hoặc WiFi nhà là băng tần loa không bắt được | kiểm tên (đúng hoa/thường), mật khẩu, loại mã hoá; thử WiFi 2,4 GHz (theo thông số công khai, R1 chỉ có 2,4 GHz; **chưa kiểm trên loa này**) |
 | Loa vào WiFi nhà nhưng HA không thấy | IP loa đổi, hoặc loa và HA khác mạng con | xem IP trong router, đặt IP tĩnh, kiểm HA cùng mạng với loa |

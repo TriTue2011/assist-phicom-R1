@@ -9,7 +9,7 @@ Làm ĐÚNG như mục [1] của chương trình Bo Cai R1 (đã đọc bytecode
 Chỉ dùng thư viện chuẩn, chạy được trên Windows, Linux, macOS, Termux. Cách dùng:
     python gui-wifi-r1.py "Tên WiFi" "Mật khẩu"            # WPA/WPA2 (thông dụng)
     python gui-wifi-r1.py "Tên WiFi" "" --ma-hoa INSECURE   # WiFi không mật khẩu
-Trước đó: giữ nút trên loa 5–10 giây (đèn nhấp nháy, loa phát âm thanh) và nối máy vào WiFi Phicomm_R1_XXXX (tắt VPN, dữ liệu di động).
+Trước đó: đưa loa vào chế độ chờ — loa cần reset: rút điện, giữ nút nguồn, cắm điện, nhả khi đèn đen-trắng-hồng; loa mới tinh: giữ nút trên loa 5–10 giây (đèn nhấp nháy, loa phát âm thanh) và nối máy vào WiFi Phicomm_R1_XXXX (tắt VPN, dữ liệu di động).
 """
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ma-hoa", choices=MA_HOA, default="WPA")
     a = ap.parse_args(argv)
     if not kiem_tcp():
-        print(f"Không nối được {HOST}:{CONG}. Kiểm tra: đã nối WiFi Phicomm_R1_XXXX chưa; loa đã nhấp nháy (giữ nút 5–10 giây) chưa; tắt VPN/dữ liệu di động.")
+        print(f"Không nối được {HOST}:{CONG}. Kiểm tra: đã nối WiFi Phicomm_R1_XXXX chưa; loa đã vào chế độ chờ chưa (loa cần reset: rút điện, giữ nút nguồn, cắm điện, nhả khi đèn đen-trắng-hồng; loa mới tinh: giữ nút 5–10 giây); tắt VPN/dữ liệu di động.")
         return 2
     ok, tb = gui_cau_hinh(a.ssid, a.password, a.ma_hoa)
     if ok:

@@ -14,19 +14,67 @@ Kho này biến loa **Phicomm R1** thành một thiết bị đầy đủ của 
 
 **Giấy phép: [MIT](LICENSE)** cho mã của kho này (tích hợp `r1_speaker`, APK `vn.r1.bodam`, trang kết nối WiFi). Các ứng dụng gốc của hãng Phicomm đi kèm trong `custom_components/r1_speaker/apk/` (`autodlna.apk`, `unisound.apk.*`) **không** thuộc giấy phép này: chúng thuộc bản quyền của hãng, kho chỉ mang theo để cài lên loa của chính bạn.
 
+## Ưu điểm và nhược điểm
+
+**Ưu điểm**
+
+- Đủ bộ thực thể HA cho loa: EQ, âm lượng, DLNA/AirPlay, phát TTS/nhạc, vệ tinh Assist, đèn LED (13 hiệu ứng), nút khởi động lại, cảm biến CPU/RAM/WiFi.
+- **Chỉ cần HACS**: tích hợp tự cài ứng dụng lên loa qua mạng (kể cả loa mới tinh), không phải cài `adb` hay chạy lệnh trên máy tính.
+- Báo thức, nhắc nhở, hẹn giờ tắt nhạc chạy bằng HA (không phụ thuộc máy chủ của hãng); thêm được nhiều loa độc lập, đàm thoại giữa các loa.
+- Mic loa chỉ về HA khi bật; tắt bằng `switch.r1_tat_mic` là dừng.
+
+**Nhược điểm**
+
+- **Dự án thử nghiệm**: phần lớn kiểm bằng loa giả; nhiều điểm chưa kiểm trên loa thật ([docs/PHAT-TRIEN.md](docs/PHAT-TRIEN.md)).
+- Cài đặt dựa vào **ADB mạng (cổng 5555) không mã hoá, không xác thực**: phải khoá cổng hoặc đóng ADB sau khi cài (xem [Hạn chế bị tấn công qua ADB](#hạn-chế-bị-tấn-công-qua-adb-với-modem-hoặc-router-bất-kỳ)).
+- Cài ứng dụng và ẩn ứng dụng gốc của hãng là việc **khó đảo ngược** với thiết bị của bạn.
+- Đóng ADB thì mất đèn tự do, cài/cập nhật ứng dụng, thông tin hệ thống, công tắc Bluetooth; mở lại phải rút điện loa.
+- Tiếng và khoá mic đi qua TCP trơn trong LAN (chỉ dùng mạng tin cậy); loa cần IP tĩnh và cổng `18765` thông từ loa về HA.
+- Cần Home Assistant **2026.2 trở lên**.
+
 ## Cài đặt nhanh (chỉ cần HACS)
 
 Không cần cài `adb` hay chạy lệnh nào trên máy tính: tích hợp tự nói chuyện với loa qua mạng.
 
-1. **Cho loa vào WiFi nhà** (chỉ với loa mới hoặc vừa reset): làm theo [mục 4](#4-kết-nối-wifi-cho-loa-mới-hoặc-vừa-reset). Đặt **IP tĩnh** cho loa trong router.
-2. **HACS → ⋮ → Custom repositories** → dán địa chỉ kho này, loại **Integration** → cài **Phicomm R1 Speaker** → **khởi động lại Home Assistant**.
-3. **Cài đặt → Thiết bị & dịch vụ → Thêm tích hợp → Phicomm R1 Speaker** → nhập **IP của loa** (cổng điều khiển để mặc định `8080`).
-4. Mở thiết bị **Phicomm R1** → ở ba thực thể **«Ứng dụng: …»** (trình phát, thiết bị và giọng nói, mic) bấm **Cài đặt** lần lượt.
-   Tích hợp tự **ẩn các ứng dụng gốc** của hãng và tự cấu hình APK mic, bạn không phải làm gì thêm.
-5. Bấm nút **Khởi động lại loa**, đợi **1–2 phút** (cổng điều khiển trên loa lên sau khoảng 100 giây).
-6. **Kiểm:** nói gần loa, `sensor.r1_trang_thai_mic` phải chuyển **«gui»**. Rồi thêm thẻ `type: custom:r1-card` vào bảng điều khiển (4 tab: Đàm thoại, EQ, Chức năng, Cài đặt).
+1. **Reset loa vào chế độ chờ WiFi** (loa cần reset hoặc chưa biết WiFi nhà): **rút điện** loa → **giữ nút nguồn** → vẫn giữ, **cắm điện** → khi đèn hiện **đen, trắng, hồng** thì **nhả tay**. Loa phát WiFi `Phicomm_R1_XXXX` (chi tiết và cách khác cho loa mới tinh: [mục 4](#4-kết-nối-wifi-cho-loa-mới-hoặc-vừa-reset)).
+2. **Cho loa vào WiFi nhà bằng trang HTML:** tải sẵn `Trang kết nối WiFi cho loa R1.html`, nối điện thoại/máy tính vào WiFi `Phicomm_R1_XXXX` (tắt VPN và dữ liệu di động), mở tệp HTML, điền WiFi nhà → **Gửi cấu hình**, chờ 10–20 giây. Nối lại WiFi nhà, rồi đặt **IP tĩnh** (hoặc giữ chỗ DHCP) cho loa trong router.
+3. **Mở cổng `18765`** từ loa tới máy chạy Home Assistant (xem *Tường lửa và Docker* bên dưới).
+4. **HACS → ⋮ → Custom repositories** → dán địa chỉ kho này, loại **Integration** → cài **Phicomm R1 Speaker** → **khởi động lại Home Assistant**.
+5. **Cài đặt → Thiết bị & dịch vụ → Thêm tích hợp → Phicomm R1 Speaker** → nhập **IP của loa** (cổng điều khiển để mặc định `8080`).
+6. **Cài ứng dụng lên loa:** **Công cụ nhà phát triển → Hành động** → chọn `r1_speaker.install_apps` → ở `entity_id` chọn một thực thể của loa (ví dụ `sensor.r1_cai_dat`), **để mặc định** các tuỳ chọn → **Thực hiện hành động**. Nó cài đủ ba ứng dụng (trình phát, thiết bị và giọng nói, APK mic `vn.r1.bodam`), cấu hình APK mic, rồi **tự chạy «Chuẩn bị loa»** (ẩn các ứng dụng gốc của hãng).
+   - Cài từng ứng dụng bằng nút **Cài đặt** ở các thực thể **«Ứng dụng: …»** thì chỉ cài ứng dụng đó, **không** ẩn ứng dụng gốc: phải bấm thêm nút **«Chuẩn bị loa (ẩn ứng dụng gốc)»** ở cuối. Bỏ bước này thì loa hỏng (cổng `8080` không trả lời, loa tự khởi động lại).
+7. Bấm nút **Khởi động lại loa** (cả «Chuẩn bị loa» lẫn `install_apps` đều **không** tự khởi động lại), đợi **1–2 phút** (cổng điều khiển trên loa lên sau khoảng 100 giây).
+8. **Kiểm:** nói gần loa, `sensor.r1_trang_thai_mic` phải chuyển **«gui»**. Rồi thêm thẻ `type: custom:r1-card` vào bảng điều khiển (4 tab: Đàm thoại, EQ, Chức năng, Cài đặt).
+9. **Chọn cách điều khiển loa: dùng APK (đóng ADB) hay dùng ADB (giữ ADB).** Đây là lựa chọn quan trọng nhất sau khi cài, xem bảng dưới.
 
-> Loa vừa reset: cổng ADB mạng `5555` của loa phải mở thì bước 4 mới chạy được (chưa kiểm trên loa vừa reset). Mở rồi mà báo bận thì tắt mọi công cụ `adb` khác: loa chỉ nhận **một** kết nối ADB.
+> Loa vừa reset: cổng ADB mạng `5555` của loa phải mở thì bước 6 mới chạy được (chưa kiểm trên loa vừa reset). Mở rồi mà báo bận thì tắt mọi công cụ `adb` khác: loa chỉ nhận **một** kết nối ADB một lúc.
+
+### Chọn: dùng APK hay dùng ADB
+
+Bạn chọn **một** cách (ô **«Chế độ đóng ADB»** ở **Cài đặt → Thiết bị & dịch vụ → Phicomm R1 Speaker → Cấu hình**, hoặc nút **«Đóng ADB mạng…»** để đóng ngay một lần):
+
+| | **Dùng APK** (đóng ADB) | **Dùng ADB** (giữ ADB, mặc định) |
+|---|---|---|
+| An ninh | Không máy nào trong mạng nối được cổng `5555` | Cổng `5555` mở không xác thực cho cả LAN; phải tự bảo vệ (phần cuối trang) |
+| Chạy được | Mic, đàm thoại, Assist, âm lượng, phát nhạc DLNA/AirPlay, Dừng, Tắt tiếng, nút giữa (APK 1.3) | Tất cả |
+| Đèn | Chỉ hiệu ứng có sẵn của firmware (màu cố định, thở, hướng đánh thức) | Đèn tự do 13 hiệu ứng, màu RGB tuỳ ý |
+| Mất | Cài/cập nhật ứng dụng, «Chuẩn bị loa», thông tin hệ thống, công tắc Bluetooth | — |
+| Mở lại ADB | Rút điện loa rồi cắm lại (làm xong thì đóng lại) | — |
+| Rủi ro | Phải cài xong và APK đã nối về HA trước khi đóng | ADB bị chiếm thì loa mất kiểm soát |
+
+- **Chọn APK:** bật «Chế độ đóng ADB» (tự đóng khi APK đã nối ổn định 2 phút; không bao giờ đóng khi APK chưa nối) hoặc bấm «Đóng ADB mạng…», rồi đặt **«Nguồn phím» = `apk`** (nếu để `adb` thì nút giữa ngừng chạy khi ADB đóng). Nút «Khởi động lại loa» tự đi qua cổng `8080` (đã thử khi ADB còn mở, **chưa thử khi đã đóng**).
+- **Chọn ADB:** giữ mặc định, rồi làm phần **«Hạn chế bị tấn công qua ADB»** ở cuối trang. Loa chỉ nhận **một** kết nối ADB một lúc: đừng chạy `adb` từ máy khác khi HA đang dùng.
+- **Gợi ý:** cài xong và kiểm xong (bước 8) mới đóng ADB, vì khi đóng không cài/cập nhật được ứng dụng.
+
+**Các lựa chọn khác** (đều ở **Cài đặt → Thiết bị & dịch vụ → Phicomm R1 Speaker → Cấu hình**, trừ hành động phím):
+
+| Lựa chọn | Giá trị | Chọn khi |
+|---|---|---|
+| **Nguồn phím** (nút giữa) | `adb` (mặc định): HA đọc phím qua ADB, không cần APK mới, nhưng cần ADB mở và giữ một luồng ADB liên tục<br>`apk`: APK 1.3 báo phím qua dịch vụ trợ năng, chạy được cả khi ADB đóng<br>`tat`: không nhận phím | Giữ ADB → `adb`; đóng ADB → `apk` |
+| **Cách nối ADB** (`adb_mode`) | `auto` (tự nhận), `server` (qua adb-server container), `direct` (nối thẳng loa) | Thường để `auto`; có adb-server riêng thì `server` |
+| **Hành động nút giữa** (bốn ô chọn: nhấn 1, 2, 3 lần, giữ) | Mặc định theo app AI box: 1 lần tắt báo thức/đàm thoại, 2 lần Assist, 3 lần Bluetooth, giữ đèn theo nhạc | Muốn như APK cũ (đơn = tắt mic, đúp = Bluetooth) thì đổi ở bốn ô này |
+| **Mic** | «Tăng mic» khoảng **18 dB** và bật **hạn đỉnh**; **đừng bật AGC** với mặc định hiện tại (mục 10) | Từ đánh thức không nhận |
+| **Từ đánh thức** | Do HA dò trong luồng mic (có); chạy trên loa **chưa có** | — |
 
 ### Tường lửa và Docker
 
@@ -39,7 +87,7 @@ Loa gọi ngược về Home Assistant ở **cổng 18765** (mỗi loa thêm m�
 - **Home Assistant chạy bằng Docker:** dùng `network_mode: host`, hoặc công bố cổng trong compose (`ports: - "18765:18765"`). Docker **tự mở** cổng khi công bố, **không cần** thêm luật `ufw`.
 - Home Assistant OS / Supervised: không cần làm gì thêm.
 
-### Gỡ rối nhanh
+## Sửa lỗi
 
 | Thấy | Làm |
 |---|---|
@@ -47,12 +95,34 @@ Loa gọi ngược về Home Assistant ở **cổng 18765** (mỗi loa thêm m�
 | `ADB … đang bận phục vụ một client ADB khác` | Tắt công cụ `adb` khác (`adb disconnect`, `adb kill-server`) rồi thử lại |
 | Thẻ Đàm thoại báo «Chưa có kênh phát về loa», mic chỉ «nghe», không lên «gui» | Mở cổng 18765 (mục trên), tích **«Ghép lại APK»** trong Tuỳ chọn, khởi động lại loa |
 | Sau khi cài, mic không tự chạy lại sau khởi động | APK chưa từng được mở một lần: bấm **Cài đặt** lại ở «Ứng dụng: …» (mic) rồi khởi động lại loa |
+| Không thấy WiFi `Phicomm_R1_XXXX` | Loa chưa ở chế độ chờ: làm lại bước 1 (rút điện, giữ nút nguồn, cắm điện, nhả khi đèn đen–trắng–hồng) |
+| Cần cài/cập nhật ứng dụng nhưng ADB đã đóng | **Rút điện loa rồi cắm lại** (ADB mở lại), làm xong thì đóng lại |
+| Nút giữa không chạy sau khi đóng ADB | Đổi **«Nguồn phím»** thành `apk` (cần APK 1.3), hoặc mở lại ADB |
+| Đèn không sáng | Xem `binary_sensor.r1_dich_vu_den` (thuộc tính `loi`); tự thử lại sau 15 giây. ADB đóng thì đèn chạy qua APK |
 
 Chi tiết: [mục 11 (gỡ rối)](#11-gỡ-rối), [docs/CAI-UNG-DUNG.md](docs/CAI-UNG-DUNG.md), [docs/HUONG-DAN-CAI-DAT.md](docs/HUONG-DAN-CAI-DAT.md).
 
+## Hạn chế bị tấn công qua ADB với modem hoặc router bất kỳ
+
+**Vì sao cần:** ADB mạng của loa (cổng `5555`) không mã hoá và không đòi mật khẩu; máy nào nối được cổng này đều chạy được lệnh trên loa, và loa có `ro.debuggable=1` nên có thể là quyền root. Botnet quét cổng ADB trên Internet và từ các thiết bị đã bị nhiễm ngay trong mạng nhà (TV box giá rẻ…). Làm theo thứ tự; **bước 1 và 2 làm được với mọi modem/router**:
+
+1. **Đóng ADB ngay trên loa** (không phụ thuộc router): chọn «Dùng APK» ở bước 9. Kiểm từ một máy khác trong mạng: `nc -zv <IP-loa> 5555` (Windows PowerShell: `Test-NetConnection <IP-loa> -Port 5555`) phải **không nối được**.
+2. **Không để cổng ra Internet:** vào trang quản trị router và kiểm
+   - **Port Forwarding / Virtual Server / NAT:** không có luật nào chuyển cổng `5555` về IP loa;
+   - **DMZ:** không đặt IP loa làm DMZ host;
+   - **UPnP:** tắt (thiết bị trong nhà không được tự mở cổng);
+   - **Quản trị từ xa (Remote Management)** của router: tắt hoặc giới hạn;
+   - **IPv6:** nếu router cấp IPv6 công khai cho thiết bị trong nhà, bật tường lửa IPv6 chặn kết nối từ ngoài vào (chưa kiểm loa có nghe ADB trên IPv6).
+
+   Kiểm từ ngoài: tắt WiFi, dùng 4G, quét cổng `5555` của IP công khai nhà bạn: phải đóng.
+3. **Tách thiết bị không tin cậy:** đặt TV box giá rẻ, thiết bị của khách, camera không rõ nguồn gốc vào **mạng khách (Guest) có bật cách ly thiết bị (Client/AP Isolation)** hoặc một VLAN riêng. Đừng đưa mật khẩu WiFi chính cho người lạ: ai vào được mạng nhà là chạm được cổng ADB nếu còn mở.
+4. **Nếu phải giữ ADB:** chỉ cho IP Home Assistant vào `<IP-loa>:5555` và chặn mọi nguồn khác (ví dụ RouterOS ở [mục 12](#12-quyền-riêng-tư-và-bảo-mật)). Việc này chỉ làm được trên router lọc được **giữa các thiết bị trong cùng LAN** (OpenWrt, MikroTik, UniFi, pfSense/OPNsense…, thường kèm một VLAN riêng cho loa). Modem/router phổ thông của nhà mạng thường chỉ lọc giữa Internet và LAN, **không chặn được LAN↔LAN**: khi đó chỉ có bước 1 là chắc chắn.
+5. **Giữ router an toàn:** cập nhật firmware, đổi mật khẩu quản trị mặc định, dùng WPA2/WPA3 với mật khẩu mạnh, tắt WPS.
+6. **Cần cập nhật ứng dụng trên loa:** rút điện loa để mở lại ADB, làm xong đóng lại ngay.
+
 ## Mục lục
 
-Cài đặt nhanh ở trên · [4. WiFi cho loa](#4-kết-nối-wifi-cho-loa-mới-hoặc-vừa-reset) · [5. Đèn](#5-đèn) · [6. Ứng dụng trên loa](#6-ứng-dụng-trên-loa-cài-từ-ha) ·
+Cài đặt nhanh, Sửa lỗi, Hạn chế bị tấn công qua ADB ở trên · [4. WiFi cho loa](#4-kết-nối-wifi-cho-loa-mới-hoặc-vừa-reset) · [5. Đèn](#5-đèn) · [6. Ứng dụng trên loa](#6-ứng-dụng-trên-loa-cài-từ-ha) ·
 [7. Thông tin hệ thống](#7-thông-tin-hệ-thống-của-loa) · [8. Nút giữa](#8-nút-giữa) · [9. Mic về HA](#9-nối-mic-loa-về-ha) · [10. Từ đánh thức](#10-từ-đánh-thức-và-chỉnh-mic) ·
 [11. Gỡ rối](#11-gỡ-rối) · [12. Quyền riêng tư và bảo mật](#12-quyền-riêng-tư-và-bảo-mật) · [13. Phát triển và kiểm thử](#13-phát-triển-và-kiểm-thử)
 
@@ -62,7 +132,10 @@ Cài đặt nhanh ở trên · [4. WiFi cho loa](#4-kết-nối-wifi-cho-loa-m�
 
 Loa mới (hoặc vừa reset) chưa biết WiFi nhà: nó **tự phát WiFi `Phicomm_R1_XXXX`** khi chờ cấu hình. Tệp **`Trang kết nối WiFi cho loa R1.html`** (ở gốc kho) chạy **hoàn toàn offline** và gửi tên + mật khẩu WiFi nhà thẳng tới loa.
 
-1. Cắm điện loa, chờ đèn **nhấp nháy**.
+0. **Đưa loa vào chế độ chờ cấu hình** (làm một trong hai cách):
+   - **Loa cần reset** (theo chủ kho): **rút điện** → **giữ nút nguồn** → vẫn giữ, **cắm điện** → khi đèn hiện **đen, trắng, hồng** thì **nhả tay**.
+   - **Loa mới tinh**: cắm điện, **giữ nút trên loa 5–10 giây** cho đèn **nhấp nháy** và loa phát âm thanh.
+1. Loa phát WiFi **`Phicomm_R1_XXXX`** (XXXX là mã riêng của loa): chờ tới khi thấy mạng này.
 2. **Tải sẵn** tệp HTML về điện thoại/máy tính (vì sau khi nối WiFi của loa sẽ không có Internet).
 3. Nối thiết bị vào WiFi **`Phicomm_R1_XXXX`**; tắt dữ liệu di động và VPN.
 4. Mở tệp HTML **trực tiếp** trong trình duyệt → **Kiểm tra kết nối tới loa** (phải báo tới được `192.168.43.1:8989`).

@@ -41,7 +41,7 @@ Tên gói và tên tệp đều qua bộ lọc trước khi vào lệnh; khoá n
 
 ## Tự kết nối về HA sau khi cài APK
 
-- **Cài qua tích hợp** (nút «Cài ứng dụng» hoặc dịch vụ `install_apps`): ngay sau khi cài xong bodam, HA chạy lệnh cấu hình để APK nối về HA, không cần nhập gì.
+- **Cài qua tích hợp** (nút **Cài đặt** ở thực thể «Ứng dụng: …», hoặc dịch vụ `install_apps`): ngay sau khi cài xong bodam, HA chạy lệnh cấu hình để APK nối về HA, không cần nhập gì.
 - **Cài ngoài tích hợp** (chương trình Bo Cai R1 trên máy tính, `adb install` tay): APK chưa biết HA ở đâu nên trước đây phải tự nhập. Từ 0.5.11, HA tự đối chiếu: nếu APK bodam **đã cài trên loa** mà **chưa nối về HA sau 90 giây**, HA tự chạy lại đúng lệnh cấu hình đó.
 - Lệnh an toàn khi lặp: APK đã cấu hình thì bỏ qua phần đổi cấu hình, chỉ mở app (cũng đánh thức dịch vụ đang dừng).
 - Giới hạn: tối đa 3 lần cho một đợt mất kết nối, cách nhau 10 phút. APK nối lại được thì bộ đếm về 0. ADB bận hoặc loa chưa sẵn sàng thì không tính là một lần.
