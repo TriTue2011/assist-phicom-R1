@@ -1,5 +1,7 @@
 # assist-phicom-R1 — loa Phicomm R1 trong Home Assistant
 
+[![Mở kho này trong HACS của bạn.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=TriTue2011&repository=assist-phicom-R1&category=integration)
+
 Kho này biến loa **Phicomm R1** thành một thiết bị đầy đủ của Home Assistant (HA), gồm hai phần chạy cùng nhau:
 
 1. **Tích hợp HA `r1_speaker`** (`custom_components/r1_speaker/`): EQ, âm lượng, DLNA/AirPlay; phát tiếng của HA (TTS, nhạc) ra loa; vệ tinh Assist với từ đánh thức;
