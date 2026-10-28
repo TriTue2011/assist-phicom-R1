@@ -275,7 +275,22 @@ class BoCai:
             return "thông tin cấu hình APK không hợp lệ (bỏ qua)"
         await self.dev.shell(f"am start -n vn.r1.bodam/.ManHinhChinh --es host {host} --ei port {cong} "
                              f"--es khoa {khoa} --ez bat true", timeout=30)
-        return "đã chạy lệnh cấu hình APK"
+        return "đã chạy lệnh cấu hình APK; " + await self._bat_tro_nang_phim()
+
+    async def _bat_tro_nang_phim(self) -> str:
+        """Bật dịch vụ trợ năng ``TiepCanPhim`` của APK để nhận nút giữa khi app chạy nền (một lần; cài đặt này giữ qua khởi động lại nên không cần
+        ADB nữa sau đó). Giữ nguyên các dịch vụ trợ năng khác đang bật (nối thêm bằng dấu «:»)."""
+        ten = "vn.r1.bodam/vn.r1.bodam.TiepCanPhim"
+        dang = (await self.dev.shell("settings get secure enabled_accessibility_services", timeout=20)).strip()
+        ds = [x for x in ("" if dang in ("null", "") else dang).split(":") if x]
+        if ten in ds:
+            return "trợ năng phím đã bật sẵn"
+        moi = ":".join(ds + [ten])
+        if not re.fullmatch(r"[A-Za-z0-9_.:/]+", moi):                  # chuỗi đọc từ loa: chỉ nhận ký tự tên thành phần, không bao giờ đưa lại vào shell nếu lạ
+            return "bỏ qua bật trợ năng phím (danh sách trợ năng hiện có không đọc được)"
+        await self.dev.shell(f"settings put secure enabled_accessibility_services {moi}", timeout=20)
+        await self.dev.shell("settings put secure accessibility_enabled 1", timeout=20)
+        return "đã bật trợ năng nhận phím"
 
     async def don_ota(self, kq: KetQua) -> None:
         """Chạy ``DON_TRUOC_KHI_CAI``; lệnh nào báo lỗi (ví dụ tệp không có) chỉ ghi lại, không dừng. Lỗi ADB thì ném lên."""

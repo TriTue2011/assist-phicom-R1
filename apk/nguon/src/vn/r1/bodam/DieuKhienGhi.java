@@ -271,6 +271,48 @@ public final class DieuKhienGhi {
         hangDen.dat("{\"type\":\"den_hoi\"}");                   // bao HA trang thai may chu den ngay khi noi
         try { mayGhiCuoi.guiKhung(Khung.amLuong(AM_THAT.muc(), AM_THAT.toiDa())); } catch (IOException boQua) { }  // va muc am luong hien tai
 
+        // Kenh len HA cho phim/tin firmware, bao cao phien ban + he thong + Bluetooth (khi noi roi dinh ky), va lenh phu tu HA.
+        KenhHa.dat(mayGhiCuoi);
+        final BaoCao.Gui guiBaoCao = new BaoCao.Gui() {
+            @Override public void gui(byte[] khungDaDongGoi) throws IOException { mayGhiCuoi.guiKhung(khungDaDongGoi); }
+        };
+        final int theHeBaoCao = theHeCuaToi;
+        final Thread luongBaoCao = new Thread(new Runnable() {
+            @Override public void run() {
+                BaoCao.khiNoi(guiBaoCao, HeThongLoa.THAT);
+                while (true) {
+                    try { Thread.sleep(BaoCao.CHU_KY_MS); } catch (InterruptedException ngat) { return; }
+                    synchronized (khoa) { if (dung || theHeBaoCao != theHe) return; }
+                    if (!mayGhiCuoi.dangGhi()) return;
+                    BaoCao.baoHeThong(guiBaoCao, HeThongLoa.THAT);
+                }
+            }
+        }, "r1-bao-cao");
+        luongBaoCao.setDaemon(true);
+        luongBaoCao.start();
+        final LenhPhu.Dich dichPhu = new LenhPhu.Dich() {
+            @Override public String datBluetooth(boolean bat) {
+                String loi = BluetoothDieuKhien.dat(bat);
+                Thread t = new Thread(new Runnable() {
+                    @Override public void run() {
+                        try { Thread.sleep(2000); } catch (InterruptedException ngat) { return; }
+                        BaoCao.baoBluetooth(guiBaoCao, BluetoothDieuKhien.dangBat());     // cho he thong kip doi roi bao lai trang thai THAT
+                    }
+                }, "r1-bt");
+                t.setDaemon(true);
+                t.start();
+                return loi;
+            }
+            @Override public void datPhim(int[] ma, boolean doTatCa) { PhimHa.datCauHinh(ma, doTatCa); }
+            @Override public void baoHeThong() {
+                Thread t = new Thread(new Runnable() {
+                    @Override public void run() { BaoCao.baoHeThong(guiBaoCao, HeThongLoa.THAT); }
+                }, "r1-he-thong");
+                t.setDaemon(true);
+                t.start();
+            }
+        };
+
         // Luồng nhận PCM từ HA (phát xuống loa) trên cùng kết nối; khung JSON điều khiển bị bỏ qua.
         final PhatAm phat = new PhatAm();
         new Thread(new Runnable() {
@@ -300,6 +342,10 @@ public final class DieuKhienGhi {
                                     try { mayGhiCuoi.guiKhung(Khung.amLuong(AM_THAT.muc(), AM_THAT.toiDa())); } catch (IOException boQua) { }
                                     continue;
                                 }
+                                if (LenhPhu.laLenhPhu(khungJson)) {            // Bluetooth, cau hinh phim, hoi he thong
+                                    LenhPhu.xuLy(khungJson, dichPhu);
+                                    continue;
+                                }
                                 if (!hangDen.dat(khungJson)) {
                                     LenhDieuKhien.xuLy(khungJson, LenhDieuKhien.THAT);
                                 }
@@ -312,6 +358,9 @@ public final class DieuKhienGhi {
                     // kết nối đóng/hỏng: luồng phát dừng, phiên mic xử lý tiếp
                 } finally {
                     hangDen.dungLai();
+                    luongBaoCao.interrupt();
+                    PhimHa.xoa();                                  // mat HA thi logic phim tai cho (neu co) chay lai nhu truoc
+                    KenhHa.bo(mayGhiCuoi);
                     phat.dong();
                     if (dangDoc) {
                         // HA dong / ket noi hong: dong socket de phia gui mic bao dut ngay

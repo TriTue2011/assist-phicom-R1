@@ -40,9 +40,13 @@ async def _noi_apk(e, port):
     return reader, writer
 
 
-async def _khung_xuong(reader) -> bytes:
-    do_dai = int.from_bytes(await asyncio.wait_for(reader.readexactly(4), 3), "big")
-    return await asyncio.wait_for(reader.readexactly(do_dai), 3)
+async def _khung_xuong(reader, *, ca_bat_tay: bool = False) -> bytes:
+    """Khung kế tiếp HA gửi xuống APK. Khung «phim_cau_hinh» HA gửi NGAY khi APK nối (bắt tay cấu hình phím) bị bỏ qua, trừ khi ``ca_bat_tay``."""
+    while True:
+        do_dai = int.from_bytes(await asyncio.wait_for(reader.readexactly(4), 3), "big")
+        khung = await asyncio.wait_for(reader.readexactly(do_dai), 3)
+        if ca_bat_tay or not khung.startswith(b'{"type":"phim_cau_hinh"'):
+            return khung
 
 
 def _st(hass, eid) -> str:
@@ -90,7 +94,8 @@ async def test_den_nhac_ngoai_khoang_bi_chan_truoc_khi_gui(hass, r1):
     with pytest.raises(HomeAssistantError):              # HA chặn giá trị ngoài khoảng của thanh trượt
         await hass.services.async_call("number", "set_value", {"entity_id": LUMA, "value": 150},
                                        blocking=True)
-    with pytest.raises(asyncio.TimeoutError):            # không khung nào lọt xuống loa
+    assert (await _khung_xuong(reader, ca_bat_tay=True)).startswith(b'{"type":"phim_cau_hinh"')     # chỉ có khung bắt tay cấu hình phím
+    with pytest.raises(asyncio.TimeoutError):            # ngoài ra không khung nào lọt xuống loa
         await asyncio.wait_for(reader.readexactly(4), 0.3)
     writer.close()
 

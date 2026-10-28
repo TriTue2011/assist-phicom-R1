@@ -26,13 +26,77 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
     async_add_entities(R1Sensor(entry.runtime_data, d) for d in SENSORS)
     preregister(hass, entry, "sensor", f"{entry.entry_id}_mic_status", "r1_trang_thai_mic")
     preregister(hass, entry, "sensor", f"{entry.entry_id}_settings", "r1_cai_dat")
-    async_add_entities([R1MicStatus(entry), R1Settings(entry)])
+    preregister(hass, entry, "sensor", f"{entry.entry_id}_bao_thuc_ke_tiep", "r1_bao_thuc_ke_tiep")
+    preregister(hass, entry, "sensor", f"{entry.entry_id}_apk", "r1_apk")
+    async_add_entities([R1MicStatus(entry), R1Settings(entry), R1BaoThucSensor(entry), R1ApkSensor(entry)])
     ht = entry.runtime_data.he_thong
     for khoa, obj in (("cpu", "r1_cpu"), ("ram", "r1_ram"), ("bo_nho", "r1_bo_nho"), ("wifi", "r1_song_wifi"),
                       ("thoi_gian_chay", "r1_thoi_gian_chay")):
         preregister(hass, entry, "sensor", f"{entry.entry_id}_{khoa}", obj)
     async_add_entities(R1HeThongSensor(entry, ht, d) for d in HE_THONG)
     entry.async_create_background_task(hass, ht.async_refresh(), "r1 he thong lan dau")
+
+
+class R1BaoThucSensor(SensorEntity):
+    """``sensor.r1_bao_thuc_ke_tiep``: lúc kêu kế tiếp của mọi báo thức/nhắc nhở; thuộc tính liệt kê từng cái, cái đang kêu và hẹn giờ tắt nhạc."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "bao_thuc_ke_tiep"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(self, entry: R1ConfigEntry) -> None:
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_bao_thuc_ke_tiep"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry.entry_id)})
+
+    @property
+    def _bt(self):
+        return self._entry.runtime_data.bao_thuc
+
+    @property
+    def native_value(self):
+        return self._bt.ke_tiep_chung()
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return self._bt.trang_thai()
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._bt.tren_doi.append(self.async_write_ha_state)
+        self.async_on_remove(lambda: self._bt.tren_doi.remove(self.async_write_ha_state))
+
+
+class R1ApkSensor(SensorEntity):
+    """``sensor.r1_apk``: phiên bản APK trên loa và khả năng nó báo (đèn, âm lượng, Bluetooth, hệ thống, phím...). Biết APK cũ thiếu gì thay vì lệnh đi vào hư không."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "apk"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, entry: R1ConfigEntry) -> None:
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_apk"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry.entry_id)})
+
+    @property
+    def _mic(self):
+        return self._entry.runtime_data.mic_server
+
+    @property
+    def native_value(self) -> str:
+        if not self._mic.receiving:
+            return "mat_ket_noi"
+        return self._mic.apk_ver or "cu"                    # nối rồi mà không báo phiên bản = APK trước 1.3
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"kha_nang": sorted(self._mic.apk_kha_nang), "den_firmware": self._mic.den_san_sang,
+                "nguon_he_thong": getattr(getattr(self._entry.runtime_data.he_thong, "data", None), "nguon", None)}
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self._mic.add_state_listener(self.async_write_ha_state))
 
 
 class R1Sensor(R1Entity, SensorEntity):

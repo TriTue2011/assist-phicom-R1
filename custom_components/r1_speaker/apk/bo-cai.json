@@ -38,12 +38,12 @@
       "tep": [
         "vn-r1-bodam.apk"
       ],
-      "sha256": "cf7037210c9f8c60d4933f2763bd1817e1fd0a8b2067bdeb0a19fefff1de7d2e",
-      "phien_ban": "1.2",
+      "sha256": "5e1ef91fe1d5cdfa3c86cce29aaa62efdb407463a71b0b04d10da6fc295ea404",
+      "phien_ban": "1.3",
       "thu_tu": 3,
       "mac_dinh": true,
       "sau_cai": "cau_hinh_bodam",
-      "mo_ta": "APK của tích hợp: đẩy tiếng mic về HA, âm lượng, nút giữa. Cài xong HA tự chạy lệnh cấu hình một lần.",
+      "mo_ta": "APK của tích hợp: đẩy tiếng mic về HA, âm lượng, nút giữa (qua dịch vụ trợ năng), Bluetooth, thông tin hệ thống, đèn bằng hiệu ứng firmware. Cài xong HA tự chạy lệnh cấu hình một lần (kèm bật trợ năng nhận phím).",
       "tu_go_neu_khac_chu_ky": true
     }
   ]

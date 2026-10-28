@@ -113,6 +113,12 @@
       },
       "thoi_gian_chay": {
         "name": "Thời gian loa đã chạy"
+      },
+      "bao_thuc_ke_tiep": {
+        "name": "Lần báo thức kế tiếp"
+      },
+      "apk": {
+        "name": "APK trên loa"
       }
     },
     "media_player": {
@@ -129,6 +135,82 @@
       },
       "eq_preset": {
         "name": "Chế độ EQ"
+      },
+      "phim_don": {
+        "name": "Phím loa: nhấn đơn",
+        "state": {
+          "khong_lam_gi": "Không làm gì (chỉ phát sự kiện)",
+          "bat_tat_mic": "Bật/tắt mic (Tắt mic)",
+          "bat_tat_bluetooth": "Bật/tắt Bluetooth",
+          "bat_tat_dam_thoai": "Bật/tắt đàm thoại (bộ đàm)",
+          "phat_tam_dung": "Phát / tạm dừng nhạc",
+          "dung_nhac": "Dừng nhạc",
+          "bai_ke": "Bài kế tiếp",
+          "bai_truoc": "Bài trước",
+          "tang_am_luong": "Tăng âm lượng",
+          "giam_am_luong": "Giảm âm lượng",
+          "tat_tieng_loa": "Tắt/bật tiếng loa",
+          "bao_thuc_dung": "Tắt báo thức đang kêu",
+          "bao_thuc_hoan": "Báo thức: hoãn (báo lại sau)",
+          "hen_gio_tat_nhac_30": "Hẹn giờ tắt nhạc 30 phút (nhỏ dần)"
+        }
+      },
+      "phim_doi": {
+        "name": "Phím loa: nhấn đúp",
+        "state": {
+          "khong_lam_gi": "Không làm gì (chỉ phát sự kiện)",
+          "bat_tat_mic": "Bật/tắt mic (Tắt mic)",
+          "bat_tat_bluetooth": "Bật/tắt Bluetooth",
+          "bat_tat_dam_thoai": "Bật/tắt đàm thoại (bộ đàm)",
+          "phat_tam_dung": "Phát / tạm dừng nhạc",
+          "dung_nhac": "Dừng nhạc",
+          "bai_ke": "Bài kế tiếp",
+          "bai_truoc": "Bài trước",
+          "tang_am_luong": "Tăng âm lượng",
+          "giam_am_luong": "Giảm âm lượng",
+          "tat_tieng_loa": "Tắt/bật tiếng loa",
+          "bao_thuc_dung": "Tắt báo thức đang kêu",
+          "bao_thuc_hoan": "Báo thức: hoãn (báo lại sau)",
+          "hen_gio_tat_nhac_30": "Hẹn giờ tắt nhạc 30 phút (nhỏ dần)"
+        }
+      },
+      "phim_ba": {
+        "name": "Phím loa: nhấn ba lần",
+        "state": {
+          "khong_lam_gi": "Không làm gì (chỉ phát sự kiện)",
+          "bat_tat_mic": "Bật/tắt mic (Tắt mic)",
+          "bat_tat_bluetooth": "Bật/tắt Bluetooth",
+          "bat_tat_dam_thoai": "Bật/tắt đàm thoại (bộ đàm)",
+          "phat_tam_dung": "Phát / tạm dừng nhạc",
+          "dung_nhac": "Dừng nhạc",
+          "bai_ke": "Bài kế tiếp",
+          "bai_truoc": "Bài trước",
+          "tang_am_luong": "Tăng âm lượng",
+          "giam_am_luong": "Giảm âm lượng",
+          "tat_tieng_loa": "Tắt/bật tiếng loa",
+          "bao_thuc_dung": "Tắt báo thức đang kêu",
+          "bao_thuc_hoan": "Báo thức: hoãn (báo lại sau)",
+          "hen_gio_tat_nhac_30": "Hẹn giờ tắt nhạc 30 phút (nhỏ dần)"
+        }
+      },
+      "phim_giu": {
+        "name": "Phím loa: nhấn giữ",
+        "state": {
+          "khong_lam_gi": "Không làm gì (chỉ phát sự kiện)",
+          "bat_tat_mic": "Bật/tắt mic (Tắt mic)",
+          "bat_tat_bluetooth": "Bật/tắt Bluetooth",
+          "bat_tat_dam_thoai": "Bật/tắt đàm thoại (bộ đàm)",
+          "phat_tam_dung": "Phát / tạm dừng nhạc",
+          "dung_nhac": "Dừng nhạc",
+          "bai_ke": "Bài kế tiếp",
+          "bai_truoc": "Bài trước",
+          "tang_am_luong": "Tăng âm lượng",
+          "giam_am_luong": "Giảm âm lượng",
+          "tat_tieng_loa": "Tắt/bật tiếng loa",
+          "bao_thuc_dung": "Tắt báo thức đang kêu",
+          "bao_thuc_hoan": "Báo thức: hoãn (báo lại sau)",
+          "hen_gio_tat_nhac_30": "Hẹn giờ tắt nhạc 30 phút (nhỏ dần)"
+        }
       }
     },
     "binary_sensor": {
@@ -154,6 +236,25 @@
       },
       "dong_adb": {
         "name": "Đóng ADB mạng (tới lần khởi động lại loa)"
+      },
+      "tat_bao_thuc": {
+        "name": "Tắt báo thức đang kêu"
+      }
+    },
+    "event": {
+      "phim": {
+        "name": "Phím loa",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "don": "Nhấn đơn",
+              "doi": "Nhấn đúp",
+              "ba": "Nhấn ba lần",
+              "giu": "Nhấn giữ",
+              "nhan_ngan": "Nhấn ngắn"
+            }
+          }
+        }
       }
     }
   },
@@ -171,7 +272,8 @@
           "ghep_lai_apk": "Ghép lại APK (sinh khoá mới; APK tự lấy, không phải copy)",
           "adb_server": "Địa chỉ adb-server (tuỳ chọn; để TRỐNG = nối thẳng tới IP của loa, cổng 5555)",
           "adb_mode": "Cách nối ADB tới loa: auto (tự nhận diện), server (qua adb-server), direct (nối thẳng loa)",
-          "adb_tu_dong_dong": "Chế độ «đóng ADB»: tự đóng ADB mạng của loa khi APK đã nối. ƯU: chặn botnet cùng mạng. NHƯỢC: mất đèn tự do, cài ứng dụng, khởi động lại từ HA, thông tin hệ thống, công tắc Bluetooth; mở lại bằng cách rút điện loa"
+          "adb_tu_dong_dong": "Chế độ «đóng ADB»: tự đóng ADB mạng của loa khi APK đã nối. ƯU: chặn botnet cùng mạng. NHƯỢC: mất đèn tự do, cài ứng dụng, khởi động lại từ HA, thông tin hệ thống, công tắc Bluetooth; mở lại bằng cách rút điện loa",
+          "phim_ma": "Mã phím HA chạy hành động theo cử chỉ (cách nhau dấu phẩy; 195 = nút giữa; mã khác chỉ phát sự kiện)"
         }
       },
       "nang_cao": {
@@ -356,6 +458,192 @@
         "reboot": {
           "name": "Khởi động lại",
           "description": "Khởi động lại loa ngay sau khi chuẩn bị."
+        }
+      }
+    },
+    "bao_thuc_dat": {
+      "name": "Đặt báo thức",
+      "description": "Thêm báo thức, hoặc sửa khi có id đã tồn tại. Giờ HH:MM, ngày lặp (rỗng = một lần), kiểu tts (đọc lời nhắn) hoặc media (phát địa chỉ âm thanh).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        },
+        "id": {
+          "name": "Mã báo thức",
+          "description": "Có thì sửa báo thức đó."
+        },
+        "gio": {
+          "name": "Giờ",
+          "description": "HH:MM, giờ của HA."
+        },
+        "ngay": {
+          "name": "Ngày lặp",
+          "description": "mon, tue, wed, thu, fri, sat, sun; rỗng = một lần."
+        },
+        "nhan": {
+          "name": "Nhãn",
+          "description": "Tên báo thức."
+        },
+        "bat": {
+          "name": "Bật",
+          "description": "Bật/tắt báo thức."
+        },
+        "loai": {
+          "name": "Kiểu",
+          "description": "tts hoặc media."
+        },
+        "noi_dung": {
+          "name": "Nội dung",
+          "description": "Lời đọc (tts) hoặc địa chỉ âm thanh (media)."
+        },
+        "lap_s": {
+          "name": "Kêu lại sau (giây)",
+          "description": "5–600, mặc định 30."
+        },
+        "toi_da_s": {
+          "name": "Kêu tối đa (giây)",
+          "description": "30–1800, mặc định 300."
+        },
+        "am_luong": {
+          "name": "Âm lượng (%)",
+          "description": "Đặt âm lượng loa khi kêu rồi trả lại."
+        }
+      }
+    },
+    "nhac_nho": {
+      "name": "Nhắc nhở",
+      "description": "Nhắc một lần sau N phút hoặc đúng một thời điểm; kêu xong tự xoá.",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        },
+        "noi_dung": {
+          "name": "Lời nhắc",
+          "description": "Nội dung đọc."
+        },
+        "sau_phut": {
+          "name": "Sau (phút)",
+          "description": "Nhắc sau ngần ấy phút."
+        },
+        "luc": {
+          "name": "Lúc",
+          "description": "Thời điểm tuyệt đối."
+        },
+        "loai": {
+          "name": "Kiểu",
+          "description": "tts hoặc media."
+        },
+        "lap_s": {
+          "name": "Kêu lại sau (giây)",
+          "description": "5–600."
+        },
+        "toi_da_s": {
+          "name": "Kêu tối đa (giây)",
+          "description": "30–1800."
+        },
+        "am_luong": {
+          "name": "Âm lượng (%)",
+          "description": "0–100."
+        }
+      }
+    },
+    "bao_thuc_xoa": {
+      "name": "Xoá báo thức",
+      "description": "Xoá một báo thức hoặc nhắc nhở.",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        },
+        "id": {
+          "name": "Mã báo thức",
+          "description": "Mã trong thuộc tính của «Lần báo thức kế tiếp»."
+        }
+      }
+    },
+    "bao_thuc_bat_tat": {
+      "name": "Bật/tắt báo thức",
+      "description": "Bật hoặc tắt một báo thức, giữ nguyên cài đặt.",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        },
+        "id": {
+          "name": "Mã báo thức",
+          "description": "Mã báo thức."
+        },
+        "bat": {
+          "name": "Bật",
+          "description": "Bật hay tắt."
+        }
+      }
+    },
+    "bao_thuc_tat": {
+      "name": "Tắt báo thức đang kêu",
+      "description": "Im báo thức hoặc nhắc nhở đang kêu.",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        }
+      }
+    },
+    "bao_thuc_hoan": {
+      "name": "Hoãn báo thức",
+      "description": "Im đi và báo lại sau N phút (mặc định 9).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        },
+        "phut": {
+          "name": "Phút",
+          "description": "1–120."
+        }
+      }
+    },
+    "hen_gio_tat_nhac": {
+      "name": "Hẹn giờ tắt nhạc",
+      "description": "Sau N phút nhỏ dần âm lượng (qua APK) rồi dừng nhạc và trả âm lượng cũ.",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        },
+        "phut": {
+          "name": "Phút",
+          "description": "1–720."
+        },
+        "lam_mo_giay": {
+          "name": "Thời gian nhỏ dần (giây)",
+          "description": "0–120, mặc định 20."
+        }
+      }
+    },
+    "huy_hen_gio_tat_nhac": {
+      "name": "Huỷ hẹn giờ tắt nhạc",
+      "description": "Huỷ hẹn giờ đang chờ hoặc đang nhỏ dần.",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        }
+      }
+    },
+    "phim_do": {
+      "name": "Dò phím",
+      "description": "Một lúc báo MỌI phím trên loa (không nuốt) để biết mã phím; mỗi phím phát sự kiện r1_speaker_phim_do. Cần dịch vụ trợ năng của APK.",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        },
+        "giay": {
+          "name": "Số giây",
+          "description": "5–300, mặc định 60."
         }
       }
     }

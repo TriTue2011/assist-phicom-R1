@@ -77,7 +77,7 @@ def test_danh_sach_dung_ba_ung_dung_va_tep_that_khop_sha256():
     ds = doc_bo_cai()
     assert [(u.id, u.goi, u.phien_ban) for u in ds] == [
         ("player", "com.phicomm.speaker.player", "0.2.5"), ("unisound", "com.phicomm.speaker.device", "V3.2.5.2-"),
-        ("bodam", "vn.r1.bodam", "1.2")]
+        ("bodam", "vn.r1.bodam", "1.3")]
     for u in ds:
         assert hashlib.sha256(ghep_va_kiem(u)).hexdigest() == u.sha256       # tệp thật, kể cả ghép 2 phần của unisound
     assert doc_bo_cai()[1].tep == ("unisound.apk.00", "unisound.apk.01")
@@ -308,12 +308,12 @@ async def test_moi_ung_dung_co_mot_thuc_the_cap_nhat_va_cai_bang_nut(hass, ha_ca
     from homeassistant.helpers.entity_component import async_update_entity
     await async_update_entity(hass, pl)
     st = hass.states.get(pl)
-    assert st.attributes["installed_version"] == "chưa cài" and st.attributes["latest_version"] == "1.2"
+    assert st.attributes["installed_version"] == "chưa cài" and st.attributes["latest_version"] == "1.3"
     assert st.state == "on" and st.attributes["title"].startswith("APK mic")
     await hass.services.async_call("update", "install", {"entity_id": pl}, blocking=True)
     assert any(c.startswith("pm install -r") and "r1-bodam" in c for c in dev.cmds)
     dev.cai_san["vn.r1.bodam"] = ("/data/app/p-1/base.apk",
-                                                 hashlib.md5(ghep_va_kiem(bo.tim("bodam"))).hexdigest(), "1.2")
+                                                 hashlib.md5(ghep_va_kiem(bo.tim("bodam"))).hexdigest(), "1.3")
     bo._nho.clear()                                                          # bỏ bộ nhớ 30 giây của lần đọc trước
     await async_update_entity(hass, pl)
     assert hass.states.get(pl).state == "off"                              # đã cài đúng bản đi kèm: hết «có cập nhật»
@@ -502,3 +502,42 @@ async def test_go_roi_cai_lai_thu_tu_hien_go_cai_an_va_bo_qua_loi_go():
     assert kq2.ok and [c.split()[1] for c in dev.cmds if c.startswith("pm ") and ("bodam" in c or "r1-bodam" in c)][-2:] == ["uninstall", "install"]
     r = await bo.cai_nhieu(["player"], go_truoc=True, chuan_bi=False)
     assert r[0].ok and any(c == "pm uninstall com.phicomm.speaker.player" for c in dev.cmds)
+
+
+async def test_cau_hinh_bodam_bat_tro_nang_phim_giu_dich_vu_khac_va_khong_lap():
+    """Cấu hình APK lần đầu bật dịch vụ trợ năng nhận phím; có dịch vụ trợ năng khác thì nối thêm; đã bật sẵn thì không đụng lại."""
+    bo, _ = _bo(FakeDev())
+    dev = bo.dev
+    kq = await bo.cau_hinh_lai()
+    assert "đã bật trợ năng nhận phím" in kq
+    assert "settings put secure enabled_accessibility_services vn.r1.bodam/vn.r1.bodam.TiepCanPhim" in dev.cmds
+    assert "settings put secure accessibility_enabled 1" in dev.cmds
+
+    goc = dev.shell
+
+    async def shell(cmd, **kw):
+        if cmd == "settings get secure enabled_accessibility_services":
+            return "com.khac/com.khac.DichVu\n"
+        return await goc(cmd, **kw)
+    dev.shell = shell
+    dev.cmds.clear()
+    await bo._bat_tro_nang_phim()
+    assert "settings put secure enabled_accessibility_services com.khac/com.khac.DichVu:vn.r1.bodam/vn.r1.bodam.TiepCanPhim" in dev.cmds
+
+    async def shell2(cmd, **kw):
+        if cmd == "settings get secure enabled_accessibility_services":
+            return "vn.r1.bodam/vn.r1.bodam.TiepCanPhim\n"
+        return await goc(cmd, **kw)
+    dev.shell = shell2
+    dev.cmds.clear()
+    assert "đã bật sẵn" in await bo._bat_tro_nang_phim()
+    assert not any(c.startswith("settings put") for c in dev.cmds)
+
+    async def shell3(cmd, **kw):
+        if cmd == "settings get secure enabled_accessibility_services":
+            return "x; reboot\n"                                            # chuỗi lạ đọc từ loa: không được đưa lại vào shell
+        return await goc(cmd, **kw)
+    dev.shell = shell3
+    dev.cmds.clear()
+    assert "bỏ qua" in await bo._bat_tro_nang_phim()
+    assert not any(c.startswith("settings put") for c in dev.cmds)

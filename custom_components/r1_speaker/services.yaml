@@ -174,3 +174,170 @@ prepare_speaker:
       required: false
       selector:
         boolean:
+bao_thuc_dat:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+    id:
+      selector:
+        text:
+    gio:
+      selector:
+        text:
+    ngay:
+      selector:
+        select:
+          multiple: true
+          options: [mon, tue, wed, thu, fri, sat, sun]
+    nhan:
+      selector:
+        text:
+    bat:
+      selector:
+        boolean:
+    loai:
+      selector:
+        select:
+          options: [tts, media]
+    noi_dung:
+      selector:
+        text:
+    lap_s:
+      selector:
+        number:
+          min: 5
+          max: 600
+    toi_da_s:
+      selector:
+        number:
+          min: 30
+          max: 1800
+    am_luong:
+      selector:
+        number:
+          min: 0
+          max: 100
+nhac_nho:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+    noi_dung:
+      required: true
+      selector:
+        text:
+    sau_phut:
+      selector:
+        number:
+          min: 0.1
+          max: 10080
+          step: any
+    luc:
+      selector:
+        datetime:
+    loai:
+      selector:
+        select:
+          options: [tts, media]
+    lap_s:
+      selector:
+        number:
+          min: 5
+          max: 600
+    toi_da_s:
+      selector:
+        number:
+          min: 30
+          max: 1800
+    am_luong:
+      selector:
+        number:
+          min: 0
+          max: 100
+bao_thuc_xoa:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+    id:
+      required: true
+      selector:
+        text:
+bao_thuc_bat_tat:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+    id:
+      required: true
+      selector:
+        text:
+    bat:
+      required: true
+      selector:
+        boolean:
+bao_thuc_tat:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+bao_thuc_hoan:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+    phut:
+      selector:
+        number:
+          min: 1
+          max: 120
+hen_gio_tat_nhac:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+    phut:
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 720
+    lam_mo_giay:
+      selector:
+        number:
+          min: 0
+          max: 120
+huy_hen_gio_tat_nhac:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+phim_do:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+    giay:
+      selector:
+        number:
+          min: 5
+          max: 300

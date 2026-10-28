@@ -146,7 +146,7 @@ async def test_bo_cai_that_co_ung_dung_bodam_va_cau_hinh_lai_giu_khoa():
     bo = BoCai(Dev(), danh_sach=doc_bo_cai(), cau_hinh_bodam=lambda: ("172.16.10.200", 18765, "khoa_thu_nghiem_12345678"))
     ud = bo.bodam()
     assert ud is not None and ud.goi == "vn.r1.bodam"
-    assert await bo.cau_hinh_lai() == "đã chạy lệnh cấu hình APK"
+    assert (await bo.cau_hinh_lai()).startswith("đã chạy lệnh cấu hình APK")
     assert lenh and lenh[0].startswith("am start -n vn.r1.bodam/.ManHinhChinh --es host 172.16.10.200 --ei port 18765 --es khoa ")
     # chưa đủ thông tin (chưa có khoá) thì bỏ qua, không chạy lệnh
     lenh.clear()

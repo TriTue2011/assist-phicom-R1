@@ -31,9 +31,9 @@ from .const import (CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, 
                     CONF_TALK_SILENCE, CONF_TALK_TAIL, CONF_TALK_THRESHOLD_DB, DEFAULT_HOST,
                     DEFAULT_MIC_LISTEN_PORT, DEFAULT_MIC_PORT, DEFAULT_PLAY_PORT, DEFAULT_PORT, DEFAULT_TALK_PREROLL,
                     DEFAULT_TALK_SILENCE, DEFAULT_TALK_TAIL, DEFAULT_TALK_THRESHOLD_DB, DOMAIN)
-from .settings import (adb_settings, adb_tu_dong_dong, DuplexSettings, TalkSettings, agc_settings, conf, limiter_settings, noise_settings, wake_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
+from .settings import (adb_settings, adb_tu_dong_dong, phim_ma, DuplexSettings, TalkSettings, agc_settings, conf, limiter_settings, noise_settings, wake_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
                        speaker_port, wake_mode)
-from .const import CONF_ADB_MODE, CONF_ADB_SERVER, CONF_ADB_TU_DONG, DEFAULT_ADB_MODE, DEFAULT_ADB_SERVER
+from .const import CONF_ADB_MODE, CONF_ADB_SERVER, CONF_ADB_TU_DONG, CONF_PHIM_MA, DEFAULT_ADB_MODE, DEFAULT_ADB_SERVER, DEFAULT_PHIM_MA
 from .const import (CONF_WAKE_ENABLE, CONF_WAKE_SENSITIVITY, CONF_WAKE_WORD,
                     DEFAULT_WAKE_ENABLE, DEFAULT_WAKE_SENSITIVITY, DEFAULT_WAKE_WORD)
 
@@ -120,7 +120,7 @@ _GOC = {
     CONF_DUPLEX_DUCK_DB: DEFAULT_DUPLEX_DUCK_DB,
     CONF_WAKE_ENABLE: DEFAULT_WAKE_ENABLE, CONF_WAKE_WORD: DEFAULT_WAKE_WORD,
     CONF_WAKE_SENSITIVITY: DEFAULT_WAKE_SENSITIVITY,
-    CONF_ADB_SERVER: DEFAULT_ADB_SERVER, CONF_ADB_MODE: DEFAULT_ADB_MODE, CONF_ADB_TU_DONG: False,
+    CONF_ADB_SERVER: DEFAULT_ADB_SERVER, CONF_ADB_MODE: DEFAULT_ADB_MODE, CONF_ADB_TU_DONG: False, CONF_PHIM_MA: DEFAULT_PHIM_MA,
 }
 
 
@@ -205,7 +205,8 @@ class R1OptionsFlow(OptionsFlowWithReload):
                 self._co_ban = {CONF_HOST: host, CONF_PORT: port, CONF_HA_URL: url.rstrip("/"),
                                 CONF_ADB_SERVER: (user_input.get(CONF_ADB_SERVER) or DEFAULT_ADB_SERVER).strip(),
                                 CONF_ADB_MODE: user_input.get(CONF_ADB_MODE, DEFAULT_ADB_MODE),
-                                CONF_ADB_TU_DONG: user_input.get(CONF_ADB_TU_DONG, False)}
+                                CONF_ADB_TU_DONG: user_input.get(CONF_ADB_TU_DONG, False),
+                                CONF_PHIM_MA: (user_input.get(CONF_PHIM_MA) or DEFAULT_PHIM_MA).strip()}
                 if user_input.get(CONF_NANG_CAO):
                     return await self.async_step_nang_cao()
                 return self._luu({})
@@ -220,6 +221,7 @@ class R1OptionsFlow(OptionsFlowWithReload):
             vol.Optional(CONF_ADB_MODE, default=v.get(CONF_ADB_MODE, adb_settings(entry)[1])): vol.In(
                 ["auto", "server", "direct"]),
             vol.Optional(CONF_ADB_TU_DONG, default=v.get(CONF_ADB_TU_DONG, adb_tu_dong_dong(entry))): bool,
+            vol.Optional(CONF_PHIM_MA, default=v.get(CONF_PHIM_MA, ",".join(str(m) for m in sorted(phim_ma(entry))) or DEFAULT_PHIM_MA)): str,
             vol.Optional(CONF_ROTATE_KEY, default=False): bool,
             vol.Optional(CONF_GHEP_LAI, default=False): bool,
             vol.Optional(CONF_NANG_CAO, default=False): bool,

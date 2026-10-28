@@ -14,7 +14,7 @@ from homeassistant.config_entries import ConfigEntry
 
 from .agc import AgcSettings, LimiterSettings
 from .noise_suppress import NoiseSettings
-from .const import ADB_SERVER_LOCAL, CONF_ADB_MODE, CONF_ADB_SERVER, CONF_ADB_TU_DONG, DEFAULT_ADB_MODE, DEFAULT_ADB_SERVER
+from .const import ADB_SERVER_LOCAL, CONF_ADB_MODE, CONF_ADB_SERVER, CONF_ADB_TU_DONG, CONF_PHIM_MA, DEFAULT_ADB_MODE, DEFAULT_ADB_SERVER, DEFAULT_PHIM_MA
 from .const import (CONF_WAKE_ENABLE, CONF_WAKE_SENSITIVITY, CONF_WAKE_WORD,
                     DEFAULT_WAKE_ENABLE, DEFAULT_WAKE_SENSITIVITY, DEFAULT_WAKE_WORD)
 from .const import (CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, CONF_AGC_TARGET_DB,
@@ -171,6 +171,16 @@ def wake_settings(entry: ConfigEntry) -> dict[str, Any]:
         "tu_khoa": str(conf(entry, CONF_WAKE_WORD, DEFAULT_WAKE_WORD) or ""),
         "do_nhay": float(conf(entry, CONF_WAKE_SENSITIVITY, DEFAULT_WAKE_SENSITIVITY)),
     }
+
+
+def phim_ma(entry: ConfigEntry) -> set[int]:
+    """Mã phím được chạy hành động theo cử chỉ: chuỗi «195,116» → {195, 116}; phần sai (không phải số 1–999) bị bỏ, tối đa 16 mã."""
+    ra: set[int] = set()
+    for p in str(conf(entry, CONF_PHIM_MA, DEFAULT_PHIM_MA) or "").split(","):
+        p = p.strip()
+        if p.isdigit() and 1 <= int(p) <= 999 and len(ra) < 16:
+            ra.add(int(p))
+    return ra
 
 
 def adb_tu_dong_dong(entry: ConfigEntry) -> bool:

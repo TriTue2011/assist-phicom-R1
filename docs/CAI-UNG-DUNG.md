@@ -10,7 +10,7 @@ Danh sách nằm trong `custom_components/r1_speaker/apk/bo-cai.json` (dữ li�
 |---|---|---|---|
 | `player` | `com.phicomm.speaker.player` | 0.2.5 | Trình phát nhạc DLNA / AirPlay / mạng. Bản cập nhật của ứng dụng hệ thống EchoService (cùng chữ ký Phicomm, `sharedUserId` system). |
 | `unisound` | `com.phicomm.speaker.device` | V3.2.5.2- | Ứng dụng thiết bị của hãng. **Có thể chiếm mic của loa**: nếu mic về HA bị tranh, gỡ bằng `pm uninstall com.phicomm.speaker.device` (xem *Gỡ rối*). |
-| `bodam` | `vn.r1.bodam` | 1.2 | APK của tích hợp: đẩy tiếng mic về HA, âm lượng, nút giữa. Cài xong HA **tự chạy lệnh cấu hình một lần** (đã có host HA, cổng và khoá nghe mic). |
+| `bodam` | `vn.r1.bodam` | 1.3 | APK của tích hợp: đẩy tiếng mic về HA, âm lượng, nút giữa (qua dịch vụ trợ năng), Bluetooth, thông tin hệ thống, đèn bằng hiệu ứng firmware. Cài xong HA **tự chạy lệnh cấu hình một lần** (đã có host HA, cổng và khoá nghe mic). |
 
 Tệp APK nằm cùng thư mục (`apk/`); `unisound` được **chia hai phần** (`unisound.apk.00`, `.01`) vì GitHub giới hạn 25 MB khi tải lên: tích hợp tự ghép và **kiểm sha256** trước khi đẩy
 (sai sha256 thì không đẩy gì lên loa).

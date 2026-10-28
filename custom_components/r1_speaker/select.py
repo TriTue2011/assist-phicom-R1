@@ -7,18 +7,57 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN, EQ_MAX, EQ_MIN, EQ_PRESET_MB
 from .coordinator import R1ConfigEntry, R1Coordinator
 from .entity import R1Entity, R1MicEntity, preregister
+from .phim import CU_CHI, danh_sach
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
                             async_add_entities: AddConfigEntryEntitiesCallback) -> None:
     # unique_id do AssistPipelineSelect tự đặt: f"{entry_id}-pipeline".
     preregister(hass, entry, "select", f"{entry.entry_id}-pipeline", "r1_tro_ly")
-    async_add_entities([R1PipelineSelect(hass, entry), R1EqPreset(entry.runtime_data)])
+    for cc in CU_CHI:
+        preregister(hass, entry, "select", f"{entry.entry_id}_phim_{cc}", f"r1_phim_nhan_{cc}")
+    async_add_entities([R1PipelineSelect(hass, entry), R1EqPreset(entry.runtime_data), *[R1PhimSelect(entry, cc) for cc in CU_CHI]])
+
+
+class R1PhimSelect(SelectEntity, RestoreEntity):
+    """Hành động khi bấm phím trên loa theo MỘT cử chỉ (đơn / đúp / ba / giữ). Danh sách lấy từ bảng hành động của ``phim.py``: thêm một hành động
+    mới trong mã là nó tự có ở đây. Nhớ lựa chọn qua lần khởi động."""
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, entry: R1ConfigEntry, cu_chi: str) -> None:
+        self._entry, self._cu_chi = entry, cu_chi
+        self._attr_translation_key = f"phim_{cu_chi}"
+        self._attr_unique_id = f"{entry.entry_id}_phim_{cu_chi}"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry.entry_id)})
+
+    @property
+    def options(self) -> list[str]:
+        return danh_sach()
+
+    @property
+    def current_option(self) -> str | None:
+        return self._entry.runtime_data.phim.cau_hinh.get(self._cu_chi)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        cu = await self.async_get_last_state()
+        if cu is not None and cu.state in danh_sach():
+            self._entry.runtime_data.phim.cau_hinh[self._cu_chi] = cu.state
+
+    async def async_select_option(self, option: str) -> None:
+        if option not in danh_sach():
+            raise HomeAssistantError(f"Hành động phím «{option}» không có")
+        self._entry.runtime_data.phim.cau_hinh[self._cu_chi] = option
+        self.async_write_ha_state()
 
 
 class R1PipelineSelect(R1MicEntity, AssistPipelineSelect):

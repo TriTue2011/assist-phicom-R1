@@ -27,6 +27,12 @@ public class TiepCanPhim extends AccessibilityService {
     private LogicNut logicNut;
 
     @Override protected boolean onKeyEvent(KeyEvent event) {
+        // Phim thuoc HA (HA da gui phim_cau_hinh) hoac dang do phim: bao ve HA, KHONG xu ly tai cho. Day la cua do nguoi dung chon
+        // o HA, nen khong phu thuoc co bat_tiep_can_phim cuc bo.
+        if (PhimHa.suKien(event.getKeyCode(), event.getAction() == KeyEvent.ACTION_DOWN, event.getRepeatCount(), PhimHa.QUA_KENH)) {
+            return true;
+        }
+        if (PhimHa.dangDo()) return false;
         CauHinh cfg = CauHinh.doc(this);
         if (!cfg.batTiepCanPhim) return false;
         if (event.getAction() == KeyEvent.ACTION_DOWN

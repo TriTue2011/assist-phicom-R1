@@ -161,3 +161,28 @@ nhận byte mic nào cho tới khi loa báo trigger (hoặc người bật `swit
 Lệnh `lights_test set <mặt nạ> <rgb>` chỉ chạy được trên loa; HA không có đường tới nó. Hợp đồng
 `LightsSink`, mặt nạ, chức năng, hiệu ứng và việc chưa đo: xem `DEN-LED.md`. **TODO phía loa:** một dịch
 vụ đèn (chưa được duyệt) thoả giao diện đó.
+
+
+## Khung APK 1.3 (0.8.0)
+
+Mọi khung đều là «4 byte độ dài + JSON gọn» trên kết nối mic đã xác thực (mục 2). **APK → HA:**
+
+| Khung | Trường | Ý nghĩa |
+|---|---|---|
+| `apk` | `ver`, `kha_nang` (danh sách chuỗi: `den`, `am_luong`, `bluetooth`, `he_thong`, `phim`) | Phiên bản và khả năng, gửi ngay khi nối. APK cũ không gửi: HA coi là «cũ» và rơi về đường ADB |
+| `he_thong` | `txt` | Thông tin hệ thống dạng văn bản chia khối `---tên` (CPU, RAM, `/data`, WiFi, Bluetooth, uptime), mỗi 60 giây và khi HA hỏi. Cùng định dạng mà `he_thong.phan_tich` đọc cho đường ADB. Không có BSSID/MAC/số sê-ri |
+| `bluetooth_trang_thai` | `bat` | Trạng thái Bluetooth THẬT (báo lại ~2 giây sau lệnh) |
+| `phim` | `ma`, `xuong` | Phím thô qua dịch vụ trợ năng của APK (nhấn/nhả); chỉ báo phím HA đã nhận (`phim_cau_hinh`) hoặc mọi phím trong chế độ dò. HA tự nhận diện đơn/đúp/ba/giữ |
+
+**HA → APK:**
+
+| Khung | Trường | Ý nghĩa |
+|---|---|---|
+| `bluetooth` | `bat` | Bật/tắt Bluetooth bằng `BluetoothAdapter.enable/disable` (API Android chuẩn) |
+| `phim_cau_hinh` | `ma` (≤ 16 mã, 1–999), `do` | Mã phím do HA xử lý (APK không xử lý tại chỗ và nuốt phím); `do` bật chế độ dò (báo mọi phím, không nuốt). Gửi mỗi khi APK nối vào |
+| `he_thong_hoi` | — | Bảo APK báo `he_thong` ngay |
+| `den_hieu_ung`, `den_hoi` | `id` | Đèn bằng hiệu ứng firmware (mục 5 của `DEN-LED.md`) |
+
+APK bỏ qua mọi khung sai dạng (mẫu chặt, không bao giờ làm đứt kết nối).
+
+**Đã thử và KHÔNG dùng** (đo trên loa thật 28/10/2026): bộ nhận diện cử chỉ phím của firmware (`userdefkeyservice.registerEventListener`, `msgcenter` nhóm 256) đăng ký được nhưng không gửi gì khi ứng dụng gốc bị ẩn; `FXSystemPrivate.writeProp` chỉ là kho khoá-giá trị riêng của hãng (không đổi thuộc tính hệ thống) nên **không thể khởi động lại loa qua APK** (cần quyền `REBOOT` chỉ hệ thống có): nút khởi động lại vẫn dùng ADB.

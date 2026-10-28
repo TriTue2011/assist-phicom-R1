@@ -37,6 +37,7 @@ public class DichVuGhi extends Service {
     @Override public void onCreate() {
         super.onCreate();
         AmLuong.khoiTao(this);
+        HeThongLoa.khoiTao(this);
         chu = new Handler(Looper.getMainLooper());
     }
 

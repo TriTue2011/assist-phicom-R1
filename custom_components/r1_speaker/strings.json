@@ -113,6 +113,12 @@
       },
       "thoi_gian_chay": {
         "name": "Speaker uptime"
+      },
+      "bao_thuc_ke_tiep": {
+        "name": "Next alarm"
+      },
+      "apk": {
+        "name": "Speaker APK"
       }
     },
     "media_player": {
@@ -129,6 +135,82 @@
       },
       "eq_preset": {
         "name": "EQ preset"
+      },
+      "phim_don": {
+        "name": "Speaker key: single press",
+        "state": {
+          "khong_lam_gi": "Do nothing (event only)",
+          "bat_tat_mic": "Toggle mic (Mute mic)",
+          "bat_tat_bluetooth": "Toggle Bluetooth",
+          "bat_tat_dam_thoai": "Toggle intercom",
+          "phat_tam_dung": "Play / pause",
+          "dung_nhac": "Stop music",
+          "bai_ke": "Next track",
+          "bai_truoc": "Previous track",
+          "tang_am_luong": "Volume up",
+          "giam_am_luong": "Volume down",
+          "tat_tieng_loa": "Mute / unmute speaker",
+          "bao_thuc_dung": "Dismiss ringing alarm",
+          "bao_thuc_hoan": "Alarm: snooze",
+          "hen_gio_tat_nhac_30": "Sleep timer 30 min (fade out)"
+        }
+      },
+      "phim_doi": {
+        "name": "Speaker key: double press",
+        "state": {
+          "khong_lam_gi": "Do nothing (event only)",
+          "bat_tat_mic": "Toggle mic (Mute mic)",
+          "bat_tat_bluetooth": "Toggle Bluetooth",
+          "bat_tat_dam_thoai": "Toggle intercom",
+          "phat_tam_dung": "Play / pause",
+          "dung_nhac": "Stop music",
+          "bai_ke": "Next track",
+          "bai_truoc": "Previous track",
+          "tang_am_luong": "Volume up",
+          "giam_am_luong": "Volume down",
+          "tat_tieng_loa": "Mute / unmute speaker",
+          "bao_thuc_dung": "Dismiss ringing alarm",
+          "bao_thuc_hoan": "Alarm: snooze",
+          "hen_gio_tat_nhac_30": "Sleep timer 30 min (fade out)"
+        }
+      },
+      "phim_ba": {
+        "name": "Speaker key: triple press",
+        "state": {
+          "khong_lam_gi": "Do nothing (event only)",
+          "bat_tat_mic": "Toggle mic (Mute mic)",
+          "bat_tat_bluetooth": "Toggle Bluetooth",
+          "bat_tat_dam_thoai": "Toggle intercom",
+          "phat_tam_dung": "Play / pause",
+          "dung_nhac": "Stop music",
+          "bai_ke": "Next track",
+          "bai_truoc": "Previous track",
+          "tang_am_luong": "Volume up",
+          "giam_am_luong": "Volume down",
+          "tat_tieng_loa": "Mute / unmute speaker",
+          "bao_thuc_dung": "Dismiss ringing alarm",
+          "bao_thuc_hoan": "Alarm: snooze",
+          "hen_gio_tat_nhac_30": "Sleep timer 30 min (fade out)"
+        }
+      },
+      "phim_giu": {
+        "name": "Speaker key: long press",
+        "state": {
+          "khong_lam_gi": "Do nothing (event only)",
+          "bat_tat_mic": "Toggle mic (Mute mic)",
+          "bat_tat_bluetooth": "Toggle Bluetooth",
+          "bat_tat_dam_thoai": "Toggle intercom",
+          "phat_tam_dung": "Play / pause",
+          "dung_nhac": "Stop music",
+          "bai_ke": "Next track",
+          "bai_truoc": "Previous track",
+          "tang_am_luong": "Volume up",
+          "giam_am_luong": "Volume down",
+          "tat_tieng_loa": "Mute / unmute speaker",
+          "bao_thuc_dung": "Dismiss ringing alarm",
+          "bao_thuc_hoan": "Alarm: snooze",
+          "hen_gio_tat_nhac_30": "Sleep timer 30 min (fade out)"
+        }
       }
     },
     "binary_sensor": {
@@ -154,6 +236,25 @@
       },
       "dong_adb": {
         "name": "Close network ADB (until speaker restarts)"
+      },
+      "tat_bao_thuc": {
+        "name": "Dismiss ringing alarm"
+      }
+    },
+    "event": {
+      "phim": {
+        "name": "Speaker key",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "don": "Single press",
+              "doi": "Double press",
+              "ba": "Triple press",
+              "giu": "Long press",
+              "nhan_ngan": "Short press"
+            }
+          }
+        }
       }
     }
   },
@@ -171,7 +272,8 @@
           "ghep_lai_apk": "Re-pair the speaker APK (new key; the APK fetches it by itself)",
           "adb_server": "adb-server address (optional; leave EMPTY to connect straight to the speaker IP, port 5555)",
           "adb_mode": "How to reach the speaker over ADB: auto, server (via adb-server) or direct (straight to the speaker)",
-          "adb_tu_dong_dong": "«Close ADB» mode: auto-close the speaker's network ADB once the APK is connected. PRO: blocks botnets on the LAN. CON: lose free-form lights, app install, reboot from HA, system info, Bluetooth switch; re-open by unplugging the speaker"
+          "adb_tu_dong_dong": "«Close ADB» mode: auto-close the speaker's network ADB once the APK is connected. PRO: blocks botnets on the LAN. CON: lose free-form lights, app install, reboot from HA, system info, Bluetooth switch; re-open by unplugging the speaker",
+          "phim_ma": "Key codes for which HA runs gesture actions (comma separated; 195 = middle button; other codes only fire events)"
         }
       },
       "nang_cao": {
@@ -356,6 +458,192 @@
         "reboot": {
           "name": "Reboot",
           "description": "Reboot the speaker right after preparing."
+        }
+      }
+    },
+    "bao_thuc_dat": {
+      "name": "Set alarm",
+      "description": "Add an alarm, or update when id exists. Time HH:MM, repeat days (empty = once), kind tts (speak a message) or media (play an audio URL).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        },
+        "id": {
+          "name": "Alarm id",
+          "description": "Update that alarm when given."
+        },
+        "gio": {
+          "name": "Time",
+          "description": "HH:MM in HA's time zone."
+        },
+        "ngay": {
+          "name": "Repeat days",
+          "description": "mon…sun; empty = once."
+        },
+        "nhan": {
+          "name": "Label",
+          "description": "Alarm name."
+        },
+        "bat": {
+          "name": "Enabled",
+          "description": "Enable/disable."
+        },
+        "loai": {
+          "name": "Kind",
+          "description": "tts or media."
+        },
+        "noi_dung": {
+          "name": "Content",
+          "description": "Message (tts) or audio URL (media)."
+        },
+        "lap_s": {
+          "name": "Repeat every (s)",
+          "description": "5–600, default 30."
+        },
+        "toi_da_s": {
+          "name": "Ring at most (s)",
+          "description": "30–1800, default 300."
+        },
+        "am_luong": {
+          "name": "Volume (%)",
+          "description": "Set speaker volume while ringing, then restore."
+        }
+      }
+    },
+    "nhac_nho": {
+      "name": "Reminder",
+      "description": "One-shot reminder after N minutes or at a time; deleted after ringing.",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        },
+        "noi_dung": {
+          "name": "Message",
+          "description": "What to say."
+        },
+        "sau_phut": {
+          "name": "After (min)",
+          "description": "Remind after this many minutes."
+        },
+        "luc": {
+          "name": "At",
+          "description": "Absolute time."
+        },
+        "loai": {
+          "name": "Kind",
+          "description": "tts or media."
+        },
+        "lap_s": {
+          "name": "Repeat every (s)",
+          "description": "5–600."
+        },
+        "toi_da_s": {
+          "name": "Ring at most (s)",
+          "description": "30–1800."
+        },
+        "am_luong": {
+          "name": "Volume (%)",
+          "description": "0–100."
+        }
+      }
+    },
+    "bao_thuc_xoa": {
+      "name": "Delete alarm",
+      "description": "Delete an alarm or reminder.",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        },
+        "id": {
+          "name": "Alarm id",
+          "description": "Id from the Next alarm sensor attributes."
+        }
+      }
+    },
+    "bao_thuc_bat_tat": {
+      "name": "Enable/disable alarm",
+      "description": "Enable or disable an alarm, keeping its settings.",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        },
+        "id": {
+          "name": "Alarm id",
+          "description": "Alarm id."
+        },
+        "bat": {
+          "name": "Enabled",
+          "description": "On or off."
+        }
+      }
+    },
+    "bao_thuc_tat": {
+      "name": "Dismiss ringing alarm",
+      "description": "Silence the alarm or reminder that is ringing.",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        }
+      }
+    },
+    "bao_thuc_hoan": {
+      "name": "Snooze alarm",
+      "description": "Silence and ring again after N minutes (default 9).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        },
+        "phut": {
+          "name": "Minutes",
+          "description": "1–120."
+        }
+      }
+    },
+    "hen_gio_tat_nhac": {
+      "name": "Sleep timer",
+      "description": "After N minutes fade the volume out (via the APK), stop playback and restore the volume.",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        },
+        "phut": {
+          "name": "Minutes",
+          "description": "1–720."
+        },
+        "lam_mo_giay": {
+          "name": "Fade time (s)",
+          "description": "0–120, default 20."
+        }
+      }
+    },
+    "huy_hen_gio_tat_nhac": {
+      "name": "Cancel sleep timer",
+      "description": "Cancel a pending or fading sleep timer.",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        }
+      }
+    },
+    "phim_do": {
+      "name": "Key finder",
+      "description": "For a while report EVERY key on the speaker (not swallowed) to learn key codes; each fires a r1_speaker_phim_do event. Needs the APK accessibility service.",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        },
+        "giay": {
+          "name": "Seconds",
+          "description": "5–300, default 60."
         }
       }
     }

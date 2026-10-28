@@ -23,7 +23,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
     preregister(hass, entry, "button", f"{entry.entry_id}_chuan_bi", "r1_chuan_bi_loa")
     preregister(hass, entry, "button", f"{entry.entry_id}_dung_nhac", "r1_dung_nhac")
     preregister(hass, entry, "button", f"{entry.entry_id}_dong_adb", "r1_dong_adb")
-    async_add_entities([R1RebootButton(entry), R1PrepareButton(entry), R1StopButton(entry), R1CloseAdbButton(entry)])
+    preregister(hass, entry, "button", f"{entry.entry_id}_tat_bao_thuc", "r1_tat_bao_thuc")
+    async_add_entities([R1RebootButton(entry), R1PrepareButton(entry), R1StopButton(entry), R1CloseAdbButton(entry), R1DismissAlarmButton(entry)])
+
+
+class R1DismissAlarmButton(ButtonEntity):
+    """«Tắt báo thức»: im báo thức hoặc nhắc nhở đang kêu (cùng việc với dịch vụ ``bao_thuc_tat`` và hành động phím ``bao_thuc_dung``)."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "tat_bao_thuc"
+
+    def __init__(self, entry: R1ConfigEntry) -> None:
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_tat_bao_thuc"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry.entry_id)})
+
+    async def async_press(self) -> None:
+        await self._entry.runtime_data.bao_thuc.tat()
 
 
 class R1CloseAdbButton(ButtonEntity):

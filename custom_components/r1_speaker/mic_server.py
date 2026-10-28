@@ -28,6 +28,7 @@ import hmac
 import json
 import logging
 from collections.abc import Callable
+from typing import Any
 
 from .const import MUSIC_LIGHT_RANGE
 from .mic import R1Mic
@@ -83,6 +84,17 @@ class R1MicServer:
         self.am_luong: tuple[int, int] | None = None
         #: APK báo lấy được dịch vụ đèn của firmware (msgcenter): None = chưa biết / loa chưa nối.
         self.den_san_sang: bool | None = None
+        #: APK báo phiên bản và các khả năng (``apk``): rỗng = chưa biết / loa chưa nối / APK cũ không báo.
+        self.apk_ver: str | None = None
+        self.apk_kha_nang: frozenset[str] = frozenset()
+        #: Bluetooth của loa do APK báo (``bluetooth_trang_thai``); None = chưa biết.
+        self.bluetooth: bool | None = None
+        #: Thông tin hệ thống APK báo định kỳ (văn bản chia khối «---tên», cùng định dạng ``he_thong.phan_tich`` đọc) và lúc nhận.
+        self.he_thong_txt: str | None = None
+        self.he_thong_luc: float | None = None
+        self._nghe_phim_tho: list[Callable[[int, bool], None]] = []    # (mã phím, nhấn=True / nhả=False) qua dịch vụ trợ năng
+        #: Gọi (dạng tác vụ) ngay sau khi APK xác thực xong: gửi cấu hình phím cho APK.
+        self.khi_ket_noi: Callable[[], Any] | None = None
         #: Gọi mỗi khi APK xác thực thành công (hello đúng khoá): dùng để đóng «cửa ghép khoá».
         self.khi_xac_thuc: Callable[[], None] | None = None
         #: Gọi khi loa (đúng IP) gửi hello nhưng SAI khoá: APK đã mất khoá, cần được ghép lại.
@@ -156,6 +168,48 @@ class R1MicServer:
         self._on_state.append(cb)
         return lambda: self._on_state.remove(cb)
 
+    def add_phim_tho_listener(self, cb: Callable[[int, bool], None]) -> Callable[[], None]:
+        self._nghe_phim_tho.append(cb)
+        return lambda: self._nghe_phim_tho.remove(cb)
+
+    @staticmethod
+    def _goi(nguoi_nghe: list, *args) -> None:
+        for cb in list(nguoi_nghe):
+            try:
+                cb(*args)
+            except Exception:  # noqa: BLE001 — người nghe hỏng không được giết vòng đọc
+                _LOGGER.exception("R1 mic server: listener failed")
+
+    def _xu_ly_khung_apk(self, loai: str, ctrl: dict) -> bool:
+        """Khung APK báo lên (phiên bản, hệ thống, Bluetooth, phím). Kiểm kiểu từng trường: khung hỏng bị bỏ, không làm
+        đứt kết nối. True = đã xử lý (kể cả khi bị bỏ vì sai dạng)."""
+        if loai == "apk":
+            ver, kn = ctrl.get("ver"), ctrl.get("kha_nang")
+            if isinstance(ver, str) and len(ver) <= 20 and isinstance(kn, list) and len(kn) <= 32 \
+                    and all(isinstance(x, str) and len(x) <= 32 for x in kn):
+                moi = frozenset(kn)
+                if (ver, moi) != (self.apk_ver, self.apk_kha_nang):
+                    self.apk_ver, self.apk_kha_nang = ver, moi
+                    self._notify_state()
+            return True
+        if loai == "he_thong":
+            txt = ctrl.get("txt")
+            if isinstance(txt, str) and len(txt) <= 8192:
+                self.he_thong_txt, self.he_thong_luc = txt, time.monotonic()
+                self._notify_state()
+            return True
+        if loai == "bluetooth_trang_thai":
+            if isinstance(ctrl.get("bat"), bool) and ctrl["bat"] != self.bluetooth:
+                self.bluetooth = ctrl["bat"]
+                self._notify_state()
+            return True
+        if loai == "phim":
+            ma, xuong = ctrl.get("ma"), ctrl.get("xuong")
+            if isinstance(ma, int) and not isinstance(ma, bool) and 1 <= ma <= 999 and isinstance(xuong, bool):
+                self._goi(self._nghe_phim_tho, ma, xuong)
+            return True
+        return False
+
     def _notify_state(self) -> None:
         for cb in list(self._on_state):
             try:
@@ -192,6 +246,31 @@ class R1MicServer:
     async def hoi_den(self) -> None:
         """Hỏi APK có lấy được dịch vụ đèn của firmware không; APK trả ``den_trang_thai``."""
         await self._gui_khung(b'{"type":"den_hoi"}')
+
+    async def _chay_khi_ket_noi(self) -> None:
+        try:
+            kq = self.khi_ket_noi()
+            if asyncio.iscoroutine(kq):
+                await kq
+        except Exception as exc:  # noqa: BLE001 — hỏng ở bước phụ không được làm đứt kết nối
+            _LOGGER.warning("R1 mic server: lỗi sau khi nối: %s", type(exc).__name__)
+
+    async def gui_bluetooth(self, bat: bool) -> None:
+        """Bật/tắt Bluetooth của loa qua API Android chuẩn trong APK (``BluetoothAdapter.enable/disable``); APK báo lại trạng thái thật."""
+        if not isinstance(bat, bool):
+            raise ValueError(f"bat phải là bool: {bat!r}")
+        await self._gui_khung(json.dumps({"type": "bluetooth", "bat": bat}, separators=(",", ":")).encode())
+
+    async def gui_phim_cau_hinh(self, ma: list[int], do_tat_ca: bool = False) -> None:
+        """Báo APK các mã phím do HA xử lý (APK không xử lý tại chỗ mà báo ``phim``) và bật/tắt chế độ dò (báo mọi phím, không nuốt)."""
+        if (not isinstance(ma, (list, tuple)) or len(ma) > 16 or not isinstance(do_tat_ca, bool)
+                or any(isinstance(m, bool) or not isinstance(m, int) or not 1 <= m <= 999 for m in ma)):
+            raise ValueError(f"cấu hình phím không hợp lệ: {ma!r}, {do_tat_ca!r}")
+        await self._gui_khung(json.dumps({"type": "phim_cau_hinh", "ma": list(ma), "do": do_tat_ca}, separators=(",", ":")).encode())
+
+    async def hoi_he_thong(self) -> None:
+        """Bảo APK báo thông tin hệ thống ngay (ngoài chu kỳ 60 giây)."""
+        await self._gui_khung(b'{"type":"he_thong_hoi"}')
 
     async def hoi_am_luong(self) -> None:
         """Hỏi APK mức âm lượng hiện tại; APK trả ``am_luong_trang_thai``."""
@@ -261,8 +340,16 @@ class R1MicServer:
             self._writer = writer
             self.am_luong = None
             self.den_san_sang = None
+            self.apk_ver, self.apk_kha_nang = None, frozenset()
+            self.bluetooth = None
+            self.he_thong_txt = self.he_thong_luc = None
             if self.khi_xac_thuc is not None:
                 self.khi_xac_thuc()
+            if self.khi_ket_noi is not None:
+                try:
+                    asyncio.get_running_loop().create_task(self._chay_khi_ket_noi())
+                except RuntimeError:
+                    pass
             self._mic.note_inbound(True)
             self._notify_state()
             _LOGGER.debug("R1 mic server: loa %s đã nối, bắt đầu nhận tiếng", ip)
@@ -277,6 +364,8 @@ class R1MicServer:
                         loai = ctrl.get("type")
                         if loai == "end":
                             break                   # loa báo kết thúc phiên
+                        if self._xu_ly_khung_apk(loai, ctrl):
+                            continue
                         if loai == "den_trang_thai":
                             # Chỉ coi là sẵn sàng khi APK báo ĐÈN FIRMWARE (APK cũ không báo che_do thì gửi lệnh vào hư không).
                             moi = ctrl.get("san_sang") is True and ctrl.get("che_do") == "firmware"
@@ -305,6 +394,9 @@ class R1MicServer:
                     self._writer = None
                     self.am_luong = None
                     self.den_san_sang = None
+                    self.apk_ver, self.apk_kha_nang = None, frozenset()
+                    self.bluetooth = None
+                    self.he_thong_txt = self.he_thong_luc = None
                 self._mic.note_inbound(False)
                 self._notify_state()
                 _LOGGER.debug("R1 mic server: phiên từ %s đã đóng", ip)

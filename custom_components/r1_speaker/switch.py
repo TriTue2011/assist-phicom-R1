@@ -103,9 +103,11 @@ class R1Switch(R1Entity, SwitchEntity):
 
 
 class R1BluetoothSwitch(R1Entity, SwitchEntity):
-    """Bluetooth của loa. Trạng thái ĐỌC qua ADB (``settings get global bluetooth_on``, vòng hỏi hệ thống); lệnh bật/tắt đi đường WebSocket
-    ``send_message`` what=64 (CHƯA kiểm trên loa thật) rồi đọc lại để xác nhận — không tin trạng thái lạc quan: sau lệnh mà ADB vẫn
-    báo giá trị cũ thì công tắc phản ánh đúng điều đó, giúp biết lệnh không có tác dụng."""
+    """Bluetooth của loa. **Đường chính là APK** (khả năng ``bluetooth``, 0.8.0): lệnh đi qua kết nối mic tới APK, APK gọi API Android chuẩn
+    ``BluetoothAdapter.enable/disable`` rồi báo lại trạng thái THẬT (``bluetooth_trang_thai``), nên chạy cả khi đóng ADB. Theo mã firmware,
+    nhóm tin 64 mà đường cũ dùng chỉ là «báo trạng thái Bluetooth» chứ không phải lệnh bật/tắt. APK cũ (không có khả năng này) thì rơi về
+    đường cũ: lệnh WebSocket ``send_message`` what=64 + đọc lại qua ADB (``settings get global bluetooth_on``), CHƯA kiểm trên loa thật; công tắc
+    luôn phản ánh trạng thái đọc lại, không tin lạc quan."""
 
     _attr_translation_key = "bluetooth"
 
@@ -116,7 +118,13 @@ class R1BluetoothSwitch(R1Entity, SwitchEntity):
     def _he_thong(self):
         return getattr(self.coordinator, "he_thong", None)
 
+    def _apk(self) -> bool:
+        may = self.coordinator.mic_server
+        return bool(may.receiving and "bluetooth" in may.apk_kha_nang)
+
     def _value(self):
+        if self.coordinator.mic_server.bluetooth is not None:          # APK báo: trạng thái THẬT, đi cả khi đóng ADB
+            return self.coordinator.mic_server.bluetooth
         he = self._he_thong()
         return None if he is None or he.data is None else he.data.bluetooth
 
@@ -131,16 +139,27 @@ class R1BluetoothSwitch(R1Entity, SwitchEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {"nguon_trang_thai": "adb", "da_kiem_lenh_tren_loa": False,
-                "ghi_chu": "Trạng thái đọc qua ADB; lệnh bật/tắt chưa kiểm trên loa thật" + ("" if self._value() is not None else " (ADB chưa trả trạng thái)")}
+        apk = self._apk()
+        return {"nguon_trang_thai": "apk" if self.coordinator.mic_server.bluetooth is not None else "adb",
+                "duong_lenh": "apk" if apk else "websocket_what_64", "da_kiem_lenh_tren_loa": False,
+                "ghi_chu": ("Lệnh và trạng thái qua APK (API Bluetooth chuẩn của Android), chưa thử trên loa thật" if apk else
+                            "APK chưa hỗ trợ Bluetooth (cần APK 1.3): trạng thái đọc qua ADB, lệnh bật/tắt chưa kiểm trên loa thật")
+                + ("" if self._value() is not None else " (chưa đọc được trạng thái)")}
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         he = self._he_thong()
         if he is not None:
             self.async_on_remove(he.async_add_listener(self.async_write_ha_state))
+        self.async_on_remove(self.coordinator.mic_server.add_state_listener(self.async_write_ha_state))
 
     async def _dat(self, on: bool) -> None:
+        if self._apk():
+            try:
+                await self.coordinator.mic_server.gui_bluetooth(on)
+            except (ConnectionError, OSError, TimeoutError, ValueError) as exc:
+                raise HomeAssistantError(f"Loa chưa nối về HA (APK): chưa đổi được Bluetooth: {exc}") from exc
+            return                                          # APK tự báo lại trạng thái thật sau ~2 giây
         try:
             await self.coordinator.client.set_bluetooth(on)
         except R1Error as exc:

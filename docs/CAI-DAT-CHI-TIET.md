@@ -35,6 +35,7 @@ nữa với IP khác, mỗi loa có khoá, cổng, phiên, đèn và thực th�
 | Địa chỉ HA mà loa gọi tới (`ha_url`) | Dạng `http://<IP của HA>:8123`. Để trống = tự đoán. Có nhập thì HA kiểm ngay: không được là `127.0.0.1`/`localhost`, và HA phải tự gọi lại được địa chỉ đó |
 | Đổi khoá URL bộ đàm | Sinh khoá mới cho các dòng go2rtc; dòng cũ ngừng chạy |
 | Ghép lại APK | Sinh khoá nghe mic mới và mở lại cửa ghép; APK trên loa tự xin khoá mới sau vài giây (dùng khi cài lại APK hoặc thay loa) |
+| Mã phím chạy hành động | Mã phím (cách nhau dấu phẩy, mặc định `195` = nút giữa) mà HA chạy hành động theo cử chỉ; mã khác chỉ phát sự kiện. Muốn biết mã phím của nút/thanh cảm ứng thì gọi dịch vụ `phim_do` |
 | Chế độ «đóng ADB» | Tự đóng ADB mạng của loa khi APK đã nối về HA ổn định 2 phút (không bao giờ đóng khi APK chưa nối, để khỏi tự khoá). Mặc định TẮT. Xem bảng chọn bên dưới |
 | Chỉnh thông số nâng cao | Sang bước hai: 19 số âm thanh ở mục 4 (cũng chỉnh được ở thẻ) |
 
@@ -65,6 +66,11 @@ Hai chế độ, **bạn chọn một** (ô «Chế độ đóng ADB» ở tuỳ
 | Loudness / Độ lợi loudness | switch / number | Bù tiếng ở âm lượng nhỏ | 0–1000 |
 | DLNA, AirPlay | switch | Cho loa nhận nhạc qua DLNA / AirPlay | |
 | Đóng ADB mạng (tới lần khởi động lại loa) | button | Loa thôi nghe cổng ADB mạng 5555 ngay (dịch vụ `usb:` của adbd, như `adb usb`), rồi HA thử nối lại để xác nhận; còn nghe thì báo lỗi chứ không nói «đã đóng». Có tác dụng tới lần khởi động lại sau: **rút điện loa rồi cắm lại là mở lại**. Xem mục «Chọn: đóng ADB hay giữ ADB» ở mục 1 |
+| Lần báo thức kế tiếp | sensor | Lúc kêu kế tiếp của mọi báo thức/nhắc nhở; thuộc tính liệt kê từng cái (`id`, `gio`, `ngay`, `nhan`, `ke_tiep`), cái đang kêu và hẹn giờ tắt nhạc. Báo thức/nhắc nhở/hẹn giờ chạy bằng HA, lưu qua khởi động lại, thay cho báo thức đám mây của hãng. Mỗi lần kêu/tắt/hoãn phát sự kiện `r1_speaker_bao_thuc` |
+| Tắt báo thức đang kêu | button | Im báo thức hoặc nhắc nhở đang kêu (cùng việc với dịch vụ `bao_thuc_tat` và hành động phím `bao_thuc_dung`) |
+| APK trên loa | sensor | Phiên bản APK và khả năng nó báo (`den`, `am_luong`, `bluetooth`, `he_thong`, `phim`); `cu` = APK trước 1.3, `mat_ket_noi` = chưa nối |
+| Phím loa: nhấn đơn, Phím loa: nhấn đúp, Phím loa: nhấn ba lần, Phím loa: nhấn giữ | select | Hành động khi bấm nút giữa theo từng cử chỉ. Mặc định: đơn = bật/tắt mic, đúp = bật/tắt Bluetooth (như APK cũ), ba lần và giữ = không làm gì. Danh sách hành động lấy từ bảng trong `phim.py`: **thêm hành động mới = viết một hàm và gắn `@hanh_dong`**, nó tự có trong cả bốn ô chọn |
+| Phím loa | event | Mỗi cử chỉ phát một sự kiện (`don`, `doi`, `ba`, `giu`) kèm mã phím; dùng làm điều kiện kích hoạt trong tự động hoá, kể cả cho mã phím khác 195 |
 | Dừng nhạc | button | Nút Stop ở trang thiết bị (gọi `media_player.media_stop` của loa, tự gửi lại nếu loa bỏ qua). Hộp điều khiển chuẩn của Home Assistant chỉ hiện Stop khi loa không hỗ trợ Tạm dừng nên không đặt cạnh nút Phát/Tạm dừng được; biểu tượng loa cạnh thanh âm lượng là nút **Tắt tiếng loa** | |
 | Bluetooth | switch | Bật/tắt Bluetooth của loa. Trạng thái đọc qua ADB (`settings get global bluetooth_on`), lệnh đi qua `send_message` what=64 (chưa kiểm trên loa thật); sau lệnh tích hợp đọc lại để xác nhận. Cùng DLNA và AirPlay hiện ở thẻ R1 (mục «Kết nối loa») để bật/tắt từng kết nối khi dò lỗi; công tắc DLNA khai thuộc tính `renderer` (đã nối bằng đường nào, hoặc đã thử những đường nào mà hỏng) | |
 | Tăng mic | number | Khuếch đại tuyến tính tiếng mic (dB) **ở HA**, áp trước khi tiếng vào Assist; chặn cứng ở biên độ tối đa, không lọc ồn. Nhớ giá trị qua các lần khởi động HA. **CHƯA ĐO** | 0–30 dB, mặc định 12 |
@@ -404,6 +410,12 @@ nút Thử.
 | `start_duplex` / `stop_duplex` | Mở/đóng phiên đàm thoại song công của loa |
 | `get_intercom_source` | Trả hai dòng nguồn cho `go2rtc.yaml`: nói vào loa (`talk`) và nghe mic (`listen`) |
 | `get_wake_endpoint` | Trả địa chỉ để loa/thiết bị khác POST trigger từ đánh thức về HA |
+| `bao_thuc_dat` | Thêm/sửa **báo thức**: `gio` (HH:MM), `ngay` (mon…sun; rỗng = một lần), `nhan`, `loai` (`tts` đọc lời hoặc `media` phát địa chỉ âm thanh), `noi_dung`, `lap_s`, `toi_da_s`, `am_luong`, `bat`, `id` (có thì sửa) |
+| `nhac_nho` | **Nhắc nhở** một lần: `noi_dung` + `sau_phut` hoặc `luc`; kêu xong tự xoá |
+| `bao_thuc_xoa` / `bao_thuc_bat_tat` | Xoá / bật-tắt một báo thức theo `id` (lấy ở thuộc tính của «Lần báo thức kế tiếp») |
+| `bao_thuc_tat` / `bao_thuc_hoan` | Tắt báo thức đang kêu / hoãn báo lại sau `phut` (mặc định 9) |
+| `hen_gio_tat_nhac` / `huy_hen_gio_tat_nhac` | Sau `phut` phút nhỏ dần âm lượng (`lam_mo_giay`, qua APK) rồi dừng nhạc và trả âm lượng cũ / huỷ hẹn giờ |
+| `phim_do` | **Dò phím**: `giay` giây báo MỌI phím (không nuốt) để biết mã phím; mỗi phím phát sự kiện `r1_speaker_phim_do` |
 
 Lệnh WebSocket `r1_speaker/apk_lenh` (chỉ quản trị viên) trả lệnh cài APK có kèm khoá; khoá không nằm trong trạng thái
 thực thể.

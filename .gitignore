@@ -2,3 +2,10 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .venv/
+
+# Tệp trung gian khi dựng APK (build.sh): không đưa vào kho
+apk/nguon/AndroidManifest.xml
+apk/nguon/build/
+apk/nguon/gen/
+apk/nguon/nv247-vn-r1-bodam*.apk*
+apk/nguon/*.keystore

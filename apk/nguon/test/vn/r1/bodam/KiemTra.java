@@ -281,8 +281,111 @@ public class KiemTra {
             failed++;
             System.out.println("FAIL nv247: ngoai le " + e);
         }
+        try {
+            chayTestApk13();
+        } catch (Exception e) {
+            failed++;
+            System.out.println("FAIL apk13: ngoai le " + e);
+        }
         System.out.println("TONG NV247 (gom ca cu): passed=" + passed + " failed=" + failed);
         if (failed > 0) System.exit(1);
+    }
+
+    /** Khung/lenh/phim/he thong cua APK 1.3 (Bluetooth, he thong, phim, nghe firmware, bao cao). */
+    static void chayTestApk13() throws Exception {
+        final Charset U = Charset.forName("UTF-8");
+        // --- Khung moi gui ve HA: dung dinh dang, thoat JSON ---
+        ok("\\\"a\\n".equals(Khung.thoat("\"a\n")) && "\\u0001".equals(Khung.thoat("\u0001")) && "\\\\".equals(Khung.thoat("\\")),
+                "khung13: thoat JSON dau nhay, xuong dong, dieu khien, gach cheo");
+        String ht = new String(Khung.heThong("MemTotal: 1 kB\n---up\n5 \"x\""), 4, Khung.heThong("MemTotal: 1 kB\n---up\n5 \"x\"").length - 4, U);
+        ok(ht.equals("{\"type\":\"he_thong\",\"txt\":\"MemTotal: 1 kB\\n---up\\n5 \\\"x\\\"\"}"), "khung13: he_thong thoat xuong dong va nhay kep");
+        byte[] bt = Khung.bluetooth(true);
+        ok(new String(bt, 4, bt.length - 4, U).equals("{\"type\":\"bluetooth_trang_thai\",\"bat\":true}"), "khung13: bluetooth_trang_thai");
+        byte[] ph = Khung.phim(195, false);
+        ok(new String(ph, 4, ph.length - 4, U).equals("{\"type\":\"phim\",\"ma\":195,\"xuong\":false}"), "khung13: phim xuong/len");
+        byte[] ak = Khung.apk("1.3", new String[] {"den", "phim"});
+        ok(new String(ak, 4, ak.length - 4, U).equals("{\"type\":\"apk\",\"ver\":\"1.3\",\"kha_nang\":[\"den\",\"phim\"]}"), "khung13: apk phien ban + kha nang");
+
+        // --- Lenh phu tu HA ---
+        final List<String> nhatKy = new ArrayList<String>();
+        LenhPhu.Dich dich = new LenhPhu.Dich() {
+            @Override public String datBluetooth(boolean bat) { nhatKy.add("bt=" + bat); return null; }
+            @Override public void datPhim(int[] ma, boolean doTatCa) { nhatKy.add("phim=" + Arrays.toString(ma) + ",do=" + doTatCa); }
+            @Override public void baoHeThong() { nhatKy.add("he_thong"); }
+        };
+        ok(LenhPhu.xuLy("{\"type\":\"bluetooth\",\"bat\":true}", dich) == null && nhatKy.get(0).equals("bt=true"), "lenhphu: bluetooth bat");
+        ok(LenhPhu.xuLy("{\"type\":\"bluetooth\",\"bat\":false}", dich) == null && nhatKy.get(1).equals("bt=false"), "lenhphu: bluetooth tat");
+        ok(LenhPhu.xuLy("{\"type\":\"phim_cau_hinh\",\"ma\":[195,116],\"do\":false}", dich) == null
+                && nhatKy.get(2).equals("phim=[195, 116],do=false"), "lenhphu: phim_cau_hinh danh sach ma");
+        ok(LenhPhu.xuLy("{\"type\":\"phim_cau_hinh\",\"ma\":[],\"do\":true}", dich) == null && nhatKy.get(3).equals("phim=[],do=true"), "lenhphu: danh sach rong + che do do");
+        ok(LenhPhu.xuLy("{\"type\":\"he_thong_hoi\"}", dich) == null && nhatKy.get(4).equals("he_thong"), "lenhphu: he_thong_hoi");
+        int truoc = nhatKy.size();
+        String[] xau = {"{\"type\":\"phim_cau_hinh\",\"ma\":[0],\"do\":false}", "{\"type\":\"phim_cau_hinh\",\"ma\":[1000],\"do\":false}",
+                "{\"type\":\"phim_cau_hinh\",\"ma\":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17],\"do\":false}", "{\"type\":\"phim_cau_hinh\",\"ma\":[1,,2],\"do\":false}",
+                "{\"type\":\"phim_cau_hinh\",\"ma\":[a],\"do\":false}", "{\"type\":\"bluetooth\",\"bat\":1}", "{\"type\":\"bluetooth\"}", "", null, "{\"type\":\"reboot\"}"};
+        boolean tatCaBoQua = true;
+        for (String x : xau) tatCaBoQua &= LenhPhu.xuLy(x, dich) != null;
+        ok(tatCaBoQua && nhatKy.size() == truoc, "lenhphu: ma ngoai khoang, qua 16, dau phay thua, kieu sai, null, lenh la -> bo qua, khong goi dich");
+
+        // --- Phim thuoc HA: nuot + bao; phim khac khong dong vao; che do do chi bao ---
+        final List<byte[]> daGui = new ArrayList<byte[]>();
+        PhimHa.Gui g = new PhimHa.Gui() { @Override public boolean gui(byte[] k) { daGui.add(k); return true; } };
+        PhimHa.xoa();
+        ok(!PhimHa.suKien(195, true, 0, g) && daGui.isEmpty(), "phimha: chua cau hinh -> khong nuot, khong bao");
+        PhimHa.datCauHinh(new int[] {195}, false);
+        ok(PhimHa.suKien(195, true, 0, g) && daGui.size() == 1, "phimha: phim cua HA -> nuot va bao xuong");
+        ok(PhimHa.suKien(195, true, 3, g) && daGui.size() == 1, "phimha: lap (giu phim) khong bao them, van nuot");
+        ok(!PhimHa.suKien(24, true, 0, g) && daGui.size() == 1, "phimha: phim khong cua HA -> khong nuot, khong bao");
+        PhimHa.datCauHinh(new int[0], true);
+        ok(!PhimHa.suKien(24, false, 0, g) && daGui.size() == 2 && PhimHa.dangDo(), "phimha: che do do bao moi phim nhung KHONG nuot");
+        PhimHa.xoa();
+        ok(!PhimHa.dangDo() && !PhimHa.hoiXuLy(195), "phimha: xoa khi mat ket noi");
+
+        // --- He thong: ghep van ban dung dinh dang HA doc ---
+        HeThongLoa.Nguon gia = new HeThongLoa.Nguon() {
+            @Override public String doc(String p) {
+                if (p.equals("/proc/meminfo")) return "MemTotal:  1000 kB\nMemFree:  400 kB\nBuffers:  50 kB\nCached:  150 kB\nSwapCached: 0 kB\n";
+                if (p.equals("/proc/loadavg")) return "0.5 0.4 0.3 1/200 999\n";
+                if (p.equals("/proc/stat")) return "cpu  100 0 50 800 10 0 0 0\ncpu0 1 1 1 1\n";
+                if (p.endsWith("/online")) return "0-3\n";
+                if (p.endsWith("scaling_cur_freq")) return null;
+                if (p.equals("/proc/uptime")) return "1234.56 4000.00\n";
+                return null;
+            }
+            @Override public String df() { return HeThongLoa.dongDf(5000L * 1024 * 1024, 3600L * 1024 * 1024); }
+            @Override public String wifi() { return HeThongLoa.dongWifi("\"Nha, A\"", -55, 72, 5180); }
+            @Override public Boolean bluetooth() { return Boolean.TRUE; }
+        };
+        String txt = HeThongLoa.tao(gia);
+        ok(txt.startsWith("MemTotal:  1000 kB\nMemFree:  400 kB\nBuffers:  50 kB\nCached:  150 kB\n---load\n0.5 0.4 0.3 1/200 999\n---s2\ncpu  100 0 50 800 10 0 0 0\n---cpu\n0-3\n"),
+                "hethong: bo nho 4 dong, tai, mau CPU tong (khong lay cpu0), so nhan");
+        ok(txt.contains("---df\n/data 5000.0M 1400.0M 3600.0M\n") && txt.contains("---wifi\nmWifiInfo SSID: Nha  A, RSSI: -55, Link speed: 72Mbps, Frequency: 5180MHz,\n")
+                && txt.contains("---bt\n1\n") && txt.endsWith("---up\n1234.56 4000.00"), "hethong: df, wifi (khong BSSID/MAC, bo dau nhay va phay), bluetooth, uptime");
+        ok(!txt.contains("BSSID") && !txt.contains("MAC"), "hethong: khong co BSSID/MAC");
+        HeThongLoa.Nguon rong = new HeThongLoa.Nguon() {
+            @Override public String doc(String p) { return null; }
+            @Override public String df() { return null; }
+            @Override public String wifi() { return null; }
+            @Override public Boolean bluetooth() { return null; }
+        };
+        String t2 = HeThongLoa.tao(rong);
+        ok(!t2.contains("---df") && !t2.contains("---wifi") && !t2.contains("---bt") && t2.contains("---up"), "hethong: khong doc duoc thi bo khoi, khong nem loi");
+
+        // --- Bao cao ---
+        final List<String> khungGui = new ArrayList<String>();
+        BaoCao.Gui gb = new BaoCao.Gui() {
+            @Override public void gui(byte[] k) throws IOException { khungGui.add(new String(k, 4, k.length - 4, U)); }
+        };
+        BaoCao.khiNoi(gb, gia);
+        ok(khungGui.size() == 3 && khungGui.get(0).startsWith("{\"type\":\"apk\",\"ver\":\"" + BaoCao.PHIEN_BAN + "\"")
+                && khungGui.get(0).contains("\"phim\"") && khungGui.get(0).contains("\"bluetooth\"") && khungGui.get(0).contains("\"he_thong\"")
+                && khungGui.get(1).equals("{\"type\":\"bluetooth_trang_thai\",\"bat\":true}") && khungGui.get(2).startsWith("{\"type\":\"he_thong\""),
+                "baocao: khi noi gui apk (kha nang), bluetooth, he_thong");
+        BaoCao.Gui hong = new BaoCao.Gui() { @Override public void gui(byte[] k) throws IOException { throw new IOException("dut"); } };
+        BaoCao.khiNoi(hong, gia);
+        BaoCao.baoHeThong(hong, gia);
+        ok(true, "baocao: ket noi dut thi khong nem loi");
+
     }
 
     static void chayTestNv247() throws Exception {

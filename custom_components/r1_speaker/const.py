@@ -192,6 +192,9 @@ CONF_ADB_SERVER = "adb_server"
 CONF_ADB_MODE = "adb_mode"
 #: Chế độ «đóng ADB» (người dùng chọn): khi APK đã nối về HA thì tự đóng ADB mạng của loa (xem tu_dong_dong_adb.py). Mặc định TẮT.
 CONF_ADB_TU_DONG = "adb_tu_dong_dong"
+#: Mã phím (cách nhau bằng dấu phẩy) mà HA chạy hành động theo cử chỉ; mã khác chỉ phát sự kiện ``event.r1_phim``. 195 = nút giữa (đo thật).
+CONF_PHIM_MA = "phim_ma"
+DEFAULT_PHIM_MA = "195"
 #: Trống = không dùng adb-server, nối thẳng tới IP của loa (cổng 5555). Chỉ điền khi thật sự có adb-server (chế độ server/auto).
 DEFAULT_ADB_SERVER = ""
 #: Địa chỉ dùng khi người dùng CHỌN chế độ «server» mà để trống ô địa chỉ.

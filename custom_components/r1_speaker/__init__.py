@@ -38,6 +38,7 @@ from .den import R1Lights, dang_ky_dich_vu as dang_ky_dich_vu_den
 from .adb_client import AdbDevice
 from .cai_ung_dung import BoCai
 from .he_thong import HeThongLoa
+from .bao_thuc import BaoThuc, dang_ky_dich_vu as dang_ky_dich_vu_bao_thuc
 from .den_apk import ApkLights, LightsRouter
 from .tu_dong_dong_adb import TuDongDongAdb
 from .tu_ket_noi import TuKetNoi
@@ -50,7 +51,8 @@ from .intercom import IntercomView, MicView, R1Intercom, go2rtc_source, wake_end
 from .mic import R1Mic
 from .mic_server import R1MicServer
 from .playback import R1Playback
-from .settings import (adb_settings, adb_tu_dong_dong, DuplexSettings, TalkSettings, agc_settings, cong_nghe_trong, limiter_settings, mic_host_hieu_luc, noise_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
+from .phim import Phim, dang_ky_dich_vu as dang_ky_dich_vu_phim
+from .settings import (adb_settings, adb_tu_dong_dong, phim_ma, DuplexSettings, TalkSettings, agc_settings, cong_nghe_trong, limiter_settings, mic_host_hieu_luc, noise_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
                        speaker_port, wake_mode)
 from .song_cong import DuplexView, R1Duplex
 
@@ -58,7 +60,7 @@ _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-PLATFORMS = [Platform.ASSIST_SATELLITE, Platform.BINARY_SENSOR, Platform.BUTTON, Platform.MEDIA_PLAYER,
+PLATFORMS = [Platform.ASSIST_SATELLITE, Platform.BINARY_SENSOR, Platform.BUTTON, Platform.EVENT, Platform.MEDIA_PLAYER,
              Platform.NUMBER, Platform.SELECT, Platform.SENSOR, Platform.SWITCH, Platform.UPDATE]
 
 _WWW = Path(__file__).parent / "www"
@@ -79,6 +81,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     await _register_card(hass)
     await giao_dien.dang_ky_tai_nguyen(hass)
     dang_ky_dich_vu_den(hass)
+    dang_ky_dich_vu_bao_thuc(hass)
+    dang_ky_dich_vu_phim(hass)
     den_chinh.dang_ky_dich_vu(hass)
     lenh_apk.dang_ky(hass)
     nang_cao.dang_ky_dich_vu(hass)
@@ -271,13 +275,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
     # APK cài NGOÀI tích hợp (máy tính, adb tay) chưa biết HA ở đâu: HA tự cấu hình khi thấy APK đã cài mà chưa nối về.
     coordinator.tu_ket_noi = TuKetNoi(coordinator.apps, coordinator.mic_server)
     entry.async_create_background_task(hass, coordinator.tu_ket_noi.chay(), "r1_speaker tự kết nối APK")
+    # Phím trên loa: cử chỉ (firmware nhận diện hoặc HA nhận diện từ phím thô) → hành động người dùng chọn + sự kiện event.r1_phim.
+    coordinator.phim = Phim(hass, entry, coordinator, lambda: phim_ma(entry))
+    for go in coordinator.phim.noi(coordinator.mic_server):
+        entry.async_on_unload(go)
+
+    async def _bao_cau_hinh_phim() -> None:
+        await coordinator.mic_server.gui_phim_cau_hinh(sorted(phim_ma(entry)), False)
+    coordinator.mic_server.khi_ket_noi = _bao_cau_hinh_phim            # APK nối vào thì báo mã phím do HA xử lý
     # Chế độ «đóng ADB» (người dùng chọn ở tuỳ chọn): chỉ đóng khi APK đã nối ổn định; đọc tuỳ chọn mỗi nhịp nên bật/tắt có hiệu lực ngay.
     entry.async_create_background_task(
         hass, TuDongDongAdb(adb_dev, coordinator.mic_server, lambda: adb_tu_dong_dong(entry)).chay(), "r1_speaker tự đóng ADB")
-    coordinator.he_thong = HeThongLoa(hass, entry, adb_dev, sink)        # đèn ưu tiên số 1, đọc thông tin số 2
+    # Đèn ưu tiên số 1, đọc thông tin số 2; số liệu ưu tiên do APK báo (chạy cả khi đóng ADB), ADB dự phòng.
+    coordinator.he_thong = HeThongLoa(hass, entry, adb_dev, sink, coordinator.mic_server, lambda: adb_tu_dong_dong(entry))
     coordinator.lights = R1Lights(hass, entry, sink=sink)
     sink.khi_roi = coordinator.lights.ap_dung_lai        # phiên đèn đứt (loa khởi động lại, ADB rớt) thì áp lại
     await coordinator.lights.async_load()
+    # Báo thức / nhắc nhở / hẹn giờ tắt nhạc chạy bằng HA (không cần đám mây của hãng); lưu qua khởi động lại.
+    coordinator.bao_thuc = BaoThuc(hass, entry, coordinator)
+    await coordinator.bao_thuc.async_load()
+    entry.async_on_unload(coordinator.bao_thuc.huy)
     _don_thuc_the_cu(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     coordinator.lights.start()

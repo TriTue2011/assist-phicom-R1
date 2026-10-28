@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
 
+from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .adb_client import AdbDevice, AdbError
@@ -21,6 +22,8 @@ from .adb_client import AdbDevice, AdbError
 _LOGGER = logging.getLogger(__name__)
 
 CHU_KY_S = 60
+#: Số do APK báo quá cũ (APK dừng, mất kết nối) thì không dùng nữa: ba chu kỳ báo của APK (60 giây).
+TUOI_APK_TOI_DA_S = 180
 #: Có hiệu ứng đèn đang chạy: đọc thưa hơn (chu kỳ này) và bằng lệnh nhẹ.
 CHU_KY_NHE_S = 300
 #: Đèn đang được áp: chờ tối đa ngần này giây cho đèn xong rồi mới đọc; quá hạn thì bỏ lượt này (đèn luôn đi trước).
@@ -68,6 +71,8 @@ class HeThong:
     #: Mẫu /proc/stat cuối (tổng, rảnh) để lần đọc nhẹ sau tính CPU; None nếu không đọc được.
     mau_cpu: tuple[int, int] | None = None
     nhe: bool = False
+    #: Nguồn số liệu: ``adb`` (đọc bằng shell) hoặc ``apk`` (APK báo).
+    nguon: str = "adb"
 
 
 def _khoi(txt: str, ten: str) -> str:
@@ -153,14 +158,47 @@ class HeThongLoa(DataUpdateCoordinator[HeThong]):
     **Đèn là ưu tiên số 1, đọc thông tin là số 2** (``den`` = sink đèn): đang áp đèn thì chờ cho đèn xong (tối đa
     ``CHO_DEN_S`` giây, quá hạn thì bỏ lượt, giữ số cũ); đang có hiệu ứng đèn chạy thì đọc nhẹ và thưa."""
 
-    def __init__(self, hass, entry, dev: AdbDevice, den=None) -> None:
+    def __init__(self, hass, entry, dev: AdbDevice, den=None, mic_server=None, dong=None) -> None:
         super().__init__(hass, _LOGGER, config_entry=entry, name="r1_he_thong",
                          update_interval=timedelta(seconds=CHU_KY_S))
         self.dev, self.den = dev, den
+        #: APK báo thông tin hệ thống qua kết nối mic (0.8.0): đường CHÍNH, chạy cả khi đóng ADB. ``dong()`` đúng = chế độ «đóng ADB»:
+        #: không thử ADB, chưa có số của APK thì giữ số cũ.
+        self._mic, self._dong = mic_server, dong or (lambda: False)
         self._mau: tuple[int, int] | None = None
         self._lan_cuoi = 0.0
+        self._luc_apk: float | None = None
+        if mic_server is not None:
+            entry.async_on_unload(mic_server.add_state_listener(self._khi_apk))
+
+    @callback
+    def _khi_apk(self) -> None:
+        """APK vừa báo số mới: đọc ngay thay vì chờ chu kỳ."""
+        m = self._mic
+        if m is not None and m.he_thong_luc is not None and m.he_thong_luc != self._luc_apk and self.hass is not None:
+            self.hass.async_create_task(self.async_request_refresh())
+
+    def _tu_apk(self) -> HeThong | None:
+        """Số do APK báo còn mới (dưới ``TUOI_APK_TOI_DA_S``) thì phân tích bằng CÙNG hàm với đường ADB; không thì None."""
+        m = self._mic
+        if m is None or not m.receiving or m.he_thong_txt is None or m.he_thong_luc is None:
+            return None
+        if time.monotonic() - m.he_thong_luc > TUOI_APK_TOI_DA_S:
+            return None
+        h = phan_tich(m.he_thong_txt, self._mau)
+        h.nguon = "apk"
+        if self.data is not None:                          # APK không báo tiến trình nặng nhất (cần top của shell): giữ lần đọc ADB gần nhất
+            h.top = self.data.top
+        self._mau = h.mau_cpu or self._mau
+        self._luc_apk = m.he_thong_luc
+        return h
 
     async def _async_update_data(self) -> HeThong:
+        tu_apk = self._tu_apk()
+        if tu_apk is not None:
+            return tu_apk
+        if self._dong():
+            return self.data if self.data is not None else HeThong()   # đóng ADB: chưa có số của APK thì giữ số cũ, không thử ADB
         den = self.den
         if den is not None:
             t0 = time.monotonic()
