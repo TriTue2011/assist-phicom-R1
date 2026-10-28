@@ -114,3 +114,35 @@ async def test_dat_am_luong_khi_loa_chua_noi_bao_loi_ro_rang(hass, r1):
         await server.gui_am_luong(True)
     with pytest.raises(ConnectionError):
         await server.gui_am_luong(8)
+
+
+async def test_tat_tieng_loa_nho_muc_cu_va_bat_lai_dung_muc(hass, r1):
+    """Nút «Tắt tiếng loa» (chủ máy 28/10/2026): tắt = âm lượng 0 và nhớ mức cũ; bật = trả về đúng mức đã nhớ; khác «Tắt mic»."""
+    e, port = await _them_co_dau_nhan(hass, r1)
+    reader, writer = await _noi_apk(e, port)
+    await _bao(writer, 9)
+    await cho(lambda: hass.states.get(PLAYER).attributes.get("volume_level") == pytest.approx(9 / 15, abs=1e-3))
+    feats = hass.states.get(PLAYER).attributes["supported_features"]
+    assert feats & MediaPlayerEntityFeature.VOLUME_MUTE and hass.states.get(PLAYER).attributes["is_volume_muted"] is False
+    await hass.services.async_call("media_player", "volume_mute", {"entity_id": PLAYER, "is_volume_muted": True}, blocking=True)
+    assert await _khung_xuong(reader) == b'{"type":"am_luong","muc":0}'
+    await _bao(writer, 0)                                              # APK báo lại mức thật
+    await cho(lambda: hass.states.get(PLAYER).attributes.get("is_volume_muted") is True)
+    await hass.services.async_call("media_player", "volume_mute", {"entity_id": PLAYER, "is_volume_muted": False}, blocking=True)
+    assert await _khung_xuong(reader) == b'{"type":"am_luong","muc":9}'      # đúng mức trước khi tắt
+    await _bao(writer, 9)
+    await cho(lambda: hass.states.get(PLAYER).attributes.get("is_volume_muted") is False)
+    writer.close()
+
+
+async def test_bat_tieng_khi_chua_tung_tat_thi_lay_nua_thang_va_loa_chua_noi_bao_loi(hass, r1):
+    e, port = await _them_co_dau_nhan(hass, r1)
+    reader, writer = await _noi_apk(e, port)
+    await _bao(writer, 0)                                              # loa đang 0 (tắt từ lúc khởi động), chưa từng «tắt» qua HA
+    await cho(lambda: hass.states.get(PLAYER).attributes.get("is_volume_muted") is True)
+    await hass.services.async_call("media_player", "volume_mute", {"entity_id": PLAYER, "is_volume_muted": False}, blocking=True)
+    assert await _khung_xuong(reader) == b'{"type":"am_luong","muc":8}'      # nửa thang 15 → 8
+    writer.close()
+    await asyncio.sleep(0.1)
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call("media_player", "volume_mute", {"entity_id": PLAYER, "is_volume_muted": True}, blocking=True)

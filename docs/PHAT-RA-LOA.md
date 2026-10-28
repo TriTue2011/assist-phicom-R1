@@ -27,6 +27,12 @@ nhiều loa, nên số thô làm R1 «đo sai rồi chỉnh theo số sai» và 
 sai số cỡ 0,1–0,3 giây sau vài lần hỏi), ghi lại khi lệch quá 0,3 giây hoặc 15 giây một lần, và chu kỳ hỏi là 2,9 giây (không phải số nguyên giây, để
 pha đổi dần). Tua gửi đích có phần thập phân (`0:00:42.370`); loa từ chối thì tự làm tròn GẦN NHẤT tới giây (thư viện mặc định cắt xuống) và nhớ.
 
+## Dừng và tắt tiếng loa (0.6.4)
+
+Thẻ R1 (tab Đàm thoại) có nút **Dừng** (`media_player.media_stop`, tự gửi lại nếu renderer bỏ qua) và công tắc **Tắt tiếng loa** (`media_player.volume_mute`).
+Tắt tiếng loa là đưa âm lượng nhạc về 0 qua đường APK đã kiểm (như `number.r1_am_luong`), nhớ mức cũ để bật lại đúng mức; khác công tắc «Tắt mic» (đóng
+luồng mic). Cần APK nối về HA; chưa nối thì báo lỗi rõ.
+
 ## Lý do idle (`idle_reason`)
 
 Khi `idle`, thực thể có thuộc tính `idle_reason`: `finished` (bài tự hết), `stopped` (lệnh dừng của người dùng/tự động hoá),

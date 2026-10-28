@@ -133,7 +133,7 @@ const truoc=card.shadowRoot.textContent.includes("Không tìm thấy");
 // 2) Thực thể đến muộn → thẻ dựng lại, không ném lỗi.
 add("switch.r1_dam_thoai","intercom_open","off",{giu_mo:false});
 add("sensor.r1_trang_thai_mic","mic_status","nghe",{phien:null,che_do_tu_danh_thuc:"speaker",phia_loa:"da_ket_noi",so_lan_tu_choi:0});
-add("media_player.r1_loa","speaker","playing",{media_title:"<img src=x onerror=alert(1)>"});
+add("media_player.r1_loa","speaker","playing",{media_title:"<img src=x onerror=alert(1)>",supported_features:8,is_volume_muted:false});
 add("switch.r1_tat_mic","mute","off");
 add("switch.r1_dlna","dlna","on",{renderer:"đã nối (SSDP unicast)"}); add("switch.r1_airplay","airplay","off"); add("switch.r1_bluetooth","bluetooth","unknown");
 let loi=null; try{ card.hass=mk(); }catch(e){ loi=String(e); }
@@ -171,9 +171,18 @@ const rong=q("[data-music-text]").textContent;
 const kn={sec:q("[data-conn-sec]").style.display!=="none",
  dlna:q('[data-conn="dlna"]').checked, airplay:q('[data-conn="airplay"]').checked,
  btOff:q('[data-conn="bluetooth"]').disabled, note:q("[data-conn-note]").textContent};
+// 7) Nút Dừng (media_stop) và «Tắt tiếng loa» (volume_mute) cho loa R1.
+states["media_player.r1_loa"]={state:"playing",attributes:{media_title:"A",supported_features:8,is_volume_muted:false}}; card.hass=mk();
+const stop={disabled:q("[data-stop]").disabled, hang:q("[data-spk-mute-row]").style.display!=="none", bat:q("[data-spk-mute]").checked};
+const a0=calls.length; q("[data-stop]").click(); const sw=q("[data-spk-mute]"); sw.checked=true; sw.dispatchEvent(new Event("change"));
+stop.goi=JSON.stringify(calls.slice(a0)); calls.length=a0;
+states["media_player.r1_loa"]={state:"idle",attributes:{supported_features:8,is_volume_muted:true}}; card.hass=mk();
+stop.dungKhiIdle=q("[data-stop]").disabled; stop.tat=q("[data-spk-mute]").checked;
+states["media_player.r1_loa"]={state:"playing",attributes:{supported_features:0}}; card.hass=mk();
+stop.anKhiKhongHoTro=q("[data-spk-mute-row]").style.display==="none";
 const antes=calls.length; const cd=q('[data-conn="airplay"]'); cd.checked=true; cd.dispatchEvent(new Event("change"));
 kn.goi=JSON.stringify(calls.slice(antes)); calls.length=antes;      // giữ nguyên danh sách lệnh của các bước trước cho phần kiểm cũ
-setTimeout(()=>{document.getElementById("out").textContent=JSON.stringify({truoc,loi,nghe,gui,la:lạ,calls,het,hong,dai,rong,kn,
+setTimeout(()=>{document.getElementById("out").textContent=JSON.stringify({truoc,loi,nghe,gui,la:lạ,calls,het,hong,dai,rong,kn,stop,
  eq:!!q("[data-eq] r1-eq-card"), xss:sr.innerHTML.includes("<img src=x"), title:q("[data-music-text]").textContent});},150);
 </script>"""
 
@@ -211,6 +220,11 @@ def test_giao_dien_the_dam_thoai_trang_thai_mic_nut_va_thuc_the_den_muon(tmp_pat
     # loa im thì nói vì sao; đang phát thì kèm thời lượng (185 giây = 3:05); không có lý do thì như cũ
     assert r["het"] == "Bài vừa rồi đã hết bài" and "lỗi phát" in r["hong"]
     assert r["dai"] == "Đang phát — A (3:05)" and r["rong"] == "Không có nhạc đang phát"
+    sp = r["stop"]
+    assert sp["disabled"] is False and sp["hang"] is True and sp["bat"] is False
+    assert json.loads(sp["goi"]) == [["media_player", "media_stop", {"entity_id": "media_player.r1_loa"}],
+                                     ["media_player", "volume_mute", {"entity_id": "media_player.r1_loa", "is_volume_muted": True}]]
+    assert sp["dungKhiIdle"] is True and sp["tat"] is True and sp["anKhiKhongHoTro"] is True
     kn = r["kn"]
     assert kn["sec"] and kn["dlna"] is True and kn["airplay"] is False
     assert kn["btOff"] is False, "Bluetooth «unknown» (ADB chưa đọc được) vẫn phải bấm được"

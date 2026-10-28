@@ -27,7 +27,7 @@
       sending_tip: "Tiếng mic đang được gửi về Home Assistant.",
       unknown_tip: "Không đọc được trạng thái mic — coi như mic có thể đang mở.",
       busy: "Đang có phiên", mute: "Tắt mic", conn: "Kết nối loa (bật/tắt để dò lỗi phát nhạc)", dlna: "DLNA", airplay: "AirPlay", bluetooth: "Bluetooth",
-      bt_unknown: "Bluetooth chưa đọc được trạng thái (cần ADB)", music: "Nhạc", music_last: "Bài vừa rồi", pause: "Tạm dừng", play: "Phát",
+      bt_unknown: "Bluetooth chưa đọc được trạng thái (cần ADB)", music: "Nhạc", music_last: "Bài vừa rồi", pause: "Tạm dừng", play: "Phát", stop: "Dừng", spk_mute: "Tắt tiếng loa",
       nothing: "Không có nhạc đang phát", playing: "Đang phát", paused: "Đã tạm dừng",
       r_finished: "đã hết bài", r_stopped: "đã dừng", r_error: "lỗi phát (renderer DLNA của loa báo lỗi)", r_interrupted: "bị bài khác thay",
       pending: "Phía loa chưa có (từ đánh thức trên loa còn chờ)",
@@ -57,7 +57,7 @@
       sending_tip: "Microphone audio is being sent to Home Assistant.",
       unknown_tip: "Mic status unreadable — assume the mic may be open.",
       busy: "Session in progress", mute: "Mute mic", conn: "Speaker connections (toggle to troubleshoot playback)", dlna: "DLNA", airplay: "AirPlay", bluetooth: "Bluetooth",
-      bt_unknown: "Bluetooth state unreadable (needs ADB)", music: "Music", music_last: "Last track", pause: "Pause", play: "Play",
+      bt_unknown: "Bluetooth state unreadable (needs ADB)", music: "Music", music_last: "Last track", pause: "Pause", play: "Play", stop: "Stop", spk_mute: "Mute speaker",
       nothing: "Nothing is playing", playing: "Playing", paused: "Paused",
       r_finished: "finished", r_stopped: "stopped", r_error: "playback error (the speaker's DLNA renderer reported an error)", r_interrupted: "replaced by another track",
       pending: "Speaker side not built yet (wake word on the speaker is pending)",
@@ -161,6 +161,9 @@
       title: sa.media_title || null, dur: sa.media_duration || null, reason: sa.idle_reason || null,
       canPause: isUp(sp) && (ms === "playing" || ms === "buffering"),
       canPlay: isUp(sp) && ms === "paused",
+      canStop: isUp(sp) && (ms === "playing" || ms === "buffering" || ms === "paused"),
+      // Tắt tiếng LOA (media_player.volume_mute, VOLUME_MUTE = 8), khác «Tắt mic»; chỉ hiện khi thực thể hỗ trợ.
+      canMute: isUp(sp) && !!(Number(sa.supported_features || 0) & 8), muted: sa.is_volume_muted === true,
     };
     var always = { entity: intercom.entity, present: intercom.present, on: intercom.on && intercom.giuMo };
     var mst = stateOf(hass, ent.mute);
@@ -274,7 +277,9 @@
         '<div class="note" data-pending style="display:none">' + esc(t.pending) + "</div>" +
         '<section><div class="row"><span>' + esc(t.music) + ': <span data-music-text></span></span>' +
         '<span><button class="sec" data-pause>' + esc(t.pause) + '</button> ' +
-        '<button class="sec" data-play>' + esc(t.play) + "</button></span></div></section>" +
+        '<button class="sec" data-play>' + esc(t.play) + '</button> ' +
+        '<button class="sec" data-stop>' + esc(t.stop) + "</button></span></div>" +
+        '<div class="row" data-spk-mute-row style="display:none"><label>' + esc(t.spk_mute) + '</label><ha-switch data-spk-mute></ha-switch></div></section>' +
         '<div class="eq" data-eq></div></ha-card>';
     }
 
@@ -308,6 +313,15 @@
       on("[data-pause]", function () {
         var m = now();
         if (m.music.canPause) self._call("media_player", "media_pause", { entity_id: m.music.entity });
+      });
+      on("[data-stop]", function () {
+        var m = now();
+        if (m.music.canStop) self._call("media_player", "media_stop", { entity_id: m.music.entity });
+      });
+      var sm = root.querySelector("[data-spk-mute]");
+      if (sm) sm.addEventListener("change", function () {
+        var m = now();
+        if (m.music.canMute) self._call("media_player", "volume_mute", { entity_id: m.music.entity, is_volume_muted: sm.checked });
       });
       on("[data-play]", function () {
         var m = now();
@@ -710,6 +724,10 @@
       q("[data-music-text]").textContent = xt;
       q("[data-pause]").disabled = !m.music.canPause;
       q("[data-play]").disabled = !m.music.canPlay;
+      q("[data-stop]").disabled = !m.music.canStop;
+      var smr = q("[data-spk-mute-row]"), sms = q("[data-spk-mute]");
+      if (smr) smr.style.display = m.music.canMute ? "" : "none";
+      if (sms) sms.checked = m.music.muted;
       var ss = q("[data-song-song]");
       if (ss) { ss.disabled = !m.song.available; ss.checked = m.song.on; }
       var nt = q("[data-ss-note]");

@@ -131,6 +131,7 @@ class R1Player(R1Entity, MediaPlayerEntity):
                                 | MediaPlayerEntityFeature.STOP
                                 | MediaPlayerEntityFeature.SEEK
                                 | MediaPlayerEntityFeature.VOLUME_SET
+                                | MediaPlayerEntityFeature.VOLUME_MUTE
                                 | MediaPlayerEntityFeature.VOLUME_STEP)
 
     def __init__(self, coordinator: R1Coordinator) -> None:
@@ -144,6 +145,7 @@ class R1Player(R1Entity, MediaPlayerEntity):
         self._cham: asyncio.Task | None = None
         self._dang_dong_bo = False           # một lượt đọc theo chu kỳ coordinator đang chạy
         self._loi_doc = 0                    # số lần hỏi trạng thái hỏng LIÊN TIẾP
+        self._muc_truoc_tat: int | None = None   # mức âm lượng trước khi tắt tiếng (để bật lại đúng mức)
         self._uoc = UocViTri()               # vị trí chính xác hơn 1 giây từ RelTime nguyên giây
         self._ghi_luc = 0.0                  # lúc (đồng hồ đơn điệu) ghi trạng thái gần nhất
 
@@ -193,6 +195,34 @@ class R1Player(R1Entity, MediaPlayerEntity):
     def volume_step(self) -> float:
         am = self.coordinator.mic_server.am_luong
         return 1 / am[1] if am else 1 / const.VOL_MAX
+
+    @property
+    def is_volume_muted(self) -> bool | None:
+        """Tắt tiếng LOA (âm lượng nhạc = 0), khác «Tắt mic»: đúng khi ta đã tắt tiếng hoặc loa/người dùng đưa âm lượng về 0."""
+        am = self.coordinator.mic_server.am_luong
+        if am is None:
+            return None
+        return am[0] == 0
+
+    async def async_mute_volume(self, mute: bool) -> None:
+        """Tắt/bật tiếng loa bằng đúng đường âm lượng APK đã kiểm (``gui_am_luong``): tắt = nhớ mức hiện tại rồi đặt 0; bật = trả về mức đã nhớ
+        (chưa nhớ thì lấy nửa thang) — không dùng lệnh mute riêng của DLNA (chưa kiểm trên loa thật)."""
+        am = self.coordinator.mic_server.am_luong
+        toi_da = am[1] if am else const.VOL_MAX
+        if mute:
+            if am is not None and am[0] > 0:
+                self._muc_truoc_tat = am[0]
+            muc = 0
+        else:
+            muc = self._muc_truoc_tat or max(1, round(toi_da * 0.5))
+            if am is not None and am[0] > 0:
+                muc = am[0]                                   # đã có tiếng (người dùng tự chỉnh lên): giữ nguyên
+        try:
+            await self.coordinator.mic_server.gui_am_luong(muc)
+        except (ConnectionError, OSError, TimeoutError, ValueError) as exc:
+            raise HomeAssistantError("Loa chưa nối về HA (APK mic): chưa tắt/bật tiếng được") from exc
+        if not mute:
+            self._muc_truoc_tat = None
 
     async def async_set_volume_level(self, volume: float) -> None:
         am = self.coordinator.mic_server.am_luong
