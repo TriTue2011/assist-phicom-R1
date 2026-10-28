@@ -50,6 +50,7 @@ nữa với IP khác, mỗi loa có khoá, cổng, phiên, đèn và thực th�
 | Tăng cường bass / Cường độ bass | switch / number | Bật bass và độ mạnh | 0–1000 |
 | Loudness / Độ lợi loudness | switch / number | Bù tiếng ở âm lượng nhỏ | 0–1000 |
 | DLNA, AirPlay | switch | Cho loa nhận nhạc qua DLNA / AirPlay | |
+| Bluetooth | switch | Bật/tắt Bluetooth của loa. Trạng thái đọc qua ADB (`settings get global bluetooth_on`), lệnh đi qua `send_message` what=64 (chưa kiểm trên loa thật); sau lệnh tích hợp đọc lại để xác nhận. Cùng DLNA và AirPlay hiện ở thẻ R1 (mục «Kết nối loa») để bật/tắt từng kết nối khi dò lỗi; công tắc DLNA khai thuộc tính `renderer` (đã nối bằng đường nào, hoặc đã thử những đường nào mà hỏng) | |
 | Tăng mic | number | Khuếch đại tuyến tính tiếng mic (dB) **ở HA**, áp trước khi tiếng vào Assist; chặn cứng ở biên độ tối đa, không lọc ồn. Nhớ giá trị qua các lần khởi động HA. **CHƯA ĐO** | 0–30 dB, mặc định 12 |
 | Tắt mic | switch | Bật = mic ngừng (HA đóng luồng, không dò từ đánh thức, không nghe được). Dùng khi muốn riêng tư | |
 | Assist (bật/tắt) | switch | Tắt = vệ tinh Assist không nghe/không đáp (luồng mic vẫn chảy) | |

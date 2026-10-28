@@ -135,6 +135,7 @@ add("switch.r1_dam_thoai","intercom_open","off",{giu_mo:false});
 add("sensor.r1_trang_thai_mic","mic_status","nghe",{phien:null,che_do_tu_danh_thuc:"speaker",phia_loa:"da_ket_noi",so_lan_tu_choi:0});
 add("media_player.r1_loa","speaker","playing",{media_title:"<img src=x onerror=alert(1)>"});
 add("switch.r1_tat_mic","mute","off");
+add("switch.r1_dlna","dlna","on",{renderer:"đã nối (SSDP unicast)"}); add("switch.r1_airplay","airplay","off"); add("switch.r1_bluetooth","bluetooth","unknown");
 let loi=null; try{ card.hass=mk(); }catch(e){ loi=String(e); }
 const sr=card.shadowRoot, q=s=>sr.querySelector(s);
 const nghe={mic:q("[data-mic-text]").textContent, status:q("[data-mic]").dataset.status,
@@ -166,7 +167,13 @@ states["media_player.r1_loa"]={state:"playing",attributes:{media_title:"A",media
 const dai=q("[data-music-text]").textContent;
 states["media_player.r1_loa"]={state:"idle",attributes:{}}; card.hass=mk();
 const rong=q("[data-music-text]").textContent;
-setTimeout(()=>{document.getElementById("out").textContent=JSON.stringify({truoc,loi,nghe,gui,la:lạ,calls,het,hong,dai,rong,
+// 6) Công tắc kết nối (DLNA / AirPlay / Bluetooth) để dò lỗi: hiện đủ ba hàng, ghi chú chẩn đoán, bấm thì gọi dịch vụ công tắc.
+const kn={sec:q("[data-conn-sec]").style.display!=="none",
+ dlna:q('[data-conn="dlna"]').checked, airplay:q('[data-conn="airplay"]').checked,
+ btOff:q('[data-conn="bluetooth"]').disabled, note:q("[data-conn-note]").textContent};
+const antes=calls.length; const cd=q('[data-conn="airplay"]'); cd.checked=true; cd.dispatchEvent(new Event("change"));
+kn.goi=JSON.stringify(calls.slice(antes)); calls.length=antes;      // giữ nguyên danh sách lệnh của các bước trước cho phần kiểm cũ
+setTimeout(()=>{document.getElementById("out").textContent=JSON.stringify({truoc,loi,nghe,gui,la:lạ,calls,het,hong,dai,rong,kn,
  eq:!!q("[data-eq] r1-eq-card"), xss:sr.innerHTML.includes("<img src=x"), title:q("[data-music-text]").textContent});},150);
 </script>"""
 
@@ -204,6 +211,11 @@ def test_giao_dien_the_dam_thoai_trang_thai_mic_nut_va_thuc_the_den_muon(tmp_pat
     # loa im thì nói vì sao; đang phát thì kèm thời lượng (185 giây = 3:05); không có lý do thì như cũ
     assert r["het"] == "Bài vừa rồi đã hết bài" and "lỗi phát" in r["hong"]
     assert r["dai"] == "Đang phát — A (3:05)" and r["rong"] == "Không có nhạc đang phát"
+    kn = r["kn"]
+    assert kn["sec"] and kn["dlna"] is True and kn["airplay"] is False
+    assert kn["btOff"] is False, "Bluetooth «unknown» (ADB chưa đọc được) vẫn phải bấm được"
+    assert "đã nối (SSDP unicast)" in kn["note"] and "Bluetooth chưa đọc được" in kn["note"]
+    assert json.loads(kn["goi"]) == [["switch", "turn_on", {"entity_id": "switch.r1_airplay"}]]
 
 
 def _chay_chrome_den_khi_xong(page, thoi_gian=40):

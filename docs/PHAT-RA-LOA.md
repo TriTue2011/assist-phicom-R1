@@ -6,8 +6,11 @@ trước đó phải thêm tay tích hợp `dlna_dmr`).
 ## Cách hoạt động
 
 1. Khi phát, nếu DLNA của loa đang tắt thì tích hợp bật nó (`Set_DLNA_Open`).
-2. Tích hợp tìm renderer bằng **SSDP unicast tới chính loa** (cổng 1900; loa trả về địa chỉ mô tả thiết bị, cổng do loa cấp lúc chạy
-   nên được tìm lại mỗi lần nối, không nhớ cứng). Chỉ nhận địa chỉ mô tả thuộc đúng loa này.
+2. Tích hợp tìm địa chỉ mô tả của renderer bằng **nhiều đường, rẻ trước đắt** (0.6.1): địa chỉ đã nhớ lần nối gần nhất → địa chỉ mà `dlna_dmr`
+   cũ (nếu từng thêm cho loa này) đã lưu → bộ nhớ SSDP của chính Home Assistant → **SSDP unicast tới loa** (cổng 1900; loa trả về địa
+   chỉ mô tả thiết bị, cổng do loa cấp lúc chạy nên không nhớ cứng) → SSDP multicast. Chỉ nhận mô tả thuộc đúng loa này. Không tìm được
+   thì báo rõ đã thử đường nào và gợi ý kiểm UDP 1900 giữa Home Assistant và loa (tường lửa, wifi cách ly máy khách, Docker kiểu
+   cầu nối).
 3. Phát bằng UPnP AV (`SetAVTransportURI` + `Play`), tạm dừng/phát tiếp/dừng/tua cũng qua đó. Thư viện `async_upnp_client` có sẵn
    trong Home Assistant lo phần SOAP.
 4. Trạng thái (`playing` / `paused` / `idle`), tên bài, **thời lượng**, vị trí và **lý do idle** hiện ngay trên `media_player.r1_loa`

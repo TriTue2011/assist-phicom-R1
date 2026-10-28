@@ -26,7 +26,8 @@
       listening_tip_ha: "Mic loa gửi tiếng LIÊN TỤC về Home Assistant; HA đang dò từ đánh thức trong luồng đó.",
       sending_tip: "Tiếng mic đang được gửi về Home Assistant.",
       unknown_tip: "Không đọc được trạng thái mic — coi như mic có thể đang mở.",
-      busy: "Đang có phiên", mute: "Tắt mic", music: "Nhạc", music_last: "Bài vừa rồi", pause: "Tạm dừng", play: "Phát",
+      busy: "Đang có phiên", mute: "Tắt mic", conn: "Kết nối loa (bật/tắt để dò lỗi phát nhạc)", dlna: "DLNA", airplay: "AirPlay", bluetooth: "Bluetooth",
+      bt_unknown: "Bluetooth chưa đọc được trạng thái (cần ADB)", music: "Nhạc", music_last: "Bài vừa rồi", pause: "Tạm dừng", play: "Phát",
       nothing: "Không có nhạc đang phát", playing: "Đang phát", paused: "Đã tạm dừng",
       r_finished: "đã hết bài", r_stopped: "đã dừng", r_error: "lỗi phát (renderer DLNA của loa báo lỗi)", r_interrupted: "bị bài khác thay",
       pending: "Phía loa chưa có (từ đánh thức trên loa còn chờ)",
@@ -55,7 +56,8 @@
       listening_tip_ha: "The speaker microphone streams CONTINUOUSLY to Home Assistant; HA listens for the wake word in that stream.",
       sending_tip: "Microphone audio is being sent to Home Assistant.",
       unknown_tip: "Mic status unreadable — assume the mic may be open.",
-      busy: "Session in progress", mute: "Mute mic", music: "Music", music_last: "Last track", pause: "Pause", play: "Play",
+      busy: "Session in progress", mute: "Mute mic", conn: "Speaker connections (toggle to troubleshoot playback)", dlna: "DLNA", airplay: "AirPlay", bluetooth: "Bluetooth",
+      bt_unknown: "Bluetooth state unreadable (needs ADB)", music: "Music", music_last: "Last track", pause: "Pause", play: "Play",
       nothing: "Nothing is playing", playing: "Playing", paused: "Paused",
       r_finished: "finished", r_stopped: "stopped", r_error: "playback error (the speaker's DLNA renderer reported an error)", r_interrupted: "replaced by another track",
       pending: "Speaker side not built yet (wake word on the speaker is pending)",
@@ -108,6 +110,7 @@
       intercom: by("switch", "intercom_open"), song: by("switch", "song_song"),
       mic_status: by("sensor", "mic_status"), wake: by("binary_sensor", "wake"),
       speaker: by("media_player", "speaker"), mute: by("switch", "mute"), volume: by("number", "volume"),
+      dlna: by("switch", "dlna"), airplay: by("switch", "airplay"), bluetooth: by("switch", "bluetooth"),
       device_id: mine.length ? reg[mine[0]].device_id : null,
     };
   }
@@ -163,13 +166,21 @@
     var mst = stateOf(hass, ent.mute);
     var mute = { entity: ent.mute || null, present: !!ent.mute, available: isUp(mst),
                  on: isUp(mst) ? mst.state === "on" : null };
+    var conn = {};
+    ["dlna", "airplay", "bluetooth"].forEach(function (k) {
+      var cs = stateOf(hass, ent[k]);
+      // «unknown» (ví dụ Bluetooth chưa đọc được qua ADB) vẫn cho bấm lệnh; chỉ «unavailable» mới khoá.
+      var co = !!cs && cs.state !== "unavailable";
+      conn[k] = { entity: ent[k] || null, present: !!ent[k], available: co, on: co ? (cs.state === "on" ? true : (cs.state === "off" ? false : null)) : null,
+                  note: (cs && cs.attributes && cs.attributes.renderer) || "" };
+    });
     var wst = stateOf(hass, ent.wake);
     var wa = (wst && wst.attributes) || {};
     var wake = { entity: ent.wake || null, present: !!ent.wake, on: !!wst && wst.state === "on",
                  pending: wa.phia_loa === "CHO_PHIA_LOA", mode: wa.che_do || mic.mode };
     return {
       found: !!(ent.intercom || ent.mic_status || ent.speaker), mic: mic, talk: talk, intercom: intercom, song: song, volume: vol,
-      music: music, always: always, mute: mute, wake: wake, deviceId: ent.device_id,
+      music: music, always: always, mute: mute, conn: conn, wake: wake, deviceId: ent.device_id,
       showEq: config.show_eq !== false,
     };
   }
@@ -256,6 +267,10 @@
         '<div class="row" data-ng-row style="display:none"><button class="sec" data-nghe>' + esc(t.ng_on) + "</button>" +
         '<span data-ng-muc class="muc"></span></div><div class="tip" data-ng-status></div>' +
         '<div class="row"><label>' + esc(t.mute) + '</label><ha-switch data-mute></ha-switch></div>' +
+        '<section data-conn-sec style="display:none"><b>' + esc(t.conn) + "</b>" +
+        ["dlna", "airplay", "bluetooth"].map(function (k) {
+          return '<div class="row" data-conn-row="' + k + '"><label>' + esc(t[k]) + '</label><ha-switch data-conn="' + k + '"></ha-switch></div>';
+        }).join("") + '<div class="tip" data-conn-note></div></section>' +
         '<div class="note" data-pending style="display:none">' + esc(t.pending) + "</div>" +
         '<section><div class="row"><span>' + esc(t.music) + ': <span data-music-text></span></span>' +
         '<span><button class="sec" data-pause>' + esc(t.pause) + '</button> ' +
@@ -312,6 +327,12 @@
       var gs = root.querySelector("[data-nghe-gain]");
       if (gs) gs.addEventListener("input", function () { self._datGain(Number(gs.value)); });
       on("[data-nghe]", function () { if (self._ng) self._ngDong(); else self._ngMo(); });
+      root.querySelectorAll("[data-conn]").forEach(function (cs) {
+        cs.addEventListener("change", function () {
+          var c = now().conn[cs.dataset.conn];
+          if (c && c.available) self._call("switch", cs.checked ? "turn_on" : "turn_off", { entity_id: c.entity });
+        });
+      });
       var sw = root.querySelector("[data-mute]");
       if (sw) sw.addEventListener("change", function () {
         var m = now();
@@ -660,6 +681,20 @@
       hold.title = al.title = m.talk.reason ? t[m.talk.reason] : "";
       var sw = q("[data-mute]");
       if (sw) { sw.disabled = !m.mute.available; sw.checked = m.mute.on === true; }
+      var csec = q("[data-conn-sec]");
+      if (csec) {
+        var coAi = ["dlna", "airplay", "bluetooth"].some(function (k) { return m.conn[k].present; });
+        csec.style.display = coAi ? "" : "none";
+        ["dlna", "airplay", "bluetooth"].forEach(function (k) {
+          var row = q('[data-conn-row="' + k + '"]'), c = m.conn[k], cs = q('[data-conn="' + k + '"]');
+          if (row) row.style.display = c.present ? "" : "none";
+          if (cs) { cs.disabled = !c.available; cs.checked = c.on === true; }
+        });
+        var nt = [];
+        if (m.conn.dlna.note) nt.push("DLNA: " + m.conn.dlna.note);
+        if (m.conn.bluetooth.present && m.conn.bluetooth.available && m.conn.bluetooth.on === null) nt.push(t.bt_unknown);
+        q("[data-conn-note]").textContent = nt.join(" · ");
+      }
       q("[data-pending]").style.display = m.wake.pending && m.wake.mode === "speaker" ? "" : "none";
       var rf = q("[data-refused]");
       rf.style.display = m.mic.refused ? "" : "none";

@@ -149,6 +149,8 @@ class FakeDmr:
         self.loi = False
 
     da_noi = True
+    cach_tim = "giả"
+    chan_doan: list = []
 
     async def async_san_sang(self, toi_da): return None
 

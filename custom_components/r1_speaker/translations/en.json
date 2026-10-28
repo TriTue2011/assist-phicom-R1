@@ -79,6 +79,9 @@
       },
       "song_song": {
         "name": "Parallel mic and speaker"
+      },
+      "bluetooth": {
+        "name": "Bluetooth"
       }
     },
     "sensor": {

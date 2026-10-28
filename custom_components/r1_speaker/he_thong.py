@@ -31,7 +31,8 @@ LENH = (
     "cat /proc/meminfo | busybox head -n 4; echo ---load; cat /proc/loadavg; echo ---s1; busybox head -n 1 /proc/stat; "
     "sleep 1; echo ---s2; busybox head -n 1 /proc/stat; echo ---cpu; cat /sys/devices/system/cpu/online; "
     "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null; echo ---df; df /data 2>/dev/null; "
-    "echo ---wifi; dumpsys wifi 2>/dev/null | busybox grep -m1 mWifiInfo; echo ---up; cat /proc/uptime; "
+    "echo ---wifi; dumpsys wifi 2>/dev/null | busybox grep -m1 mWifiInfo; echo ---bt; settings get global bluetooth_on 2>/dev/null; "
+    "echo ---up; cat /proc/uptime; "
     "echo ---top; top -n 1 -m 8 2>/dev/null | busybox tail -n 9"
 )
 
@@ -40,7 +41,7 @@ LENH = (
 LENH_NHE = (
     "cat /proc/meminfo | busybox head -n 4; echo ---load; cat /proc/loadavg; echo ---s2; busybox head -n 1 /proc/stat; "
     "echo ---cpu; cat /sys/devices/system/cpu/online; cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null; "
-    "echo ---df; df /data 2>/dev/null; echo ---up; cat /proc/uptime"
+    "echo ---df; df /data 2>/dev/null; echo ---bt; settings get global bluetooth_on 2>/dev/null; echo ---up; cat /proc/uptime"
 )
 
 _TOP = re.compile(r"^\s*(\d+)\s+\d+\s+(\d+)%\s+\w\s+\d+\s+\d+K\s+(\d+)K\s+\w+\s+(\S+)\s+(.+?)\s*$")
@@ -60,6 +61,8 @@ class HeThong:
     wifi_mbps: int | None = None
     wifi_ssid: str | None = None
     wifi_tan_so_mhz: int | None = None
+    #: Bluetooth của loa bật/tắt (``settings get global bluetooth_on``); None = không đọc được. Phục vụ công tắc Bluetooth.
+    bluetooth: bool | None = None
     chay_s: int | None = None
     top: list[dict[str, Any]] = field(default_factory=list)
     #: Mẫu /proc/stat cuối (tổng, rảnh) để lần đọc nhẹ sau tính CPU; None nếu không đọc được.
@@ -128,6 +131,8 @@ def phan_tich(txt: str, truoc: tuple[int, int] | None = None) -> HeThong:
             setattr(h, bien, int(m.group(1)))
     m = re.search(r"SSID:\s*([^,]+),", w)
     h.wifi_ssid = m.group(1).strip() if m else None
+    bt = _khoi(txt, "bt").strip()
+    h.bluetooth = True if bt == "1" else (False if bt == "0" else None)
     u = _khoi(txt, "up").split()
     if u:
         try:

@@ -201,3 +201,12 @@ async def test_hieu_ung_chay_thi_doc_nhe_va_thua_cpu_theo_mau_truoc(hass, ht):
     assert "sleep" not in he_thong.LENH_NHE and h3.nhe is True
     assert h3.cpu_pct == 57.9                                                    # (178 - 75) / 178 so với mẫu /proc/stat của lần đọc trước
     assert h3.wifi_dbm == -32 and h3.top == h1.top                              # WiFi và top giữ từ lần đọc đầy đủ
+
+
+def test_phan_tich_doc_bluetooth_qua_settings():
+    from custom_components.r1_speaker.he_thong import phan_tich
+    nen = "---load\n0.1 0.2 0.3\n---up\n100.0 50.0\n"
+    assert phan_tich("---bt\n1\n" + nen).bluetooth is True
+    assert phan_tich("---bt\n0\n" + nen).bluetooth is False
+    assert phan_tich("---bt\nnull\n" + nen).bluetooth is None          # loa không có khoá / không đọc được
+    assert phan_tich(nen).bluetooth is None

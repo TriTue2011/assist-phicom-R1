@@ -256,3 +256,6 @@ DEFAULT_WAKE_SENSITIVITY = 0.5   # CHƯA ĐO trên mic loa R1
 
 #: Thẻ gộp: một tài nguyên duy nhất, nạp cả ba thẻ con (EQ, đàm thoại, cài đặt).
 CARD_GOP_URL = "/r1_speaker/r1-card.js"
+
+#: Sau lệnh bật/tắt Bluetooth chờ ngần này giây rồi đọc lại trạng thái qua ADB để xác nhận.
+BT_DOI_DOC_LAI = 2.0

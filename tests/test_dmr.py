@@ -107,7 +107,7 @@ async def test_renderer_chet_thi_bao_loi_va_tim_lai_o_lan_sau(hass, fake):
         assert not d.da_noi                                # bỏ thiết bị cũ: cổng có thể đã đổi
         fake.enabled = lambda: True
         await d.async_doc()
-        assert tim.await_count == 2                        # tìm lại bằng SSDP
+        assert d.cach_tim == "địa chỉ đã nhớ" and tim.await_count == 1   # nối lại bằng địa chỉ đã nhớ, chưa cần SSDP
 
 
 async def test_khong_tra_loi_ssdp_thi_bao_loi_ro(hass):
@@ -117,3 +117,63 @@ async def test_khong_tra_loi_ssdp_thi_bao_loi_ro(hass):
             await d.async_doc()
         with pytest.raises(R1DmrError, match="chưa lên"):
             await d.async_san_sang(0.3)
+
+
+async def test_nho_dia_chi_cu_roi_loa_doi_cong_thi_tim_lai_bang_ssdp(hass, fake):
+    """Loa khởi động lại đổi cổng: địa chỉ nhớ hỏng → rơi sang SSDP, không kẹt ở địa chỉ cũ."""
+    tim = mock.AsyncMock(return_value=fake.location)
+    with mock.patch.object(dmr_mod, "tim_mo_ta", new=tim):
+        d = R1Dmr(hass, "127.0.0.1")
+        d.mo_ta_cuoi = "http://127.0.0.1:9/desc.xml"           # cổng cũ không còn ai nghe
+        await d.async_doc()
+        assert d.cach_tim == "SSDP unicast" and tim.await_count == 1
+
+
+async def test_dung_dia_chi_dlna_dmr_cu_khi_ssdp_khong_tra_loi(hass, fake):
+    """Đường chuyển đổi: người dùng từng thêm dlna_dmr cho loa này thì dùng địa chỉ mô tả họ đã nhập khi SSDP bị chặn."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    MockConfigEntry(domain="dlna_dmr", data={"url": fake.location}).add_to_hass(hass)
+    with mock.patch.object(dmr_mod, "tim_mo_ta", new=mock.AsyncMock(return_value=None)):
+        d = R1Dmr(hass, "127.0.0.1")
+        await d.async_doc()
+        assert d.cach_tim == "dlna_dmr cũ"
+
+
+async def test_dung_ssdp_cua_home_assistant_khi_unicast_bi_chan(hass, fake):
+    import types
+    info = types.SimpleNamespace(ssdp_location=fake.location)
+    with mock.patch.object(dmr_mod, "tim_mo_ta", new=mock.AsyncMock(return_value=None)), \
+            mock.patch("homeassistant.components.ssdp.async_get_discovery_info_by_st", new=mock.AsyncMock(return_value=[info])):
+        d = R1Dmr(hass, "127.0.0.1")
+        await d.async_doc()
+        assert d.cach_tim == "ssdp của Home Assistant"
+
+
+async def test_ssdp_cua_home_assistant_chi_nhan_thiet_bi_dung_dia_chi_loa(hass, fake):
+    import types
+    lạ = types.SimpleNamespace(ssdp_location="http://192.0.2.77:1590/")
+    with mock.patch.object(dmr_mod, "tim_mo_ta", new=mock.AsyncMock(return_value=None)), \
+            mock.patch("homeassistant.components.ssdp.async_get_discovery_info_by_st", new=mock.AsyncMock(return_value=[lạ])):
+        d = R1Dmr(hass, "127.0.0.1")
+        with pytest.raises(R1DmrError):
+            await d.async_doc()
+
+
+async def test_thu_multicast_khi_unicast_khong_tra_loi(hass, fake):
+    with mock.patch.object(dmr_mod, "tim_mo_ta", new=mock.AsyncMock(return_value=None)), \
+            mock.patch.object(dmr_mod, "tim_mo_ta_multicast", new=mock.AsyncMock(return_value=fake.location)):
+        d = R1Dmr(hass, "127.0.0.1")
+        await d.async_doc()
+        assert d.cach_tim == "SSDP multicast"
+
+
+async def test_loi_neu_ro_da_thu_nhung_cach_nao_va_goi_y_mang(hass):
+    with mock.patch.object(dmr_mod, "tim_mo_ta", new=mock.AsyncMock(return_value=None)):
+        d = R1Dmr(hass, "127.0.0.1")
+        with pytest.raises(R1DmrError) as e:
+            await d.async_doc()
+    t = str(e.value)
+    for cach in ("địa chỉ đã nhớ", "dlna_dmr cũ", "ssdp của Home Assistant", "SSDP unicast", "SSDP multicast"):
+        assert cach in t
+    assert "UDP 1900" in t and "tường lửa" in t
+    assert d.chan_doan and len(d.chan_doan) == 5

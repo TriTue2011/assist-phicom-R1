@@ -99,6 +99,31 @@ async def tim_mo_ta(host: str, *, cong: int = SSDP_PORT, cho: float = SSDP_CHO) 
         transport.close()
 
 
+async def tim_mo_ta_multicast(host: str, *, cho: float = SSDP_CHO) -> str | None:
+    """Như ``tim_mo_ta`` nhưng hỏi bằng M-SEARCH MULTICAST (239.255.255.250:1900) rồi lọc theo địa chỉ loa. Dự phòng cho loa/mạng
+    chỉ đáp lời tìm kiếm multicast (một số firmware bỏ qua gói gửi thẳng tới cổng 1900). Cần Home Assistant có đường multicast ra
+    mạng của loa (chạy Docker kiểu cầu nối thì không có)."""
+    loop = asyncio.get_running_loop()
+    xong: asyncio.Future = loop.create_future()
+    transport, _ = await loop.create_datagram_endpoint(
+        lambda: _Nhan(host, xong), family=socket.AF_INET, local_addr=("0.0.0.0", 0))
+    try:
+        sock = transport.get_extra_info("socket")
+        if sock is not None:
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+        transport.sendto((f"M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 1\r\n"
+                          f"ST: {SSDP_ST}\r\n\r\n").encode(), ("239.255.255.250", SSDP_PORT))
+        try:
+            return await asyncio.wait_for(xong, cho)
+        except TimeoutError:
+            return None
+    except OSError as exc:
+        _LOGGER.debug("SSDP multicast tới loa %s không gửi được: %s", host, type(exc).__name__)
+        return None
+    finally:
+        transport.close()
+
+
 class R1Dmr:
     """Điều khiển renderer DLNA của một loa R1."""
 
@@ -106,27 +131,78 @@ class R1Dmr:
         self._hass, self._host, self._cong = hass, host, cong_ssdp
         self._dev: DmrDevice | None = None
         self._khoa = asyncio.Lock()
+        self.mo_ta_cuoi: str | None = None     # địa chỉ mô tả lần nối thành công gần nhất (đúng tới khi loa khởi động lại)
+        self.cach_tim: str | None = None
+        self.chan_doan: list[str] = []         # lần tìm gần nhất hỏng ở đâu (để báo lỗi)
 
     @property
     def da_noi(self) -> bool:
         """Đã nối được renderer (đã có thiết bị UPnP trong bộ nhớ): hỏi trạng thái khi đó chỉ tốn một lệnh SOAP, không tìm SSDP."""
         return self._dev is not None
 
+    def _cach_tim(self, cho_ssdp: float):
+        """Các cách tìm địa chỉ mô tả renderer, theo thứ tự rẻ → đắt. Mỗi cách trả ``(nhãn, hàm bất đồng bộ → địa chỉ | None)``.
+
+        Chủ máy/người dùng khác 28/10/2026: bản chỉ dùng SSDP unicast bị rớt DLNA («chưa lên sau 15 giây») trên một mạng khác, trong khi
+        ``dlna_dmr`` cũ vẫn tìm được: một đường duy nhất là mong manh, nên thử nhiều đường và ghi rõ đường nào hỏng."""
+        async def nho():
+            return self.mo_ta_cuoi
+
+        async def dlna_dmr_cu():
+            for cfg in self._hass.config_entries.async_entries("dlna_dmr"):
+                url = str((cfg.data or {}).get("url") or "")
+                if urlparse(url).hostname == self._host:
+                    return url                              # địa chỉ người dùng đã nhập khi thêm dlna_dmr (đường chuyển đổi)
+            return None
+
+        async def ssdp_ha():
+            try:
+                from homeassistant.components import ssdp  # noqa: PLC0415
+                for x in await ssdp.async_get_discovery_info_by_st(self._hass, SSDP_ST):
+                    if urlparse(str(x.ssdp_location or "")).hostname == self._host:
+                        return x.ssdp_location
+            except Exception as exc:  # noqa: BLE001 - thành phần ssdp chưa nạp/đổi cấu trúc: bỏ qua đường này
+                _LOGGER.debug("ssdp của Home Assistant không dùng được: %s", type(exc).__name__)
+            return None
+
+        yield "địa chỉ đã nhớ", nho
+        yield "dlna_dmr cũ", dlna_dmr_cu
+        yield "ssdp của Home Assistant", ssdp_ha
+        yield "SSDP unicast", lambda: tim_mo_ta(self._host, cong=self._cong, cho=cho_ssdp)
+        yield "SSDP multicast", lambda: tim_mo_ta_multicast(self._host, cho=cho_ssdp)
+
+    async def _dung(self, mo_ta: str) -> DmrDevice | None:
+        try:
+            async with asyncio.timeout(SOAP_CHO):
+                requester = AiohttpSessionRequester(async_get_clientsession(self._hass), with_sleep=True, timeout=SOAP_CHO)
+                device = await UpnpFactory(requester, non_strict=True).async_create_device(mo_ta)
+            return DmrDevice(device, None)
+        except (UpnpError, ClientError, TimeoutError, OSError) as exc:
+            _LOGGER.debug("Không đọc được mô tả renderer %s: %s", self._host, type(exc).__name__)
+            return None
+
     async def _thiet_bi(self, cho_ssdp: float = SSDP_CHO) -> DmrDevice:
         async with self._khoa:
             if self._dev is not None:
                 return self._dev
-            mo_ta = await tim_mo_ta(self._host, cong=self._cong, cho=cho_ssdp)
-            if mo_ta is None:
-                raise R1DmrError(f"Loa {self._host} không trả lời SSDP: DLNA của loa đang tắt hoặc loa mất mạng?")
-            try:
-                requester = AiohttpSessionRequester(async_get_clientsession(self._hass), with_sleep=True,
-                                                    timeout=SOAP_CHO)
-                device = await UpnpFactory(requester, non_strict=True).async_create_device(mo_ta)
-                self._dev = DmrDevice(device, None)
-            except (UpnpError, ClientError, TimeoutError, OSError) as exc:
-                raise R1DmrError(f"Không đọc được mô tả renderer của loa {self._host}: {type(exc).__name__}") from exc
-            return self._dev
+            da_thu: list[str] = []
+            for nhan, tim in self._cach_tim(cho_ssdp):
+                mo_ta = await tim()
+                if not mo_ta:
+                    da_thu.append(f"{nhan}: không thấy")
+                    continue
+                dev = await self._dung(mo_ta)
+                if dev is None:
+                    da_thu.append(f"{nhan}: thấy nhưng không đọc được mô tả")
+                    continue
+                self._dev, self.mo_ta_cuoi, self.cach_tim = dev, mo_ta, nhan
+                if nhan != "địa chỉ đã nhớ":
+                    _LOGGER.info("Loa %s: tìm được renderer DLNA bằng «%s»", self._host, nhan)
+                return dev
+            self.chan_doan = da_thu
+            raise R1DmrError(
+                f"Không tìm thấy renderer DLNA của loa {self._host} (đã thử: {'; '.join(da_thu)}). DLNA của loa đang tắt, loa mất mạng, "
+                "hoặc UDP 1900 giữa Home Assistant và loa bị chặn (tường lửa, cách ly máy khách của wifi, Home Assistant chạy Docker kiểu cầu nối).")
 
     def _bo(self) -> None:
         """Bỏ thiết bị đã nối: cổng của renderer đổi sau khi loa khởi động lại, lần sau tìm lại."""

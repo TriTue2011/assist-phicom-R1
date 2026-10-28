@@ -79,6 +79,9 @@
       },
       "song_song": {
         "name": "Mic loa song song"
+      },
+      "bluetooth": {
+        "name": "Bluetooth"
       }
     },
     "sensor": {

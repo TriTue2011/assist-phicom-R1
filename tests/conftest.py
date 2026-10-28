@@ -119,3 +119,13 @@ def _khong_adb_that(monkeypatch):
         return n
 
     monkeypatch.setattr("custom_components.r1_speaker.AdbLights", tao)
+
+
+@pytest.fixture(autouse=True)
+def _khong_multicast_that():
+    """Test không gửi gói SSDP multicast thật ra mạng; test nào cần thì tự thay."""
+    from unittest import mock
+
+    from custom_components.r1_speaker import dmr as dmr_mod
+    with mock.patch.object(dmr_mod, "tim_mo_ta_multicast", new=mock.AsyncMock(return_value=None)):
+        yield

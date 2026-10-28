@@ -1,7 +1,8 @@
-"""Công tắc: DLNA, AirPlay, EQ, Bass, Loudness, tắt mic, Assist, đàm thoại, mic loa song song, đèn nhạc."""
+"""Công tắc: DLNA, AirPlay, Bluetooth, EQ, Bass, Loudness, tắt mic, Assist, đàm thoại, mic loa song song, đèn nhạc."""
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -9,11 +10,13 @@ from typing import Any
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.const import STATE_OFF, STATE_ON, EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .client import R1Client
-from .const import MUSIC_LIGHT_ENABLE
+from .client import R1Client, R1Error
+from .const import BT_DOI_DOC_LAI, MUSIC_LIGHT_ENABLE
 from .coordinator import R1ConfigEntry, R1Coordinator
 from .entity import R1Entity, R1MicEntity, R1MusicLightEntity, preregister
 
@@ -26,11 +29,11 @@ class R1SwitchDescription(SwitchEntityDescription):
 
 
 SWITCHES = (
+    # DLNA / AirPlay / Bluetooth KHÔNG còn ẩn ở mục «Cấu hình» (chủ máy 28/10/2026: «thêm nút bật tắt … để phán đoán dễ hơn»): hiện ở
+    # thẻ R1 để bật/tắt từng kết nối khi dò lỗi phát nhạc.
     R1SwitchDescription(key="dlna", translation_key="dlna", field="dlna_open", command="Set_DLNA_Open",
-                        entity_category=EntityCategory.CONFIG,
                         setter=lambda c, on: c.set_dlna_open(on)),
     R1SwitchDescription(key="airplay", translation_key="airplay", field="airplay_open", command="Set_AirPlay_Open",
-                        entity_category=EntityCategory.CONFIG,
                         setter=lambda c, on: c.set_airplay_open(on)),
     R1SwitchDescription(key="eq_enable", translation_key="eq_enable", field="eq_enable", command="set_eq_enable",
                         setter=lambda c, on: c.set_eq_enable(on)),
@@ -51,7 +54,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
     preregister(hass, entry, "switch", f"{entry.entry_id}_music_light", "r1_den_nhac")
     async_add_entities([R1MuteSwitch(entry), R1AssistSwitch(entry), R1IntercomSwitch(entry),
                         R1ParallelSwitch(entry),
-                        R1MusicLightSwitch(entry.runtime_data)])
+                        R1MusicLightSwitch(entry.runtime_data),
+                        R1BluetoothSwitch(entry.runtime_data)])
 
 
 class R1Switch(R1Entity, SwitchEntity):
@@ -69,6 +73,23 @@ class R1Switch(R1Entity, SwitchEntity):
     def is_on(self) -> bool | None:
         return self._value() if self.coordinator.data is not None else None
 
+    @property
+    def extra_state_attributes(self) -> dict | None:
+        """Công tắc DLNA khai thêm chẩn đoán: tích hợp đã tìm được renderer chưa, bằng đường nào, hoặc đã thử những đường nào mà hỏng."""
+        base = super().extra_state_attributes
+        if self.entity_description.key != "dlna":
+            return base
+        dmr = getattr(self.coordinator, "dmr", None)
+        if dmr is None:
+            return base
+        if dmr.da_noi:
+            ten = f"đã nối ({dmr.cach_tim})"
+        elif dmr.chan_doan:
+            ten = "chưa tìm được: " + "; ".join(dmr.chan_doan)
+        else:
+            ten = "chưa thử"
+        return {**(base or {}), "renderer": ten}
+
     async def _set(self, on: bool) -> None:
         d = self.entity_description
         await self.coordinator.async_command(
@@ -79,6 +100,61 @@ class R1Switch(R1Entity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._set(False)
+
+
+class R1BluetoothSwitch(R1Entity, SwitchEntity):
+    """Bluetooth của loa. Trạng thái ĐỌC qua ADB (``settings get global bluetooth_on``, vòng hỏi hệ thống); lệnh bật/tắt đi đường WebSocket
+    ``send_message`` what=64 (CHƯA kiểm trên loa thật) rồi đọc lại để xác nhận — không tin trạng thái lạc quan: sau lệnh mà ADB vẫn
+    báo giá trị cũ thì công tắc phản ánh đúng điều đó, giúp biết lệnh không có tác dụng."""
+
+    _attr_translation_key = "bluetooth"
+
+    def __init__(self, coordinator: R1Coordinator) -> None:
+        super().__init__(coordinator, "bluetooth")
+        self.command = "send_message(64)"
+
+    def _he_thong(self):
+        return getattr(self.coordinator, "he_thong", None)
+
+    def _value(self):
+        he = self._he_thong()
+        return None if he is None or he.data is None else he.data.bluetooth
+
+    @property
+    def available(self) -> bool:
+        # Chưa đọc được trạng thái (ADB chưa nối) vẫn cho bấm lệnh; chỉ phụ thuộc kết nối chính tới loa.
+        return CoordinatorEntity.available.fget(self)
+
+    @property
+    def is_on(self) -> bool | None:
+        return self._value()
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"nguon_trang_thai": "adb", "da_kiem_lenh_tren_loa": False,
+                "ghi_chu": "Trạng thái đọc qua ADB; lệnh bật/tắt chưa kiểm trên loa thật" + ("" if self._value() is not None else " (ADB chưa trả trạng thái)")}
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        he = self._he_thong()
+        if he is not None:
+            self.async_on_remove(he.async_add_listener(self.async_write_ha_state))
+
+    async def _dat(self, on: bool) -> None:
+        try:
+            await self.coordinator.client.set_bluetooth(on)
+        except R1Error as exc:
+            raise HomeAssistantError(f"Loa R1 không nhận lệnh Bluetooth: {exc}") from exc
+        he = self._he_thong()
+        if he is not None:
+            await asyncio.sleep(BT_DOI_DOC_LAI)            # cho loa kịp đổi trạng thái rồi đọc lại qua ADB
+            await he.async_request_refresh()
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._dat(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._dat(False)
 
 
 class R1MuteSwitch(R1MicEntity, SwitchEntity, RestoreEntity):
