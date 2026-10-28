@@ -255,3 +255,16 @@ async def test_nut_dung_nhac_gui_stop_toi_renderer(hass, r1, dmr):
                if e.platform == "r1_speaker" and e.domain == "button" and e.translation_key == "dung_nhac")
     await hass.services.async_call("button", "press", {"entity_id": nut}, blocking=True)
     assert len(dmr.called("Stop")) >= 1 and hass.states.get(LOA).state == "idle"
+
+
+async def test_loa_co_browse_media_de_hien_trong_trang_phuong_tien_va_duyet_duoc_nguon_am_thanh(hass, r1, dmr):
+    """Hộp «Media sources» của trang Phương tiện chỉ liệt kê loa có BROWSE_MEDIA: thiếu thì R1 không chọn được từ giao diện."""
+    from homeassistant.components.media_player import MediaPlayerEntityFeature as F
+    from homeassistant.setup import async_setup_component
+    assert await async_setup_component(hass, "media_source", {})
+    await _them(hass, r1)
+    assert hass.states.get(LOA).attributes["supported_features"] & F.BROWSE_MEDIA
+    from homeassistant.components import media_player
+    loa = hass.data[media_player.DATA_COMPONENT].get_entity(LOA)
+    goc = await loa.async_browse_media()                                      # gốc: danh sách nguồn phương tiện của HA
+    assert goc.media_content_id == "media-source://" and goc.can_expand

@@ -22,6 +22,7 @@ from dataclasses import replace
 from typing import Any
 
 from homeassistant.components.media_player import (
+    BrowseMedia,
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
@@ -132,7 +133,10 @@ class R1Player(R1Entity, MediaPlayerEntity):
                                 | MediaPlayerEntityFeature.SEEK
                                 | MediaPlayerEntityFeature.VOLUME_SET
                                 | MediaPlayerEntityFeature.VOLUME_MUTE
-                                | MediaPlayerEntityFeature.VOLUME_STEP)
+                                | MediaPlayerEntityFeature.VOLUME_STEP
+                                # Trang «Phương tiện» của HA chỉ liệt kê loa có BROWSE_MEDIA (hộp «Media sources»); thiếu nó thì không chọn được loa
+                                # từ giao diện để phát VOV, thư viện nội bộ, TTS thử (chủ máy 28/10/2026), dù gọi bằng action vẫn phát được.
+                                | MediaPlayerEntityFeature.BROWSE_MEDIA)
 
     def __init__(self, coordinator: R1Coordinator) -> None:
         super().__init__(coordinator, "speaker")
@@ -393,6 +397,12 @@ class R1Player(R1Entity, MediaPlayerEntity):
 
     async def async_media_seek(self, position: float) -> None:
         await self._lenh(lambda: self._dmr.async_tua(position), {"playing", "buffering", "paused"})
+
+    async def async_browse_media(self, media_content_type: MediaType | str | None = None,
+                                 media_content_id: str | None = None) -> BrowseMedia:
+        """Duyệt nguồn phương tiện của HA (media source: thư viện nội bộ, đài, TTS...) và chỉ lọc ra âm thanh, như ``dlna_dmr``."""
+        return await media_source.async_browse_media(
+            self.hass, media_content_id, content_filter=lambda item: item.media_content_type.startswith("audio/"))
 
     async def async_play_media(self, media_type: MediaType | str, media_id: str,
                                **kwargs: Any) -> None:
