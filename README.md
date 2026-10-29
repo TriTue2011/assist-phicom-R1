@@ -36,7 +36,7 @@ Kho này biến loa **Phicomm R1** thành một thiết bị đầy đủ của 
 
 Không cần cài `adb` hay chạy lệnh nào trên máy tính: tích hợp tự nói chuyện với loa qua mạng.
 
-1. **Reset loa vào chế độ chờ WiFi** (loa cần reset hoặc chưa biết WiFi nhà): **rút điện** loa → **giữ nút nguồn** → vẫn giữ, **cắm điện** → khi đèn hiện **đen, trắng, hồng** thì **nhả tay**. Loa phát WiFi `Phicomm_R1_XXXX` (chi tiết và cách khác cho loa mới tinh: [mục 4](#4-kết-nối-wifi-cho-loa-mới-hoặc-vừa-reset)).
+1. **Reset loa vào chế độ chờ WiFi** (loa cần reset hoặc chưa biết WiFi nhà): **rút điện** loa → **giữ nút nguồn** → vẫn giữ, **cắm điện** → khi đèn hiện **đen, trắng, hồng** thì **nhả tay**. Khi loa nói 1 loạt tiếng trung là đã khởi động hoàn tất. Nhấn giữ nút giữa đến khi đèn hiện **đen, trắng, hồng** thì **nhả tay**, Loa phát WiFi `Phicomm_R1_XXXX` (chi tiết và cách khác cho loa mới tinh: [mục 4](#4-kết-nối-wifi-cho-loa-mới-hoặc-vừa-reset)).
 2. **Cho loa vào WiFi nhà bằng trang HTML:** tải sẵn `Trang kết nối WiFi cho loa R1.html`, nối điện thoại/máy tính vào WiFi `Phicomm_R1_XXXX` (tắt VPN và dữ liệu di động), mở tệp HTML, điền WiFi nhà → **Gửi cấu hình**, chờ 10–20 giây. Nối lại WiFi nhà, rồi đặt **IP tĩnh** (hoặc giữ chỗ DHCP) cho loa trong router.
 3. **Mở cổng `18765`** từ loa tới máy chạy Home Assistant (xem *Tường lửa và Docker* bên dưới).
 4. **HACS → ⋮ → Custom repositories** → dán địa chỉ kho này, loại **Integration** → cài **Phicomm R1 Speaker** → **khởi động lại Home Assistant**.
