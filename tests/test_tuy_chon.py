@@ -54,10 +54,11 @@ async def test_form_co_du_truong(hass, r1):
     res = await hass.config_entries.options.async_init(e.entry_id)
     khoa = {str(k) for k in res["data_schema"].schema}
     # Form chính chỉ còn thứ người dùng biết; khoá/cổng nghe mic tự cấp, mục chết đã gỡ khỏi form.
-    assert khoa == {"host", "port", "ha_url", "adb_server", "adb_mode", "adb_tu_dong_dong", "phim_ma", "phim_nguon", "rotate_intercom_key", "ghep_lai_apk", "nang_cao"}
+    assert khoa == {"host", "port", "ha_url", "adb_server", "adb_mode", "adb_tu_dong_dong", "phim_ma", "phim_nguon", "duong_phat", "airplay_port", "rotate_intercom_key", "ghep_lai_apk", "nang_cao"}
     macdinh = {str(k): k.default() for k in res["data_schema"].schema
                if k.default is not vol.UNDEFINED}
     assert macdinh["host"] == "127.0.0.1" and macdinh["port"] == r1.port
+    assert macdinh["duong_phat"] == "dlna" and macdinh["airplay_port"] == 5012     # mặc định = hành vi cũ, AirPlay tắt
     res = await hass.config_entries.options.async_configure(
         res["flow_id"], {"host": "127.0.0.1", "port": r1.port, "nang_cao": True})
     assert res["type"] is FlowResultType.FORM and res["step_id"] == "nang_cao"

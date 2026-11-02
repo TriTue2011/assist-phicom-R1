@@ -1,0 +1,50 @@
+name: Release integration
+
+# HACS chỉ báo «có bản cập nhật» khi có GitHub Release; nếu không, nó bám commit trần và không bao giờ báo.
+# Mỗi số phiên bản mới trong manifest.json của tích hợp được tự tạo một Release (dùng cho HACS).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - custom_components/r1_speaker/manifest.json
+      - .github/workflows/release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish the manifest version as a release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Read version and release notes
+        id: info
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          version = json.load(open("custom_components/r1_speaker/manifest.json"))["version"]
+          notes = subprocess.run(["git", "log", "-1", "--format=%B", "--", "$3"], capture_output=True, text=True).stdout.strip()
+          notes = notes or f"Phicomm R1 {version}"
+          open("release-notes.md", "w", encoding="utf-8").write(notes + "\n")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"version={version}\n")
+          PY
+
+      - name: Create the release when the version is new
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.info.outputs.version }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::$TAG already released"
+            exit 0
+          fi
+          gh release create "$TAG" --target "$GITHUB_SHA" \
+            --title "Phicomm R1 $TAG" --notes-file release-notes.md

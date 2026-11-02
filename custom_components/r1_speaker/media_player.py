@@ -10,6 +10,13 @@ Hợp đồng ``play_media`` (``tts.speak`` cũng đi đường này):
 Trạng thái chỉ được hỏi lại có chu kỳ KHI ĐANG PHÁT (2,9 giây; 1 giây khi đang báo tin) và sau mỗi lệnh; idle/tạm dừng thì không hỏi nền.
 ``idle_reason`` (``finished`` / ``stopped`` / ``interrupted`` / ``error``) khai khi idle để tích hợp phát nhạc phân biệt Stop với hết bài.
 Âm lượng dùng đường APK có sẵn (``number``).
+
+Đường phát thứ hai, AirPlay (chủ máy 29/10/2026: «song song bù trừ nhau», «tích hợp riêng, không phụ thuộc bên khác»): tuỳ chọn ``duong_phat``
+chọn ``dlna`` (mặc định, như trước) / ``dlna_truoc`` / ``airplay_truoc`` / ``airplay``. Hai đường BÙ TRỪ nhau: đường đầu hỏng thì thử đường kia, và
+đường bị bỏ luôn được DỪNG trước để loa không bao giờ phát hai nơi. «Hỏng» chỉ tính theo tín hiệu chắc chắn: DLNA = lệnh SOAP bị từ chối hoặc
+renderer báo ``ERROR_OCCURRED``; AirPlay = chưa có gói tiếng đầu sau ``AIRPLAY_BAT_DAU_TOI_DA`` giây hoặc bộ gửi báo lỗi. Một luồng chỉ chậm KHÔNG
+bị coi là hỏng. Khi AirPlay đang phát, mọi kết quả hỏi DLNA bị bỏ qua tại MỘT cổng (``_doc``) nên không ghi đè trạng thái. AirPlay do ``airplay.py``
+gửi thẳng (RAOP/PCM), giải mã bằng ffmpeg của máy chạy HA; không biết thời lượng bài; tua = phát lại từ vị trí đó.
 """
 
 from __future__ import annotations
@@ -42,10 +49,12 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from . import const
-from .const import DLNA_READY_TIMEOUT, DOMAIN
+from .const import AIRPLAY_BAT_DAU_TOI_DA, DLNA_READY_TIMEOUT, DOMAIN
+from .settings import airplay_port, duong_phat
 from .dmr import R1Dmr, R1DmrError, TrangThaiDmr, UocViTri
 from .coordinator import R1ConfigEntry, R1Coordinator
 from .client import R1Error
+from .airplay import LoiAirPlay, LoiKhongNoi, PhienAirPlay, tao_nguon
 from .entity import R1Entity
 from .music import CONTROL_COMMANDS, PLAYLIST_COMMANDS, SEARCH_SOURCES, R1Music
 
@@ -155,6 +164,11 @@ class R1Player(R1Entity, MediaPlayerEntity):
         self._muc_truoc_tat: int | None = None   # mức âm lượng trước khi tắt tiếng (để bật lại đúng mức)
         self._uoc = UocViTri()               # vị trí chính xác hơn 1 giây từ RelTime nguyên giây
         self._ghi_luc = 0.0                  # lúc (đồng hồ đơn điệu) ghi trạng thái gần nhất
+        self._duong: str | None = None       # "dlna" | "airplay" | None: đường đang giữ trạng thái phát (cổng ở ``_doc``)
+        self._ap: PhienAirPlay | None = None  # phiên AirPlay hiện tại (chưa chắc đã bắt đầu phát)
+        self._ap_tac: asyncio.Task | None = None
+        self._ap_goc = 0.0                   # giây của bài mà phiên AirPlay hiện tại bắt đầu (sau khi tua)
+        self._ap_url: str | None = None      # địa chỉ đã giải ra, để tua = phát lại từ vị trí đó
 
     @property
     def _dmr(self) -> R1Dmr:
@@ -167,6 +181,7 @@ class R1Player(R1Entity, MediaPlayerEntity):
         # Bên giữ nhạc cần trạng thái MỚI trước khi chụp (nhạc có thể do thiết bị khác bật, ta không hỏi nền lúc idle).
         self.coordinator.lam_moi_loa = functools.partial(self.async_lam_moi, chi_khi_da_noi=True)
         self.async_on_remove(self._huy_cham)
+        self.async_on_remove(self._huy_airplay)
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -185,6 +200,11 @@ class R1Player(R1Entity, MediaPlayerEntity):
             await self.async_lam_moi()
         finally:
             self._dang_dong_bo = False
+
+    @callback
+    def _huy_airplay(self) -> None:
+        if self._ap_tac is not None and not self._ap_tac.done():
+            self._ap_tac.cancel()
 
     @callback
     def _huy_cham(self) -> None:
@@ -270,9 +290,12 @@ class R1Player(R1Entity, MediaPlayerEntity):
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """``idle_reason``: vì sao loa đang idle (``finished`` hết bài / ``stopped`` người dùng dừng / ``interrupted`` bị bài mới
         thay / ``error`` lỗi phát). Chỉ có khi idle; tích hợp phát nhạc (YouTube) đọc nó thay vì đoán bằng thời lượng bài."""
+        a: dict[str, Any] = {}
+        if self._duong and self._tt.state != "idle":
+            a["duong_phat"] = self._duong                       # dlna | airplay: đường đang thực sự ra tiếng
         if self._tt.state == "idle" and self._ly_do:
-            return {"idle_reason": self._ly_do}
-        return None
+            a["idle_reason"] = self._ly_do
+        return a or None
 
     @property
     def available(self) -> bool:
@@ -319,7 +342,12 @@ class R1Player(R1Entity, MediaPlayerEntity):
             self.async_write_ha_state()
 
     async def _doc(self) -> TrangThaiDmr | None:
-        """Hỏi trạng thái renderer; không trả lời được thì coi như dừng vì lỗi (ghi một dòng nhật ký)."""
+        """Hỏi trạng thái renderer; không trả lời được thì coi như dừng vì lỗi (ghi một dòng nhật ký).
+
+        CỔNG DUY NHẤT giữa hai đường: AirPlay đang phát thì không hỏi DLNA (kết quả của nó là của lần phát CŨ, ghi vào sẽ đè trạng thái thật);
+        ``async_lam_moi``, ``_cham_vong``, ``_cho_trang_thai`` đều đi qua đây nên không chỗ nào phải tự kiểm."""
+        if self._duong == "airplay":
+            return None
         try:
             tt = await self._dmr.async_doc()
         except R1DmrError as exc:
@@ -381,16 +409,41 @@ class R1Player(R1Entity, MediaPlayerEntity):
             raise HomeAssistantError(str(exc)) from exc
         await self._cho_trang_thai(mong_doi, toi_da)
 
+    @property
+    def _la_airplay(self) -> bool:
+        """AirPlay đang giữ loa: đã phát (``_duong``) hoặc phiên đang khởi động (``_ap``, chưa có gói tiếng đầu). Lệnh Dừng bấm đúng lúc khởi động
+        mà chỉ nhìn ``_duong`` sẽ đi sang DLNA (không có gì để dừng ở đó) và bỏ sót phiên AirPlay."""
+        return self._duong == "airplay" or self._ap is not None
+
+    async def _ap_lenh(self, ten: str) -> None:
+        ap = self._ap
+        if ap is None:
+            return
+        try:
+            await getattr(ap, ten)()
+        except (LoiAirPlay, OSError, TimeoutError, asyncio.IncompleteReadError) as exc:
+            raise HomeAssistantError(f"AirPlay: {exc}") from exc
+
     async def async_media_pause(self) -> None:
+        if self._la_airplay:
+            await self._ap_lenh("tam_dung")
+            return
         await self._lenh(self._dmr.async_tam_dung, {"paused", "idle"})
 
     async def async_media_play(self) -> None:
+        if self._la_airplay:
+            await self._ap_lenh("tiep")
+            return
         await self._lenh(self._dmr.async_tiep, {"playing", "buffering"})
 
     async def async_media_stop(self) -> None:
         """Dừng hẳn. Renderer có thể bỏ qua Stop khi đang nạp luồng (TRANSITIONING) nên một lệnh không đủ — người dùng phải bấm Stop 2–3
         lần (chủ máy 28/10/2026): kiểm loa đã idle chưa, chưa thì gửi lại (tối đa ``STOP_GUI_LAI`` lần thêm)."""
         self._ly_do = "stopped"
+        if self._la_airplay:
+            await self._dung_airplay()
+            self._ghi_idle()
+            return
         for lan in range(STOP_GUI_LAI + 1):
             await self._lenh(self._dmr.async_dung, {"idle"}, toi_da=STOP_CHO_XAC_NHAN)
             if self._tt.state == "idle":
@@ -399,6 +452,11 @@ class R1Player(R1Entity, MediaPlayerEntity):
                             self.entity_id, self._tt.state, lan + 1, STOP_GUI_LAI + 1)
 
     async def async_media_seek(self, position: float) -> None:
+        if self._la_airplay:
+            if self._ap_url is None:
+                raise HomeAssistantError("AirPlay: không biết nguồn đang phát để tua")
+            await self._phat_airplay(self._ap_url, self._uri or self._ap_url, self._tieu_de or "Home Assistant", bat_dau=max(0.0, float(position)))
+            return
         await self._lenh(lambda: self._dmr.async_tua(position), {"playing", "buffering", "paused"})
 
     async def async_browse_media(self, media_content_type: MediaType | str | None = None,
@@ -412,13 +470,13 @@ class R1Player(R1Entity, MediaPlayerEntity):
         """Nhạc: phát thẳng qua renderer. Báo tin (TTS / announce): tạm dừng nhạc trước, phát tin, rồi NỀN theo dõi tin phát
         xong và khôi phục nhạc — lệnh này trả về ngay sau khi đã gửi tin đi, không chờ hết tin (``tts.speak`` khỏi bị treo)."""
         if not is_announcement(media_id, kwargs):
-            await self._phat_dmr(media_type, media_id, **kwargs)
+            await self._phat(media_type, media_id, **kwargs)
             return
         talk = self.coordinator.talk
         giu = await talk.music.hold()
         try:
             self._nhanh = True
-            await self._phat_dmr(media_type, media_id, **kwargs)
+            await self._phat(media_type, media_id, **kwargs)
         except BaseException:
             self._nhanh = False
             await giu.release()
@@ -450,7 +508,38 @@ class R1Player(R1Entity, MediaPlayerEntity):
             talk.announce_done()
             await giu.release()
 
-    async def _phat_dmr(self, media_type: MediaType | str, media_id: str, **kwargs: Any) -> None:
+    #: Thứ tự thử các đường theo tuỳ chọn ``duong_phat``.
+    _THU_TU = {"dlna": ("dlna",), "dlna_truoc": ("dlna", "airplay"), "airplay_truoc": ("airplay", "dlna"), "airplay": ("airplay",)}
+    _TEN_DUONG = {"dlna": "DLNA", "airplay": "AirPlay"}
+
+    async def _phat(self, media_type: MediaType | str, media_id: str, **kwargs: Any) -> None:
+        """Giải địa chỉ rồi thử lần lượt các đường theo ``duong_phat``. Đường hỏng được DỪNG trước khi thử đường kế (loa không phát hai nơi)."""
+        url = media_id
+        if media_source.is_media_source_id(media_id):
+            url = (await media_source.async_resolve_media(self.hass, media_id, self.entity_id)).url
+        url = async_process_play_media_url(self.hass, url)
+        tieu_de = str((kwargs.get("extra") or {}).get("title") or "Home Assistant")
+        thu_tu = self._THU_TU[duong_phat(self.coordinator.config_entry)]
+        loi: list[str] = []
+        for duong in thu_tu:
+            try:
+                if duong == "dlna":
+                    await self._phat_dlna(url, media_id, tieu_de)
+                else:
+                    await self._phat_airplay(url, media_id, tieu_de)
+                return
+            except HomeAssistantError as exc:
+                if len(thu_tu) == 1:
+                    raise
+                loi.append(f"{self._TEN_DUONG[duong]}: {exc}")
+                _LOGGER.warning("%s: phát qua %s hỏng (%s)%s", self.entity_id, self._TEN_DUONG[duong], exc,
+                                "" if duong == thu_tu[-1] else " — thử đường còn lại")
+                await self._don_duong(duong)
+        raise HomeAssistantError("Cả hai đường phát đều hỏng — " + "; ".join(loi))
+
+    async def _phat_dlna(self, url: str, media_id: str, tieu_de: str) -> None:
+        await self._dung_airplay()                          # bài mới thay phiên AirPlay cũ (nếu có)
+        self._duong = "dlna"
         data = self.coordinator.data
         if data is None or not data.dlna_open:
             await self.coordinator.async_command(
@@ -459,18 +548,132 @@ class R1Player(R1Entity, MediaPlayerEntity):
             await self._dmr.async_san_sang(DLNA_READY_TIMEOUT)
         except R1DmrError as exc:
             raise HomeAssistantError(str(exc)) from exc
-        url = media_id
-        if media_source.is_media_source_id(media_id):
-            url = (await media_source.async_resolve_media(self.hass, media_id, self.entity_id)).url
-        url = async_process_play_media_url(self.hass, url)
-        tieu_de = str((kwargs.get("extra") or {}).get("title") or "Home Assistant")
         self._ly_do, self._uri, self._tieu_de = "interrupted", media_id, tieu_de
+        self._tt = replace(self._tt, loi=False)             # cờ lỗi của lần phát trước không được tính cho lần này
         try:
             await self._dmr.async_phat(url, tieu_de)
         except R1DmrError as exc:
             self._ly_do = "error"
             raise HomeAssistantError(str(exc)) from exc
         await self._cho_trang_thai({"playing", "buffering"})
+        if self._tt.state == "idle" and self._tt.loi:       # tín hiệu chắc chắn duy nhất ngoài lỗi SOAP; idle thường (chậm) KHÔNG tính
+            self._ly_do = "error"
+            raise HomeAssistantError("renderer của loa báo lỗi khi phát (ERROR_OCCURRED)")
+
+    # ── AirPlay ───────────────────────────────────────────────────────────────
+
+    async def _phat_airplay(self, url: str, media_id: str, tieu_de: str, bat_dau: float = 0.0) -> None:
+        await self._dung_airplay()
+        if self._duong == "dlna" or self._tt.state in ("playing", "buffering", "paused"):
+            await self._don_duong("dlna")                   # DLNA còn phát thì dừng trước: không để hai nơi cùng ra tiếng
+        data = self.coordinator.data
+        vua_bat = data is None or not data.airplay_open
+        if vua_bat:
+            await self.coordinator.async_command(
+                lambda: self.coordinator.client.set_airplay_open(True), airplay_open=True)
+        self._ly_do, self._uri, self._tieu_de = "interrupted", media_id, tieu_de
+        loi: LoiAirPlay | None = None
+        for lan in range(6 if vua_bat else 1):              # loa vừa bật AirPlay: cổng RAOP lên chậm, thử lại tới ~2,5 giây
+            if lan:
+                await asyncio.sleep(0.5)
+            loi = await self._mo_airplay(url, bat_dau)
+            if loi is None:
+                return
+            if not isinstance(loi, LoiKhongNoi):
+                break
+        self._ly_do = "error"
+        raise HomeAssistantError(str(loi))
+
+    async def _mo_airplay(self, url: str, bat_dau: float) -> LoiAirPlay | None:
+        """Mở một phiên và chờ gói tiếng đầu. Trả ``None`` nếu đã phát; còn lại trả lỗi (phiên đã được dọn)."""
+        entry = self.coordinator.config_entry
+        ap = PhienAirPlay(self._host, airplay_port(entry), tao_nguon(url, bat_dau),
+                          tren_doi=lambda tt: self._ap_doi(ap, tt))
+        tac = entry.async_create_background_task(self.hass, self._chay_ap(ap), f"{self.entity_id} airplay")
+        self._ap, self._ap_tac, self._ap_goc, self._ap_url = ap, tac, bat_dau, url
+        bd = asyncio.ensure_future(ap.da_bat_dau.wait())
+        try:
+            xong, _ = await asyncio.wait({tac, bd}, timeout=AIRPLAY_BAT_DAU_TOI_DA, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            bd.cancel()
+        if ap.da_bat_dau.is_set():
+            return None
+        self._ap = self._ap_tac = None
+        if tac in xong:
+            return tac.result() or LoiAirPlay("phiên AirPlay kết thúc mà chưa phát được")
+        tac.cancel()
+        await asyncio.wait({tac})
+        return LoiAirPlay(f"AirPlay chưa phát được sau {AIRPLAY_BAT_DAU_TOI_DA:.0f} giây")
+
+    async def _chay_ap(self, ap: PhienAirPlay) -> LoiAirPlay | None:
+        """Chạy phiên tới hết. Trả lỗi nếu hỏng (bên mở phiên đọc kết quả khi chưa bắt đầu phát). Bị huỷ thì KHÔNG đụng trạng thái: bên huỷ lo."""
+        loi: LoiAirPlay | None = None
+        try:
+            await ap.chay()
+        except LoiAirPlay as exc:
+            loi = exc
+        except Exception as exc:  # noqa: BLE001 — lỗi không ngờ của bộ gửi: ghi đủ vết, báo thành lỗi AirPlay
+            _LOGGER.exception("%s: bộ gửi AirPlay lỗi không ngờ", self.entity_id)
+            loi = LoiAirPlay(f"lỗi không ngờ: {type(exc).__name__}")
+        if self._ap is not ap or not ap.da_bat_dau.is_set():
+            return loi
+        self._ap = self._ap_tac = None                      # đã phát rồi mới hết/hỏng: tự kết thúc
+        if loi is not None:
+            _LOGGER.warning("%s: AirPlay dừng giữa chừng: %s", self.entity_id, loi)
+        self._ly_do = "error" if loi is not None else "finished"
+        self._ghi_idle()
+        return loi
+
+    @callback
+    def _ap_doi(self, ap: PhienAirPlay, tt: str) -> None:
+        if self._ap is not ap:
+            return
+        if tt == "phat":
+            self._ghi_ap("playing")
+        elif tt == "tam_dung":
+            self._ghi_ap("paused")
+
+    def _dung_cham(self) -> None:
+        cham, self._cham = self._cham, None
+        if cham is not None and cham is not asyncio.current_task():
+            cham.cancel()
+
+    def _ghi_ap(self, state: str) -> None:
+        ap = self._ap
+        self._duong = "airplay"
+        self._ly_do = None
+        self._uoc.reset()
+        self._tt = TrangThaiDmr(state=state, position=self._ap_goc + (ap.vi_tri if ap else 0.0), duration=None, uri=self._ap_url)
+        self._tt_utc, self._ghi_luc = dt_util.utcnow(), time.monotonic()
+        self._dung_cham()
+        self.async_write_ha_state()
+
+    def _ghi_idle(self) -> None:
+        self._duong = None
+        self._tt = TrangThaiDmr(state="idle")
+        self._tt_utc, self._ghi_luc = dt_util.utcnow(), time.monotonic()
+        self.async_write_ha_state()
+
+    async def _dung_airplay(self) -> None:
+        """Dừng phiên AirPlay đang có (nếu có) mà KHÔNG ghi trạng thái: bên gọi quyết định trạng thái kế tiếp."""
+        tac = self._ap_tac
+        self._ap = self._ap_tac = None
+        if tac is not None and not tac.done():
+            tac.cancel()
+            await asyncio.wait({tac})
+
+    async def _don_duong(self, duong: str) -> None:
+        """Dừng một đường vừa hỏng (hoặc sắp bị thay) để loa không phát hai nơi."""
+        if duong == "airplay":
+            await self._dung_airplay()
+            return
+        # ``R1Dmr`` bỏ thiết bị đã nhớ sau MỌI lỗi (``da_noi`` thành False) trong khi bài trước có thể còn đang phát: nên dừng cả khi trạng thái
+        # đã biết cho thấy loa có thể đang phát. Loa idle và chưa nối thì không có gì để dừng (khỏi tốn một lượt dò SSDP).
+        if self._dmr.da_noi or self._tt.state in ("playing", "buffering", "paused"):
+            try:
+                await self._dmr.async_dung()
+            except R1DmrError as exc:
+                _LOGGER.debug("%s: không dừng được DLNA trước khi đổi đường: %s", self.entity_id, exc)
 
     # ── nhạc qua cổng 8082 (firmware có sẵn) ────────────────────────────────────
 

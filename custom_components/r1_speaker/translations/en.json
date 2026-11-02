@@ -277,7 +277,9 @@
           "adb_mode": "How to reach the speaker over ADB: auto, server (via adb-server) or direct (straight to the speaker)",
           "adb_tu_dong_dong": "«Close ADB» mode: auto-close the speaker's network ADB once the APK is connected. PRO: blocks botnets on the LAN. CON: lose free-form lights, app install, reboot from HA, system info, Bluetooth switch; re-open by unplugging the speaker",
           "phim_ma": "Key codes for which HA runs gesture actions (comma separated; 195 = middle button; other codes only fire events)",
-          "phim_nguon": "Key source: adb (getevent over ADB, no new APK needed), apk (APK 1.3 accessibility service) or tat (off)"
+          "phim_nguon": "Key source: adb (getevent over ADB, no new APK needed), apk (APK 1.3 accessibility service) or tat (off)",
+          "duong_phat": "How music and announcements reach the speaker: dlna (default, as before) · dlna_truoc (DLNA, falls back to AirPlay) · airplay_truoc (AirPlay, falls back to DLNA) · airplay. AirPlay is sent by this integration itself and needs ffmpeg on the HA host; seek restarts playback from that position",
+          "airplay_port": "The speaker's AirPlay (RAOP) port, default 5012; change it if AirPlay cannot connect after the speaker restarted"
         }
       },
       "nang_cao": {

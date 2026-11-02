@@ -15,6 +15,7 @@ from homeassistant.config_entries import ConfigEntry
 from .agc import AgcSettings, LimiterSettings
 from .noise_suppress import NoiseSettings
 from .const import ADB_SERVER_LOCAL, CONF_ADB_MODE, CONF_ADB_SERVER, CONF_ADB_TU_DONG, CONF_PHIM_MA, CONF_PHIM_NGUON, DEFAULT_ADB_MODE, DEFAULT_ADB_SERVER, DEFAULT_PHIM_MA, DEFAULT_PHIM_NGUON
+from .const import CONF_AIRPLAY_PORT, CONF_DUONG_PHAT, DEFAULT_AIRPLAY_PORT, DEFAULT_DUONG_PHAT, DUONG_PHAT_GIA_TRI
 from .const import (CONF_WAKE_ENABLE, CONF_WAKE_SENSITIVITY, CONF_WAKE_WORD,
                     DEFAULT_WAKE_ENABLE, DEFAULT_WAKE_SENSITIVITY, DEFAULT_WAKE_WORD)
 from .const import (CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, CONF_AGC_TARGET_DB,
@@ -187,6 +188,21 @@ def phim_nguon(entry: ConfigEntry) -> str:
     """``adb`` / ``apk`` / ``tat``; giá trị lạ rơi về mặc định."""
     v = str(conf(entry, CONF_PHIM_NGUON, DEFAULT_PHIM_NGUON))
     return v if v in ("adb", "apk", "tat") else DEFAULT_PHIM_NGUON
+
+
+def duong_phat(entry: ConfigEntry) -> str:
+    """``dlna`` / ``dlna_truoc`` / ``airplay_truoc`` / ``airplay``; giá trị lạ rơi về mặc định (chỉ DLNA, như trước khi có AirPlay)."""
+    v = str(conf(entry, CONF_DUONG_PHAT, DEFAULT_DUONG_PHAT))
+    return v if v in DUONG_PHAT_GIA_TRI else DEFAULT_DUONG_PHAT
+
+
+def airplay_port(entry: ConfigEntry) -> int:
+    """Cổng RAOP của loa; số hỏng hoặc ngoài 1..65535 rơi về mặc định."""
+    try:
+        v = int(conf(entry, CONF_AIRPLAY_PORT, DEFAULT_AIRPLAY_PORT))
+    except (TypeError, ValueError):
+        return DEFAULT_AIRPLAY_PORT
+    return v if 1 <= v <= 65535 else DEFAULT_AIRPLAY_PORT
 
 
 def adb_tu_dong_dong(entry: ConfigEntry) -> bool:

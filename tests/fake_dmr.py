@@ -131,6 +131,10 @@ class FakeDMR:
         self.transport_status = "OK"
         #: True: loa từ chối đích tua có phần thập phân (SOAP lỗi 711), chỉ nhận nguyên giây
         self.tu_choi_thap_phan = False
+        #: tên hành động mà loa từ chối bằng lỗi SOAP 501 (mô phỏng loa hỏng thật sự); hành động vẫn được ghi vào ``actions``
+        self.tu_choi: set[str] = set()
+        #: True: nhận ``Play`` nhưng KHÔNG đổi trạng thái (loa chậm nạp luồng: idle mà không báo lỗi)
+        self.play_cham = False
         self.uri = ""
         self.port = 0
         self._runner = None
@@ -170,10 +174,17 @@ class FakeDMR:
                     "<faultcode>s:Client</faultcode><faultstring>UPnPError</faultstring><detail>"
                     '<UPnPError xmlns="urn:schemas-upnp-org:control-1-0"><errorCode>711</errorCode>'
                     "<errorDescription>Illegal seek target</errorDescription></UPnPError></detail></s:Fault></s:Body></s:Envelope>"))
+            if action in self.tu_choi:
+                return web.Response(status=500, content_type="text/xml", text=(
+                    '<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><s:Fault>'
+                    "<faultcode>s:Client</faultcode><faultstring>UPnPError</faultstring><detail>"
+                    '<UPnPError xmlns="urn:schemas-upnp-org:control-1-0"><errorCode>501</errorCode>'
+                    "<errorDescription>Action Failed</errorDescription></UPnPError></detail></s:Fault></s:Body></s:Envelope>"))
             if action == "SetAVTransportURI":
                 self.uri = args.get("CurrentURI", "")
             elif action == "Play":
-                self.transport_state = "PLAYING"
+                if not self.play_cham:
+                    self.transport_state = "PLAYING"
             elif action == "Pause":
                 self.transport_state = "PAUSED_PLAYBACK"
             elif action == "Stop":

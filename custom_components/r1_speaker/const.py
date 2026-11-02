@@ -200,6 +200,17 @@ CONF_PHIM_MA = "phim_ma"
 CONF_PHIM_NGUON = "phim_nguon"
 DEFAULT_PHIM_NGUON = "adb"
 DEFAULT_PHIM_MA = "195"
+#: Đường phát nhạc/tin của ``media_player.r1_loa``: ``dlna`` (mặc định, hành vi cũ), ``dlna_truoc`` (DLNA, hỏng thì AirPlay), ``airplay_truoc``
+#: (AirPlay, hỏng thì DLNA) hoặc ``airplay``. AirPlay là bộ gửi RAOP riêng của tích hợp (``airplay.py``), giải mã bằng ffmpeg của máy chạy HA.
+CONF_DUONG_PHAT = "duong_phat"
+DEFAULT_DUONG_PHAT = "dlna"
+DUONG_PHAT_GIA_TRI = ("dlna", "dlna_truoc", "airplay_truoc", "airplay")
+#: Cổng RAOP (AirPlay 1) của loa. Đo 28/10/2026 ở một lần khởi động: 5012. Cổng DLNA của loa đổi theo từng lần khởi động nên cổng này cũng có thể
+#: đổi; nếu AirPlay không nối được thì đổi ở Tuỳ chọn.
+CONF_AIRPLAY_PORT = "airplay_port"
+DEFAULT_AIRPLAY_PORT = 5012
+#: AirPlay: từ lúc gửi lệnh tới lúc có gói tiếng đầu tiên, tối đa ngần này giây (bắt tay RTSP + ffmpeg mở nguồn). Quá hạn = coi là không bắt đầu được.
+AIRPLAY_BAT_DAU_TOI_DA = 10.0
 #: Trống = không dùng adb-server, nối thẳng tới IP của loa (cổng 5555). Chỉ điền khi thật sự có adb-server (chế độ server/auto).
 DEFAULT_ADB_SERVER = ""
 #: Địa chỉ dùng khi người dùng CHỌN chế độ «server» mà để trống ô địa chỉ.
