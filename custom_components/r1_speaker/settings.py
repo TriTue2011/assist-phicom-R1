@@ -16,6 +16,7 @@ from .agc import AgcSettings, LimiterSettings
 from .noise_suppress import NoiseSettings
 from .const import ADB_SERVER_LOCAL, CONF_ADB_MODE, CONF_ADB_SERVER, CONF_ADB_TU_DONG, CONF_PHIM_MA, CONF_PHIM_NGUON, DEFAULT_ADB_MODE, DEFAULT_ADB_SERVER, DEFAULT_PHIM_MA, DEFAULT_PHIM_NGUON
 from .const import CONF_AIRPLAY_PORT, CONF_DUONG_PHAT, DEFAULT_AIRPLAY_PORT, DEFAULT_DUONG_PHAT, DUONG_PHAT_GIA_TRI
+from .const import CONF_TTS_SONG_SONG, DEFAULT_TTS_SONG_SONG, CONF_HA_NHAC_XUONG, DEFAULT_HA_NHAC_XUONG, CONF_HA_NHAC_NAC, DEFAULT_HA_NHAC_NAC
 from .const import (CONF_WAKE_ENABLE, CONF_WAKE_SENSITIVITY, CONF_WAKE_WORD,
                     DEFAULT_WAKE_ENABLE, DEFAULT_WAKE_SENSITIVITY, DEFAULT_WAKE_WORD)
 from .const import (CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, CONF_AGC_TARGET_DB,
@@ -194,6 +195,28 @@ def duong_phat(entry: ConfigEntry) -> str:
     """``dlna`` / ``dlna_truoc`` / ``airplay_truoc`` / ``airplay``; giá trị lạ rơi về mặc định (chỉ DLNA, như trước khi có AirPlay)."""
     v = str(conf(entry, CONF_DUONG_PHAT, DEFAULT_DUONG_PHAT))
     return v if v in DUONG_PHAT_GIA_TRI else DEFAULT_DUONG_PHAT
+
+
+def tts_song_song_airplay(entry: ConfigEntry) -> bool:
+    """NV287: tin báo đi AirPlay song song trong khi nhạc ở DLNA. Mặc định TẮT
+    (chưa đo trên loa thật xem loa có trộn được hai luồng hay không)."""
+    return conf(entry, CONF_TTS_SONG_SONG, DEFAULT_TTS_SONG_SONG) is True
+
+
+def ha_nhac_xuong(entry: ConfigEntry) -> bool:
+    """NV287: hạ nhạc nền trong lúc tin song song phát. Mặc định TẮT; chỉ có
+    tác dụng khi ``tts_song_song_airplay`` bật (tin đi đường thường thì nhạc đã
+    tạm dừng, hạ âm lượng không còn ý nghĩa)."""
+    return conf(entry, CONF_HA_NHAC_XUONG, DEFAULT_HA_NHAC_XUONG) is True
+
+
+def ha_nhac_nac(entry: ConfigEntry) -> int:
+    """NV287: số nấc hạ khi ducking (thang 0–15 của loa). Giá trị lạ rơi về mặc định."""
+    try:
+        v = int(conf(entry, CONF_HA_NHAC_NAC, DEFAULT_HA_NHAC_NAC))
+    except (TypeError, ValueError):
+        return DEFAULT_HA_NHAC_NAC
+    return v if 1 <= v <= 14 else DEFAULT_HA_NHAC_NAC
 
 
 def airplay_port(entry: ConfigEntry) -> int:

@@ -7,6 +7,7 @@ import time
 import types
 from unittest import mock
 
+import aiohttp
 import pytest
 from homeassistant.components.assist_pipeline import PipelineEvent, PipelineEventType, PipelineStage
 from homeassistant.data_entry_flow import FlowResultType
@@ -281,6 +282,164 @@ async def test_nhac_phat_lai_khong_lam_vet_tinh_treo_mic(hass, r1, pcm_server, p
     await asyncio.wait_for(task, 3)
     assert time.monotonic() - t0 < 3 and not sat._dang_noi
     await _cho(lambda: _state(hass, LOA) == "playing", hass)
+
+
+# ── NV286: mọi đường kết thúc một lượt phải trả vệ tinh về idle và đóng phiên đúng ──────────────
+#
+# HA đặt ``responding`` ở TTS_START và chỉ ``tts_response_finished()`` mới đưa về idle. Các ca dưới
+# phát sự kiện qua ``_internal_on_pipeline_event`` (đường của HA thật, tự đặt trạng thái) từ một
+# pipeline giả chạy trong chính vòng ``_chay`` của vệ tinh.
+
+_HOI = "homeassistant.components.assist_satellite.entity.AssistSatelliteEntity.async_accept_pipeline_from_satellite"
+_TOKEN = "media-source://tts/-stream/tok-nv286"
+
+
+def _su_kien(sat, loai, du_lieu=None):
+    sat._internal_on_pipeline_event(PipelineEvent(loai, du_lieu or {}))
+
+
+def _kich_ban(pipeline, *luot):
+    """Thay pipeline: lượt thứ i kể từ lúc gắn chạy ``luot[i](sat)``; hết kịch bản thì như ``FakePipeline``
+    (đứng chờ tiếng mic). Mỗi lượt kịch bản cũng ghi bước bắt đầu vào ``pipeline.turns``."""
+    con_lai = list(luot)
+
+    async def thay(self, audio_stream, start_stage=PipelineStage.STT, **kw):
+        if not con_lai:
+            return await pipeline(self, audio_stream=audio_stream, start_stage=start_stage)
+        pipeline.turns.append(start_stage)
+        await con_lai.pop(0)(self)
+
+    return mock.patch(_HOI, new=thay)
+
+
+@pytest.fixture
+def nv286_nhanh():
+    with mock.patch.object(sat_mod, "LOI_NGHI_DAU", 0.05), mock.patch.object(sat_mod, "LOI_NGHI_TOI_DA", 0.1):
+        yield
+
+
+def _luot_tts_loi(tiep, trang_thai):
+    async def luot(s):
+        _su_kien(s, PipelineEventType.STT_START)
+        _su_kien(s, PipelineEventType.INTENT_END, {"intent_output": {"continue_conversation": tiep}})
+        _su_kien(s, PipelineEventType.TTS_START)
+        trang_thai.append(s.state)               # HA phải đã đặt responding
+        _su_kien(s, PipelineEventType.ERROR, {"code": "tts-stream-failed"})
+        _su_kien(s, PipelineEventType.RUN_END)   # KHÔNG có TTS_END
+    return luot
+
+
+@pytest.mark.parametrize("tiep", [False, True], ids=["khong_noi_tiep", "doi_noi_tiep"])
+async def test_tts_loi_giua_chung_ve_idle_va_dong_phien(hass, r1, pcm_server, pipeline, nv286_nhanh, tiep):
+    """TTS_START → ERROR → RUN_END: vệ tinh về idle, phiên đóng, KHÔNG nối tiếp dù bước hiểu lệnh đòi
+    ``continue_conversation`` (người dùng không nghe được câu trả lời nên không có gì để đáp lại)."""
+    e = await _san_sang(hass, r1, pcm_server, pipeline)
+    sat = _vet_tinh(hass)
+    trang_thai: list = []
+    n0 = len(pipeline.turns)
+    with _kich_ban(pipeline, _luot_tts_loi(tiep, trang_thai)), \
+            mock.patch.object(type(e.runtime_data.lights), "bao_loi"):
+        await _talk(e).async_start("button")
+        await _cho(lambda: trang_thai, hass)
+        await _cho(lambda: _talk(e).session is None, hass)
+        await _cho(lambda: sat.state == "idle", hass)
+    assert trang_thai == ["responding"]
+    assert _state(hass, SAT) == "idle"
+    assert pipeline.turns[n0:] == [PipelineStage.STT], "không được mở thêm lượt nghe thẳng"
+
+
+async def test_phat_loi_la_ve_idle_dong_phien_va_ghi_log(hass, r1, pcm_server, pipeline, nhac, nv286_nhanh, caplog):
+    """Nguồn stream ném lỗi NGOÀI HomeAssistantError/OSError/TimeoutError (vd aiohttp.ClientError) trong ``_phat``:
+    không bay ra tác vụ nền, vẫn ghi log (kèm traceback), về idle, và không nối tiếp một loa đã im."""
+    e = await _san_sang(hass, r1, pcm_server, pipeline)
+    await nhac()
+    sat = _vet_tinh(hass)
+
+    async def luot(s):
+        _su_kien(s, PipelineEventType.INTENT_END, {"intent_output": {"continue_conversation": True}})
+        _su_kien(s, PipelineEventType.TTS_START)
+        _su_kien(s, PipelineEventType.TTS_END, {"tts_output": {"token": "tok"}})
+        _su_kien(s, PipelineEventType.RUN_END)
+
+    luong = mock.Mock(media_source_id=_TOKEN)
+    with _kich_ban(pipeline, luot), \
+            mock.patch.object(sat_mod.tts, "async_get_stream", return_value=luong), \
+            mock.patch.object(mp_mod.R1Player, "async_play_media",
+                              side_effect=aiohttp.ClientError("stream đứt")):
+        await _talk(e).async_start("button")
+        await _cho(lambda: _talk(e).session is None, hass)
+        await _cho(lambda: sat.state == "idle", hass)
+    ban_ghi = [r for r in caplog.records if "cannot play reply" in r.getMessage()]
+    assert ban_ghi and ban_ghi[0].exc_info, "lỗi lạ phải được ghi log kèm traceback, không nuốt"
+    assert not sat._dang_noi
+
+
+async def test_pipeline_nem_ngoai_le_sau_tts_start_ve_idle_va_dong_phien(
+        hass, r1, pcm_server, pipeline, nhac, nv286_nhanh):
+    """Pipeline ném ngoại lệ sau TTS_START (không có RUN_END): chốt chặn ở cuối lượt vẫn trả về idle."""
+    e = await _san_sang(hass, r1, pcm_server, pipeline)
+    await nhac()
+    sat = _vet_tinh(hass)
+
+    async def luot(s):
+        _su_kien(s, PipelineEventType.INTENT_END, {"intent_output": {"continue_conversation": True}})
+        _su_kien(s, PipelineEventType.TTS_START)
+        raise RuntimeError("pipeline hỏng giữa chừng")
+
+    with _kich_ban(pipeline, luot):
+        await _talk(e).async_start("button")
+        await _cho(lambda: _talk(e).session is None, hass)
+        await _cho(lambda: sat.state == "idle", hass)
+
+
+async def test_tts_phat_tot_van_noi_tiep_va_khong_ve_idle_som(hass, r1, pcm_server, pipeline, nhac, nv286_nhanh):
+    """Hội thoại nối tiếp bình thường không bị hỏng: RUN_END đến lúc tiếng còn đang phát thì vẫn
+    ``responding`` (không về idle sớm); phát xong mới idle, phiên còn mở và lượt kế nghe thẳng."""
+    e = await _san_sang(hass, r1, pcm_server, pipeline)
+    dmr = await nhac()
+    dmr.start_music(MUSIC)
+    sat = _vet_tinh(hass)
+
+    async def luot(s):
+        _su_kien(s, PipelineEventType.INTENT_END, {"intent_output": {"continue_conversation": True}})
+        _su_kien(s, PipelineEventType.TTS_START)
+        _su_kien(s, PipelineEventType.TTS_END, {"tts_output": {"token": "tok"}})
+        _su_kien(s, PipelineEventType.RUN_END)
+
+    luong = mock.Mock(media_source_id=_TOKEN)
+    n0 = len(pipeline.turns)
+    with _kich_ban(pipeline, luot), mock.patch.object(sat_mod.tts, "async_get_stream", return_value=luong):
+        await _talk(e).async_start("button")
+        await _cho(lambda: _TOKEN in dmr.urls(), hass)
+        await asyncio.sleep(0.2)                                # để bên theo dõi thấy «đang phát»
+        assert sat.state == "responding" and sat._dang_noi, "RUN_END không được kéo về idle khi tiếng còn phát"
+        dmr.finish()
+        await _cho(lambda: sat.state == "idle", hass)
+        await _cho(lambda: pipeline.turns[n0:].count(PipelineStage.STT) == 2, hass)
+    assert _talk(e).session is not None, "TTS phát tốt + continue_conversation → phiên phải nối tiếp"
+    sat._cat_luot()
+    await _cho(lambda: _talk(e).session is None, hass)
+
+
+async def test_nhieu_luot_noi_tiep_im_lang_bi_cat(hass, r1, pcm_server, pipeline, nhac, nv286_nhanh):
+    """Bước hiểu lệnh đòi nối tiếp mà không có TTS nào: chỉ được ``CONTINUE_WITHOUT_TTS_MAX`` lượt liền,
+    quá thì đóng phiên (trước đây nối tiếp mãi tới hạn phiên, loa chờ nghe trong im lặng)."""
+    e = await _san_sang(hass, r1, pcm_server, pipeline)
+    await nhac()
+    sat = _vet_tinh(hass)
+
+    async def luot(s):
+        _su_kien(s, PipelineEventType.INTENT_END, {"intent_output": {"continue_conversation": True}})
+        _su_kien(s, PipelineEventType.RUN_END)
+
+    n0 = len(pipeline.turns)
+    with mock.patch.object(const, "CONTINUE_WITHOUT_TTS_MAX", 1, create=True), \
+            _kich_ban(pipeline, luot, luot, luot):
+        await _talk(e).async_start("button")
+        await _cho(lambda: _talk(e).session is None, hass)
+        await _cho(lambda: pipeline.turns[n0:][-1] is PipelineStage.WAKE_WORD, hass)
+    assert pipeline.turns[n0:][:-1] == [PipelineStage.STT] * 2     # 1 lượt im lặng được phép + lượt thứ hai bị cắt
+    assert sat.state == "idle"
 
 
 # ── Trạng thái mic trên thực thể ──────────────────────────────────────────────────

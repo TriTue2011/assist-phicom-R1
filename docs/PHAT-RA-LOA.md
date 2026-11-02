@@ -74,6 +74,87 @@ Loa đệm khoảng 2 giây (`Audio-Latency`) nên tiếng ra chậm hơn DLNA c
 **Không làm** (nói thẳng để khỏi hiểu nhầm): đây là AirPlay từng loa một, **không có đồng bộ nhiều loa** kiểu Music Assistant/`cliairplay`; hai loa AirPlay chạy cùng lúc sẽ
 lệch nhau vài trăm mili giây hoặc hơn. Nghe đồng bộ nhiều loa vẫn là việc chưa làm.
 
+## Tin báo không làm nhạc nhảy bài + hạ nhạc nền khi loa nói (NV287)
+
+### Vì sao nhạc nhảy bài sau TTS (đo trên mã, không đoán)
+
+Tin báo đi qua `media_player.play_media` với `announce`: `MusicKeeper` tạm dừng nhạc, tin **thay URI của renderer DLNA**, xong tin thì
+khôi phục bằng cách đặt lại URI nhạc cũ + tua về vị trí đã chụp. Nhảy bài xảy ra ở hai chỗ nối nhau:
+
+1. Khi tin kết thúc, renderer về idle. Mã cũ xóa `idle_reason` mỗi lần hỏi lại thấy renderer đang phát, nên lúc tin hết nó lại thành
+   `finished` («hết bài»). Bộ điều khiển danh sách phát của chủ máy (`tritue_youtube_player`, ngoài repo này — trong repo chỉ có nút bấm
+   `media_next_track` ở `phim.py`) đọc `idle_reason`: `finished` → sang bài kế. Đã chạy lại bằng chính mã của nó (`advance.py` + `ly_do_idle.py`
+   0.28.6) với chuỗi trạng thái nhạc → tạm dừng → tin phát → idle: `finished` cho **sang bài kế**.
+2. Lúc khôi phục, nếu bộ điều khiển đã kịp bật bài kế thì renderer đang `playing` bài khác, và `MusicKeeper._restore` thấy «đã có gì đó phát»
+   thì không đụng tới nữa — nhạc ở lại bài kế, đúng triệu chứng.
+
+**Vì sao không khai `interrupted`:** cùng bộ điều khiển coi `interrupted` là «bị bài khác đè» và **gỡ loa khỏi phiên** (chạy lại: gỡ loa, không
+sang bài kế), tức nhạc phát lại được nhưng hết bài thì dừng hẳn. Nên trong lúc loa đang giữ nhạc, idle được khai là **`dang_giu`**: với bộ
+điều khiển chưa biết giá trị này nó rơi về đường đoán bằng thời lượng bài với vị trí đã đóng băng lúc tạm dừng (không nhảy bài, không gỡ loa — chỉ
+sai với bài không biết thời lượng); bản vá `NV287-VA-PLAYER.diff` cho bộ điều khiển hiểu hẳn `dang_giu` = «bỏ qua, chờ loa khôi phục».
+
+### Cách sửa (mặc định: chỉ phần C; A + B mặc định TẮT)
+
+| Phương án | Làm gì | Trạng thái |
+|---|---|---|
+| C — sửa «hết bài» giả (luôn bật) | Trong lúc có lượt giữ nhạc đang mở, renderer về idle được khai `idle_reason=dang_giu` (Stop của người dùng vẫn là `stopped`), kể cả đường DLNA lẫn đường AirPlay (trước đây AirPlay hết phiên là `finished` dù đó chỉ là tin). Hết giữ nhạc, nhạc phát lại thì `idle_reason` biến mất như cũ. | Đã làm, có test với renderer giả; hành vi của bộ điều khiển đã kiểm bằng mã thật của nó. |
+| A — tin đi AirPlay song song (`tts_song_song_airplay`, mặc định tắt) | Tin mở một phiên RAOP **riêng**, không dừng DLNA, không đổi `_duong`/`_uri`/`idle_reason`/trạng thái của thực thể. Nhạc DLNA vẫn là «bài đang phát» suốt lúc tin nói nên không cần khôi phục, không có cửa cho «hết bài» giả. Chỉ dùng khi nhạc đang ở DLNA; nhạc ở AirPlay hoặc không có nhạc thì về đường thường. Tin song song mở không được thì về đường thường (nhả lượt giữ duck rồi giữ lại kiểu tạm dừng). | Đã làm, có test với RAOP giả + DLNA giả. **Chưa đo trên loa thật.** |
+| B — hạ nhạc nền (`ha_nhac_xuong`, mặc định tắt, `ha_nhac_nac` mặc định 5 nấc) | Chỉ có tác dụng khi A bật: trong lúc tin song song phát, nhạc DLNA nhỏ đi N nấc (thang 0–15 của loa, qua đúng đường `volume_set` → APK `setStreamVolume`), rồi trả **đúng mức cũ** khi bên cuối cùng nhả — kể cả khi tin lỗi hoặc bị huỷ (nhả chạy trong `finally`). Không đọc được mức cũ (APK mic chưa nối) thì về tạm dừng như cũ, không hạ mù. Giữa lúc hạ nhạc mà phiên đàm thoại mở mic thì nhạc được tạm dừng nốt (nhỏ vẫn lọt vào mic). | Đã làm, có test cả đường âm lượng thật (`volume_set` → `mic_server`). **Chưa đo trên loa thật.** |
+
+**Chưa đo, phải đo trước khi bật A/B trên loa thật** (đây là hai điều mã không tự trả lời được): (1) Android trên loa có trộn được DLNA + RAOP
+cùng lúc hay không — nếu firmware chỉ cho một nguồn ra tiếng thì tin song song sẽ im hoặc cướp tiếng nhạc, phải tắt cờ; (2) RAOP có dùng luồng
+âm lượng riêng với `STREAM_MUSIC` hay không — nếu RAOP cũng đi `STREAM_MUSIC` thì hạ nhạc cũng hạ luôn tin, ducking vô nghĩa, phải tắt
+`ha_nhac_xuong` (giữ A nếu trộn được).
+
+### Kịch bản đo cho chủ máy (tối đa 5 bước)
+
+1. Phát nhạc qua DLNA lên `media_player.r1_loa`, ghi lại bài + vị trí.
+2. Ở Tuỳ chọn tích hợp, bật `tts_song_song_airplay` và `ha_nhac_xuong` (để `ha_nhac_nac` = 5). Cần APK mic đã nối (thực thể `number` âm lượng có giá trị): chưa nối thì nhạc bị **tạm dừng** thay vì nhỏ đi (log: «ducking: không đọc được mức âm lượng cũ»).
+3. Gọi tin báo (Thử dịch vụ: `tts.speak` tới `media_player.r1_loa`, hoặc `assist_satellite.announce`): nghe xem nhạc có nhỏ đi không, tin có đủ to không.
+4. Hết tin, kiểm tra `media_content_id` vẫn là bài nhạc cũ, vị trí chạy tiếp (không quay về đầu, không sang bài kế) và âm lượng về đúng mức ở bước 1.
+5. Kết luận: tin im hoặc nhạc dừng hẳn → tắt `tts_song_song_airplay`; tin cũng nhỏ đi theo nhạc → tắt `ha_nhac_xuong` (giữ A); cả hai đều đúng → giữ nguyên.
+
+### Ví dụ: báo thức buổi sáng 30 phút (tự động hoá, không thêm mã tích hợp)
+
+`bao_thuc.py` hiện có **không** làm được đúng kịch bản này: báo thức kiểu `tts` của nó lặp lại **một lời nhắn cố định** mỗi `lap_s` giây cho tới
+khi bị tắt/hết `toi_da_s`, còn `hen_gio_tat_nhac` thì nhỏ dần rồi **dừng** nhạc — không có «nhạc 30 phút, mỗi 10 phút đọc thời gian còn lại rồi
+nhạc phát tiếp». Kịch bản này làm bằng tự động hoá HA (nhạc phát tiếp được là nhờ NV287; ở chế độ mặc định thì mỗi tin tạm dừng + khôi phục,
+ở chế độ song song thì nhạc không dừng):
+
+```yaml
+alias: Báo thức buổi sáng 30 phút
+triggers:
+  - trigger: time
+    at: "07:00:00"
+actions:
+  - action: media_player.play_media
+    target:
+      entity_id: media_player.r1_loa
+    data:
+      media_content_id: "https://nhac.example/playlist-sang.mp3"
+      media_content_type: music
+  - delay: "00:10:00"
+  - action: tts.speak
+    target:
+      entity_id: tts.MAY_TTS_CUA_BAN  # đổi thành thực thể TTS thật của người dùng
+    data:
+      media_player_entity_id: media_player.r1_loa
+      message: "Còn 20 phút nữa là hết giờ báo thức, nhạc vẫn đang phát."
+  - delay: "00:10:00"
+  - action: tts.speak
+    target:
+      entity_id: tts.MAY_TTS_CUA_BAN
+    data:
+      media_player_entity_id: media_player.r1_loa
+      message: "Còn 10 phút nữa là hết giờ báo thức."
+  - delay: "00:10:00"
+  - action: media_player.media_stop
+    target:
+      entity_id: media_player.r1_loa
+```
+
+**Chưa thử trên loa**: mọi kịch bản trên chỉ chạy với renderer DLNA giả + RAOP giả; nghiệm thu trên loa thật là việc của chủ máy.
+
 **Đã kiểm:** mã gửi chạy với loa RAOP giả viết độc lập theo đặc tả (bắt tay, đóng gói RTP big-endian, đồng bộ, timing, gửi lại gói, tạm dừng, âm lượng, huỷ) và với renderer DLNA giả
 (các kịch bản bù trừ hai chiều, chậm không bị coi là hỏng, đổi đường giữa chừng, báo tin, tua). **Chưa kiểm trên loa thật**: chưa nghe được tiếng, chưa đo độ trễ, chưa thử xem
 loa có chấp nhận đúng gói đồng bộ/timing này không, chưa thử ffmpeg thật (máy dựng không có ffmpeg).

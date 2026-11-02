@@ -30,12 +30,13 @@ from homeassistant.components.assist_satellite import (
     AssistSatelliteEntity,
     AssistSatelliteEntityFeature,
 )
+from homeassistant.components.assist_satellite.entity import AssistSatelliteState
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er, issue_registry as ir
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import den
+from . import const, den
 from .const import DOMAIN, MIC_QUEUE_CHUNKS
 from .coordinator import R1ConfigEntry
 from .entity import R1MicEntity, preregister
@@ -87,6 +88,9 @@ class R1Satellite(R1MicEntity, AssistSatelliteEntity):
         self._dang_noi = False       # đang phát ra loa: bỏ tiếng mic
         self._tts_xong = asyncio.Event()
         self._co_tts = False
+        self._co_tts_start = False           # đã nhận sự kiện TTS_START trong lượt
+        self._tts_thanh_cong = False         # TTS đã phát ra loa thành công
+        self._im_lien_tiep = 0               # số lượt nối tiếp liên tiếp không có tiếng trả lời
         self._tiep = False           # lượt sau nghe thẳng, không cần từ gọi
         self._vong: asyncio.Task | None = None
         self._cut = 0                        # đếm số lần cắt lượt (xem _cat_luot)
@@ -109,6 +113,23 @@ class R1Satellite(R1MicEntity, AssistSatelliteEntity):
         self._tiep = True
         self._cat_luot()
         self._co_phien.set()
+
+    @callback
+    def _dam_bao_idle(self) -> None:
+        """Trả vệ tinh về IDLE nếu HA còn để ``responding`` mà KHÔNG có tiếng nào đang/sắp phát.
+
+        HA đặt ``responding`` ngay ở TTS_START và chỉ ``tts_response_finished()`` mới đưa về idle
+        (RUN_END không làm, nếu đã có TTS_START). Đường thường: ``_phat`` (khởi chạy ở TTS_END) gọi
+        nó khi phát xong. Lượt không có TTS_END (TTS lỗi giữa chừng, pipeline ném ngoại lệ…) thì
+        không ai gọi, thực thể kẹt ``responding`` mãi. Hàm này là chốt chặn chung, gọi ở RUN_END và
+        ở cuối mỗi lượt của ``_chay``; không làm gì khi còn tiếng đang phát (kể cả lời thông báo
+        của chính HA, vì khi đó HA tự về idle) để khỏi về idle sớm.
+        """
+        if self.state != AssistSatelliteState.RESPONDING:
+            return
+        if self._dang_noi or (self._co_tts and not self._tts_xong.is_set()):
+            return
+        self.tts_response_finished()
 
     @callback
     def cut_turn(self) -> None:
@@ -215,37 +236,73 @@ class R1Satellite(R1MicEntity, AssistSatelliteEntity):
                 self._xoa_bao_thieu()
             self._tiep = False
             self._co_tts = False
+            self._co_tts_start = False
+            self._tts_thanh_cong = False
             self._loi_luot = None
             self._tts_xong.clear()
             self._phien_luot = self.talk.session
             self._cut_luot = self._cut
             bat_dau_luot = asyncio.get_running_loop().time()
+            nghi = 0.0    # nghỉ SAU khi đã trả vệ tinh về idle (không ngủ khi thực thể còn kẹt ``responding``)
             try:
-                await self.async_accept_pipeline_from_satellite(
-                    audio_stream=self._luong_stt(), start_stage=bat_dau)
-            except asyncio.CancelledError:
-                raise
-            except Exception:  # noqa: BLE001 — một lượt hỏng không được làm điếc vệ tinh
-                _LOGGER.exception("%s: pipeline failed", self.entity_id)
-                self.talk.end(self._phien_luot, "loi_pipeline", cut=False)
-                await asyncio.sleep(2)
-                continue
-            if self._loi_luot is not None and not self._co_tts:
-                # Lượt kết thúc bằng lỗi thật (HA báo bằng sự kiện, không ném ngoại lệ): nghỉ tăng dần rồi
-                # mới thử lại, kẻo quay vòng liên tục (xem LOI_NGHI_DAU).
-                self._loi_lien_tiep += 1
-                self._bao_loi_lien_tiep(self._loi_luot)
-                self.talk.end(self._phien_luot, "loi_pipeline", cut=False)
-                self._phien_luot = None
-                await asyncio.sleep(min(LOI_NGHI_TOI_DA, LOI_NGHI_DAU * 2 ** min(self._loi_lien_tiep - 1, 10)))
-                continue
-            self._loi_lien_tiep = 0
-            if self._co_tts:
-                await self._tts_xong.wait()
-            self.talk.turn_finished(self._phien_luot, self._tiep)
+                try:
+                    await self.async_accept_pipeline_from_satellite(
+                        audio_stream=self._luong_stt(), start_stage=bat_dau)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:  # noqa: BLE001 — một lượt hỏng không được làm điếc vệ tinh
+                    _LOGGER.exception("%s: pipeline failed", self.entity_id)
+                    self.talk.end(self._phien_luot, "loi_pipeline", cut=False)
+                    self._phien_luot = None
+                    self._tiep = False
+                    nghi = 2.0
+                else:
+                    nghi = await self._ket_luot(bat_dau_luot)
+            finally:
+                # Mọi đường ra khỏi lượt (xong, lỗi, ngoại lệ, huỷ) đều qua đây: không để ``responding`` kẹt.
+                self._dam_bao_idle()
+            if nghi:
+                await asyncio.sleep(nghi)
+
+    async def _ket_luot(self, bat_dau_luot: float) -> float:
+        """Việc sau một lượt pipeline đã trả về. Trả về số giây cần nghỉ trước lượt kế."""
+        if self._co_tts:
+            await self._tts_xong.wait()
+        if self._loi_luot is not None and not self._co_tts:
+            # Lượt kết thúc bằng lỗi thật (HA báo bằng sự kiện, không ném ngoại lệ): nghỉ tăng dần rồi
+            # mới thử lại, kẻo quay vòng liên tục (xem LOI_NGHI_DAU).
+            self._loi_lien_tiep += 1
+            self._bao_loi_lien_tiep(self._loi_luot)
+            self.talk.end(self._phien_luot, "loi_pipeline", cut=False)
             self._phien_luot = None
-            if self._cut == self._cut_luot and asyncio.get_running_loop().time() - bat_dau_luot < LUOT_TOI_THIEU:
-                await asyncio.sleep(LUOT_NGHI_SAU)    # kết thúc tức thì mà KHÔNG do ta cắt: nhường vòng lặp sự kiện
+            return min(LOI_NGHI_TOI_DA, LOI_NGHI_DAU * 2 ** min(self._loi_lien_tiep - 1, 10))
+        self._loi_lien_tiep = 0
+        self._khong_noi_tiep_khi_im_lang()
+        self.talk.turn_finished(self._phien_luot, self._tiep)
+        self._phien_luot = None
+        if self._cut == self._cut_luot and asyncio.get_running_loop().time() - bat_dau_luot < LUOT_TOI_THIEU:
+            return LUOT_NGHI_SAU    # kết thúc tức thì mà KHÔNG do ta cắt: nhường vòng lặp sự kiện
+        return 0.0
+
+    def _khong_noi_tiep_khi_im_lang(self) -> None:
+        """Bước hiểu lệnh đòi nối tiếp (``continue_conversation``) mà câu trả lời KHÔNG được nói ra thì
+        bỏ nối tiếp: ``turn_finished(…, False)`` sẽ đóng phiên, khỏi để loa mở mic chờ người dùng
+        trả lời một loa im lặng. TTS đã bắt đầu mà không phát được → bỏ ngay; không có TTS nào
+        → cho tối đa ``CONTINUE_WITHOUT_TTS_MAX`` lượt liên tiếp. Lượt do ta cắt (``begin_session`` đặt
+        ``_tiep`` để lượt kế nghe thẳng) thì không động tới."""
+        if not self._tiep or self._cut != self._cut_luot:
+            if not self._tiep:
+                self._im_lien_tiep = 0
+            return
+        if self._tts_thanh_cong:
+            self._im_lien_tiep = 0
+        elif self._co_tts_start or self._im_lien_tiep >= const.CONTINUE_WITHOUT_TTS_MAX:
+            _LOGGER.debug("%s: nối tiếp mà không có tiếng trả lời (TTS_START=%s) — đóng phiên",
+                          self.entity_id, self._co_tts_start)
+            self._tiep = False
+            self._im_lien_tiep = 0
+        else:
+            self._im_lien_tiep += 1
 
     def _thieu_tu_danh_thuc(self) -> str | None:
         """Mã lỗi nếu pipeline đang dùng KHÔNG có engine từ đánh thức dùng được (cùng điều kiện mà
@@ -316,6 +373,8 @@ class R1Satellite(R1MicEntity, AssistSatelliteEntity):
         elif event.type is PipelineEventType.INTENT_END:
             ra = (event.data or {}).get("intent_output") or {}
             self._tiep = bool(ra.get("continue_conversation"))
+        elif event.type is PipelineEventType.TTS_START:
+            self._co_tts_start = True
         elif event.type is PipelineEventType.TTS_END:
             ra = (event.data or {}).get("tts_output") or {}
             luong = tts.async_get_stream(self.hass, ra["token"]) if ra.get("token") else None
@@ -326,6 +385,8 @@ class R1Satellite(R1MicEntity, AssistSatelliteEntity):
             self._entry.async_create_background_task(
                 self.hass, self._phat(luong.media_source_id, tts_pipeline=True),
                 f"{self.entity_id} tts")
+        elif event.type is PipelineEventType.RUN_END:
+            self._dam_bao_idle()
         elif event.type is PipelineEventType.ERROR:
             _LOGGER.debug("%s: pipeline error %s", self.entity_id, event.data)
             # Đèn «lỗi» (den.py), trừ khi lượt do CHÍNH ta cắt (bấm kết thúc, hết phiên…) hoặc lỗi
@@ -355,8 +416,12 @@ class R1Satellite(R1MicEntity, AssistSatelliteEntity):
                 {"entity_id": loa, "media_content_type": "music",
                  "media_content_id": media_id, "announce": True}, blocking=True)
             await self._cho_phat_xong(seq0)
-        except (HomeAssistantError, OSError, TimeoutError) as exc:
-            _LOGGER.warning("%s: cannot play reply: %s", self.entity_id, exc)
+            if tts_pipeline:
+                self._tts_thanh_cong = True
+        except Exception as exc:  # noqa: BLE001 — nguồn stream có thể ném lỗi ngoài ba loại dưới (aiohttp.ClientError, ValueError…)
+            # Lỗi quen thì một dòng; lỗi lạ kèm traceback để còn truy được. Không bao giờ nuốt im lặng.
+            _LOGGER.warning("%s: cannot play reply: %s", self.entity_id, exc,
+                            exc_info=not isinstance(exc, (HomeAssistantError, OSError, TimeoutError)))
         finally:
             await asyncio.sleep(TAIL)
             self._dang_noi = False

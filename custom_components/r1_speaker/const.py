@@ -205,6 +205,22 @@ DEFAULT_PHIM_MA = "195"
 CONF_DUONG_PHAT = "duong_phat"
 DEFAULT_DUONG_PHAT = "dlna"
 DUONG_PHAT_GIA_TRI = ("dlna", "dlna_truoc", "airplay_truoc", "airplay")
+#: NV287 — tin báo (TTS/announce) đi AirPlay SONG SONG trong khi nhạc vẫn ở DLNA,
+#: thay vì thay URI của renderer DLNA. Mặc định TẮT vì CHƯA ĐO trên loa thật xem
+#: Android trên loa có trộn được hai luồng (DLNA + RAOP) hay không; chỉ bật sau
+#: khi chủ máy đo theo kịch bản trong docs/PHAT-RA-LOA.md. Khi bật mà nhạc đang ở
+#: AirPlay (không có DLNA để giữ) thì tự về đường tạm dừng/khôi phục thường.
+CONF_TTS_SONG_SONG = "tts_song_song_airplay"
+DEFAULT_TTS_SONG_SONG = False
+#: NV287 — hạ nhạc nền khi loa nói (ducking). Chỉ có tác dụng khi tin đi song song
+#: (``tts_song_song_airplay`` bật): nhạc DLNA vẫn phát nhưng nhỏ đi ``ha_nhac_nac``
+#: nấc trong lúc tin phát, rồi trả đúng mức cũ (kể cả khi tin lỗi). Mặc định TẮT.
+#: Tin đi đường thường (thay URI DLNA) thì vẫn tạm dừng như cũ — hạ âm lượng lúc
+#: đó vô nghĩa vì nhạc đã im và tin cũng đi cùng luồng âm lượng đó.
+CONF_HA_NHAC_XUONG = "ha_nhac_xuong"
+DEFAULT_HA_NHAC_XUONG = False
+CONF_HA_NHAC_NAC = "ha_nhac_nac"
+DEFAULT_HA_NHAC_NAC = 5
 #: Cổng RAOP (AirPlay 1) của loa. Đo 28/10/2026 ở một lần khởi động: 5012. Cổng DLNA của loa đổi theo từng lần khởi động nên cổng này cũng có thể
 #: đổi; nếu AirPlay không nối được thì đổi ở Tuỳ chọn.
 CONF_AIRPLAY_PORT = "airplay_port"
@@ -222,6 +238,9 @@ ADB_PORT = 5555
 SESSION_MAX_S = 60.0
 #: Mở phiên mà luồng mic chưa nối được sau ngần này giây → đóng phiên, không treo.
 SESSION_MIC_WAIT_S = 5.0
+#: Số lượt nối tiếp liên tiếp tối đa mà không có tiếng TTS trả lời ra loa. Quá ngần này
+#: lượt im lặng mà vẫn đòi nối tiếp thì đóng phiên, tránh để loa chờ nghe trong im lặng.
+CONTINUE_WITHOUT_TTS_MAX = 1
 #: Loa đã báo «còn sống» (trigger hoặc nhịp tim) trong ngần này giây mới coi là đang nghe từ gọi.
 WAKE_ALIVE_S = 120.0
 #: ``binary_sensor.r1_tu_danh_thuc`` bật ngần này giây sau mỗi trigger.

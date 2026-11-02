@@ -279,7 +279,10 @@
           "phim_ma": "Key codes for which HA runs gesture actions (comma separated; 195 = middle button; other codes only fire events)",
           "phim_nguon": "Key source: adb (getevent over ADB, no new APK needed), apk (APK 1.3 accessibility service) or tat (off)",
           "duong_phat": "How music and announcements reach the speaker: dlna (default, as before) · dlna_truoc (DLNA, falls back to AirPlay) · airplay_truoc (AirPlay, falls back to DLNA) · airplay. AirPlay is sent by this integration itself and needs ffmpeg on the HA host; seek restarts playback from that position",
-          "airplay_port": "The speaker's AirPlay (RAOP) port, default 5012; change it if AirPlay cannot connect after the speaker restarted"
+          "airplay_port": "The speaker's AirPlay (RAOP) port, default 5012; change it if AirPlay cannot connect after the speaker restarted",
+          "tts_song_song_airplay": "Announcements in parallel via AirPlay while music stays on DLNA (default OFF — not yet measured on a real speaker whether it can mix DLNA + RAOP; enable only after the measurement in docs/PHAT-RA-LOA.md)",
+          "ha_nhac_xuong": "Duck background music while a parallel announcement plays (only applies when parallel AirPlay announcements are on; music drops by ha_nhac_nac steps, then returns to the exact previous level, even if the announcement errors)",
+          "ha_nhac_nac": "Ducking steps (speaker 0–15 scale)"
         }
       },
       "nang_cao": {

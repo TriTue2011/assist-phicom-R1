@@ -8,7 +8,7 @@ Hợp đồng ``play_media`` (``tts.speak`` cũng đi đường này):
  - ``media-source://`` được giải ra URL, URL tương đối được đổi thành địa chỉ HA tới được từ loa.
  - Báo tin (TTS / ``announce``): tạm dừng nhạc, phát tin, rồi nền theo dõi tin xong và khôi phục nhạc (``giu_nhac``).
 Trạng thái chỉ được hỏi lại có chu kỳ KHI ĐANG PHÁT (2,9 giây; 1 giây khi đang báo tin) và sau mỗi lệnh; idle/tạm dừng thì không hỏi nền.
-``idle_reason`` (``finished`` / ``stopped`` / ``interrupted`` / ``error``) khai khi idle để tích hợp phát nhạc phân biệt Stop với hết bài.
+``idle_reason`` (``finished`` / ``stopped`` / ``interrupted`` / ``error`` / ``dang_giu``) khai khi idle để tích hợp phát nhạc phân biệt Stop với hết bài.
 Âm lượng dùng đường APK có sẵn (``number``).
 
 Đường phát thứ hai, AirPlay (chủ máy 29/10/2026: «song song bù trừ nhau», «tích hợp riêng, không phụ thuộc bên khác»): tuỳ chọn ``duong_phat``
@@ -50,7 +50,7 @@ from homeassistant.util import dt as dt_util
 
 from . import const
 from .const import AIRPLAY_BAT_DAU_TOI_DA, DLNA_READY_TIMEOUT, DOMAIN
-from .settings import airplay_port, duong_phat
+from .settings import airplay_port, duong_phat, tts_song_song_airplay, ha_nhac_xuong, ha_nhac_nac
 from .dmr import R1Dmr, R1DmrError, TrangThaiDmr, UocViTri
 from .coordinator import R1ConfigEntry, R1Coordinator
 from .client import R1Error
@@ -71,6 +71,8 @@ CHAM_TIN = 1.0
 #: Stop: chờ renderer về idle tối đa ngần này giây mỗi lần; còn phát thì gửi lại (thêm tối đa ngần này lần).
 STOP_CHO_XAC_NHAN = 1.5
 STOP_GUI_LAI = 2
+#: ``idle_reason`` khi renderer về idle trong lúc loa đang GIỮ nhạc cho tin báo / phiên đàm thoại (NV287). Xem ``_ap_dung``.
+IDLE_DANG_GIU = "dang_giu"
 #: Hỏi trạng thái renderer hỏng ngần này lần LIÊN TIẾP mới coi là loa mất/lỗi (một lần trễ thoáng qua của loa yếu không được báo «đã dừng»).
 LOI_DOC_TOI_DA = 3
 #: False: AI box đã gỡ → cổng nhạc 8082 không còn → không đăng ký dịch vụ nhạc.
@@ -167,6 +169,8 @@ class R1Player(R1Entity, MediaPlayerEntity):
         self._duong: str | None = None       # "dlna" | "airplay" | None: đường đang giữ trạng thái phát (cổng ở ``_doc``)
         self._ap: PhienAirPlay | None = None  # phiên AirPlay hiện tại (chưa chắc đã bắt đầu phát)
         self._ap_tac: asyncio.Task | None = None
+        self._ap_tin: PhienAirPlay | None = None  # NV287: phiên AirPlay SONG SONG chỉ để phát tin (không giữ trạng thái)
+        self._ap_tin_tac: asyncio.Task | None = None
         self._ap_goc = 0.0                   # giây của bài mà phiên AirPlay hiện tại bắt đầu (sau khi tua)
         self._ap_url: str | None = None      # địa chỉ đã giải ra, để tua = phát lại từ vị trí đó
 
@@ -205,6 +209,8 @@ class R1Player(R1Entity, MediaPlayerEntity):
     def _huy_airplay(self) -> None:
         if self._ap_tac is not None and not self._ap_tac.done():
             self._ap_tac.cancel()
+        if self._ap_tin_tac is not None and not self._ap_tin_tac.done():
+            self._ap_tin_tac.cancel()
 
     @callback
     def _huy_cham(self) -> None:
@@ -289,7 +295,7 @@ class R1Player(R1Entity, MediaPlayerEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """``idle_reason``: vì sao loa đang idle (``finished`` hết bài / ``stopped`` người dùng dừng / ``interrupted`` bị bài mới
-        thay / ``error`` lỗi phát). Chỉ có khi idle; tích hợp phát nhạc (YouTube) đọc nó thay vì đoán bằng thời lượng bài."""
+        thay / ``error`` lỗi phát / ``dang_giu`` idle của tin báo trong lúc loa giữ nhạc, nhạc sẽ phát lại). Chỉ có khi idle; tích hợp phát nhạc (YouTube) đọc nó thay vì đoán bằng thời lượng bài."""
         a: dict[str, Any] = {}
         if self._duong and self._tt.state != "idle":
             a["duong_phat"] = self._duong                       # dlna | airplay: đường đang thực sự ra tiếng
@@ -302,11 +308,28 @@ class R1Player(R1Entity, MediaPlayerEntity):
         # Khác các thực thể khác: DLNA tắt (dlna_open False/None) vẫn phát được vì ta bật nó.
         return CoordinatorEntity.available.fget(self)
 
+    def _dang_giu_nhac(self) -> bool:
+        """NV287: loa đang tạm dừng nhạc và SẼ phát lại nó (phiên đàm thoại / tin báo) không? Dùng để phân biệt «hết bài» thật với
+        «bị tin chen ngang»: lúc đó renderer về idle là do tin, không phải bài đã hết. Lượt giữ không chụp được gì (không có nhạc) hoặc
+        chỉ hạ nhỏ nhạc (nhạc vẫn phát) thì KHÔNG tính — bài hết trong lúc ấy là hết thật."""
+        try:
+            return bool(self.coordinator.talk.music.se_phat_lai)
+        except (AttributeError, TypeError):
+            return False
+
     @callback
     def _ap_dung(self, tt: TrangThaiDmr) -> None:
         cu = self._tt
         if tt.state == "idle":
-            if self._ly_do is None and cu.state in ("playing", "buffering"):
+            if self._dang_giu_nhac() and self._ly_do != "stopped":
+                # NV287: đang GIỮ nhạc (tin báo / phiên đàm thoại) mà renderer về idle: idle này là của tin báo, không phải của bài.
+                # Khai «dang_giu», KHÔNG khai «finished» (bộ điều khiển danh sách phát đọc finished là sang bài kế — đúng triệu
+                # chứng NV287; trước đây _ly_do bị xoá ở nhánh playing bên dưới nên tin dứt lại thành finished) và cũng KHÔNG khai
+                # «interrupted» (tritue_youtube_player coi interrupted là bị bài khác đè và GỠ LOA khỏi phiên). Giá trị lạ với bộ
+                # điều khiển chưa vá thì nó rơi về đoán bằng thời lượng bài, vị trí đã đóng băng lúc tạm dừng → không nhảy bài.
+                # Người dùng bấm Stop («stopped») vẫn được giữ nguyên.
+                self._ly_do = IDLE_DANG_GIU
+            elif self._ly_do is None and cu.state in ("playing", "buffering"):
                 self._ly_do = "error" if tt.loi else "finished"        # renderer tự dừng: không do lệnh của ta
         else:
             self._ly_do = None
@@ -440,6 +463,7 @@ class R1Player(R1Entity, MediaPlayerEntity):
         """Dừng hẳn. Renderer có thể bỏ qua Stop khi đang nạp luồng (TRANSITIONING) nên một lệnh không đủ — người dùng phải bấm Stop 2–3
         lần (chủ máy 28/10/2026): kiểm loa đã idle chưa, chưa thì gửi lại (tối đa ``STOP_GUI_LAI`` lần thêm)."""
         self._ly_do = "stopped"
+        await self._dung_tin_song_song()                  # tin song song cũng phải im khi người dùng Stop
         if self._la_airplay:
             await self._dung_airplay()
             self._ghi_idle()
@@ -468,11 +492,41 @@ class R1Player(R1Entity, MediaPlayerEntity):
     async def async_play_media(self, media_type: MediaType | str, media_id: str,
                                **kwargs: Any) -> None:
         """Nhạc: phát thẳng qua renderer. Báo tin (TTS / announce): tạm dừng nhạc trước, phát tin, rồi NỀN theo dõi tin phát
-        xong và khôi phục nhạc — lệnh này trả về ngay sau khi đã gửi tin đi, không chờ hết tin (``tts.speak`` khỏi bị treo)."""
+        xong và khôi phục nhạc — lệnh này trả về ngay sau khi đã gửi tin đi, không chờ hết tin (``tts.speak`` khỏi bị treo).
+        NV287: nếu bật ``tts_song_song_airplay`` và nhạc đang ở DLNA thì tin đi AirPlay SONG SONG (không thay URI DLNA,
+        không tạm dừng: tắt ducking nghĩa là nhạc phát tiếp ở mức đầy đủ, bật ducking thì nhạc nhỏ đi rồi trả mức cũ;
+        chỉ khi không đọc được mức cũ mới về tạm dừng); nhạc hết tin vẫn ở đúng bài, đúng vị trí mà không cần khôi phục."""
         if not is_announcement(media_id, kwargs):
             await self._phat(media_type, media_id, **kwargs)
             return
         talk = self.coordinator.talk
+        entry = self.coordinator.config_entry
+        if tts_song_song_airplay(entry) and self._tin_co_the_song_song():
+            # Song song = KHÔNG tạm dừng bao giờ: duck tắt thì nac=0 (nhạc phát tiếp
+            # ở mức đầy đủ), duck bật thì hạ nac nấc rồi trả mức cũ. Chỉ khi không
+            # đọc được mức cũ, _snapshot_and_duck mới tự về tạm dừng như cũ.
+            giu = await talk.music.hold(
+                duck=True, nac=ha_nhac_nac(entry) if ha_nhac_xuong(entry) else 0)
+            try:
+                if await self._bat_dau_tin_song_song(media_type, media_id, **kwargs):
+                    self.coordinator.config_entry.async_create_background_task(
+                        self.hass, self._theo_doi_tin_song_song(giu), f"{self.entity_id} announce song song")
+                    return
+                # Không mở được phiên song song: nhả lượt giữ duck rồi giữ lại
+                # kiểu tạm dừng thường — nếu giữ nguyên lượt duck thì lúc nhả
+                # chỉ trả mức mà không phát lại nhạc (nhạc đã bị tin thay URI).
+                _LOGGER.warning("%s: không mở được tin song song qua AirPlay, về đường tin thường", self.entity_id)
+                await giu.release()
+                giu = await talk.music.hold()
+                self._nhanh = True
+                await self._phat(media_type, media_id, **kwargs)
+            except BaseException:
+                self._nhanh = False
+                await giu.release()
+                raise
+            self.coordinator.config_entry.async_create_background_task(
+                self.hass, self._theo_doi_tin(giu), f"{self.entity_id} announce")
+            return
         giu = await talk.music.hold()
         try:
             self._nhanh = True
@@ -507,6 +561,107 @@ class R1Player(R1Entity, MediaPlayerEntity):
             self._nhanh = False
             talk.announce_done()
             await giu.release()
+
+    # ── NV287: tin song song qua AirPlay ────────────────────────────────────────
+    # Khác đường AirPlay thường ở đúng một điểm: KHÔNG dừng DLNA, KHÔNG đổi
+    # ``_duong``/``_uri``/``_ly_do``/trạng thái của thực thể. Nhạc DLNA vì vậy vẫn
+    # là «bài đang phát» suốt lúc tin nói; khi tin xong không có gì để khôi phục
+    # nên cũng không có cửa cho «hết bài» giả. Chỉ dùng khi nhạc đang ở DLNA;
+    # nhạc ở AirPlay, hoặc không có nhạc, thì đường thường rẻ hơn và đúng hơn.
+
+    def _tin_co_the_song_song(self) -> bool:
+        """Nhạc đang phát qua DLNA (không phải AirPlay) thì tin mới đi song song được."""
+        return self._tt.state in ("playing", "buffering") and not self._la_airplay
+
+    async def _bat_dau_tin_song_song(self, media_type: MediaType | str, media_id: str, **kwargs: Any) -> bool:
+        """Giải địa chỉ tin rồi mở phiên AirPlay song song; True = tin đã bắt đầu
+        phát (phiên chạy nền, bên theo dõi sẽ chờ nó xong). False = không mở được
+        (bên gọi về đường tin thường); phiên hỏng đã được dọn sạch."""
+        url = media_id
+        if media_source.is_media_source_id(media_id):
+            url = (await media_source.async_resolve_media(self.hass, media_id, self.entity_id)).url
+        url = async_process_play_media_url(self.hass, url)
+        await self._dung_tin_song_song()                    # tin mới thay tin cũ: không bao giờ hai phiên RAOP cùng nói với loa
+        data = self.coordinator.data
+        vua_bat = data is None or not data.airplay_open
+        if vua_bat:
+            try:
+                await self.coordinator.async_command(
+                    lambda: self.coordinator.client.set_airplay_open(True), airplay_open=True)
+            except Exception as exc:  # noqa: BLE001 — bật AirPlay hỏng thì về đường thường, không phá tin
+                _LOGGER.debug("%s: không bật được AirPlay cho tin song song: %s", self.entity_id, type(exc).__name__)
+                return False
+        for lan in range(6 if vua_bat else 1):              # loa vừa bật AirPlay: cổng RAOP lên chậm, thử lại như _phat_airplay
+            if lan:
+                await asyncio.sleep(0.5)
+            loi = await self._mo_tin_airplay(url)
+            if loi is None:
+                return True
+            if not isinstance(loi, LoiKhongNoi):
+                break
+        return False
+
+    async def _mo_tin_airplay(self, url: str) -> LoiAirPlay | None:
+        """Mở một phiên AirPlay SONG SONG và chờ gói tiếng đầu. None = đã phát;
+        còn lại là lỗi (phiên đã dọn). Không đụng ``_ap``/``_duong``/trạng thái."""
+        entry = self.coordinator.config_entry
+        ap = PhienAirPlay(self._host, airplay_port(entry), tao_nguon(url, 0.0), tren_doi=None)
+        tac = entry.async_create_background_task(self.hass, ap.chay(), f"{self.entity_id} tin airplay")
+        self._ap_tin, self._ap_tin_tac = ap, tac
+        bd = asyncio.ensure_future(ap.da_bat_dau.wait())
+        try:
+            xong, _ = await asyncio.wait({tac, bd}, timeout=AIRPLAY_BAT_DAU_TOI_DA, return_when=asyncio.FIRST_COMPLETED)
+        except BaseException:
+            tac.cancel()                                    # bị huỷ giữa lúc mở: phiên không có chủ thì không được để nó nói tiếp
+            self._ap_tin = self._ap_tin_tac = None
+            raise
+        finally:
+            bd.cancel()
+        if ap.da_bat_dau.is_set():
+            return None
+        self._ap_tin = self._ap_tin_tac = None
+        if tac in xong:
+            try:
+                ket_qua = tac.result()
+            except LoiAirPlay as exc:
+                return exc
+            except Exception as exc:  # noqa: BLE001 — lỗi không ngờ của bộ gửi: báo thành lỗi AirPlay
+                return LoiAirPlay(f"lỗi không ngờ: {type(exc).__name__}")
+            return ket_qua if isinstance(ket_qua, LoiAirPlay) else LoiAirPlay("phiên AirPlay kết thúc mà chưa phát được")
+        tac.cancel()
+        await asyncio.wait({tac})
+        return LoiAirPlay(f"AirPlay chưa phát được sau {AIRPLAY_BAT_DAU_TOI_DA:.0f} giây")
+
+    async def _theo_doi_tin_song_song(self, giu) -> None:
+        """Chờ phiên AirPlay song song xong (hoặc hết hạn), rồi báo vệ tinh, nhả nhạc.
+        Không đọc trạng thái renderer: renderer vẫn đang phát nhạc, đọc nó sẽ tưởng
+        tin chưa bắt đầu / đã xong sai."""
+        talk = self.coordinator.talk
+        tac = self._ap_tin_tac
+        try:
+            if tac is not None:
+                xong, _ = await asyncio.wait({tac}, timeout=const.ANNOUNCE_MAX)
+                if not xong:
+                    _LOGGER.warning("tin song song trên %s chưa xong sau %.0f giây — dừng phiên",
+                                    self.entity_id, const.ANNOUNCE_MAX)
+                    tac.cancel()
+                    await asyncio.wait({tac})
+                elif not tac.cancelled() and tac.exception() is not None:   # phiên bị dừng chủ ý (Stop / tin mới) thì không phải lỗi
+                    _LOGGER.warning("tin song song trên %s lỗi: %s", self.entity_id, type(tac.exception()).__name__)
+        finally:
+            if tac is not None and self._ap_tin_tac is tac:                  # đừng xoá phiên của tin mới hơn
+                self._ap_tin = self._ap_tin_tac = None
+            talk.announce_done()
+            await giu.release()
+
+    async def _dung_tin_song_song(self) -> None:
+        """Dừng phiên tin song song (nếu có) — dùng khi người dùng Stop hoặc khi
+        đường phát chính đổi (không để hai phiên AirPlay cùng nói với loa)."""
+        tac = self._ap_tin_tac
+        self._ap_tin = self._ap_tin_tac = None
+        if tac is not None and not tac.done():
+            tac.cancel()
+            await asyncio.wait({tac})
 
     #: Thứ tự thử các đường theo tuỳ chọn ``duong_phat``.
     _THU_TU = {"dlna": ("dlna",), "dlna_truoc": ("dlna", "airplay"), "airplay_truoc": ("airplay", "dlna"), "airplay": ("airplay",)}
@@ -620,7 +775,9 @@ class R1Player(R1Entity, MediaPlayerEntity):
         self._ap = self._ap_tac = None                      # đã phát rồi mới hết/hỏng: tự kết thúc
         if loi is not None:
             _LOGGER.warning("%s: AirPlay dừng giữa chừng: %s", self.entity_id, loi)
-        self._ly_do = "error" if loi is not None else "finished"
+        # NV287: phiên AirPlay này là tin báo trong lúc giữ nhạc thì hết cũng là
+        # «dang_giu», không phải «finished» (xem _ap_dung).
+        self._ly_do = "error" if loi is not None else (IDLE_DANG_GIU if self._dang_giu_nhac() else "finished")
         self._ghi_idle()
         return loi
 
@@ -655,12 +812,14 @@ class R1Player(R1Entity, MediaPlayerEntity):
         self.async_write_ha_state()
 
     async def _dung_airplay(self) -> None:
-        """Dừng phiên AirPlay đang có (nếu có) mà KHÔNG ghi trạng thái: bên gọi quyết định trạng thái kế tiếp."""
+        """Dừng phiên AirPlay đang có (nếu có) mà KHÔNG ghi trạng thái: bên gọi quyết định trạng thái kế tiếp.
+        Kể cả phiên tin song song: hai phiên RAOP không được cùng nói với loa."""
         tac = self._ap_tac
         self._ap = self._ap_tac = None
         if tac is not None and not tac.done():
             tac.cancel()
             await asyncio.wait({tac})
+        await self._dung_tin_song_song()
 
     async def _don_duong(self, duong: str) -> None:
         """Dừng một đường vừa hỏng (hoặc sắp bị thay) để loa không phát hai nơi."""

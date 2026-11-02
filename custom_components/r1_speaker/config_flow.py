@@ -31,10 +31,11 @@ from .const import (CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, 
                     CONF_TALK_SILENCE, CONF_TALK_TAIL, CONF_TALK_THRESHOLD_DB, DEFAULT_HOST,
                     DEFAULT_MIC_LISTEN_PORT, DEFAULT_MIC_PORT, DEFAULT_PLAY_PORT, DEFAULT_PORT, DEFAULT_TALK_PREROLL,
                     DEFAULT_TALK_SILENCE, DEFAULT_TALK_TAIL, DEFAULT_TALK_THRESHOLD_DB, DOMAIN)
-from .settings import (airplay_port, duong_phat, adb_settings, adb_tu_dong_dong, phim_ma, phim_nguon, DuplexSettings, TalkSettings, agc_settings, conf, limiter_settings, noise_settings, wake_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
+from .settings import (airplay_port, duong_phat, tts_song_song_airplay, ha_nhac_xuong, ha_nhac_nac, adb_settings, adb_tu_dong_dong, phim_ma, phim_nguon, DuplexSettings, TalkSettings, agc_settings, conf, limiter_settings, noise_settings, wake_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
                        speaker_port, wake_mode)
 from .const import CONF_ADB_MODE, CONF_ADB_SERVER, CONF_ADB_TU_DONG, CONF_PHIM_MA, CONF_PHIM_NGUON, DEFAULT_ADB_MODE, DEFAULT_ADB_SERVER, DEFAULT_PHIM_MA, DEFAULT_PHIM_NGUON
 from .const import CONF_AIRPLAY_PORT, CONF_DUONG_PHAT, DEFAULT_AIRPLAY_PORT, DEFAULT_DUONG_PHAT, DUONG_PHAT_GIA_TRI
+from .const import CONF_TTS_SONG_SONG, DEFAULT_TTS_SONG_SONG, CONF_HA_NHAC_XUONG, DEFAULT_HA_NHAC_XUONG, CONF_HA_NHAC_NAC, DEFAULT_HA_NHAC_NAC
 from .const import (CONF_WAKE_ENABLE, CONF_WAKE_SENSITIVITY, CONF_WAKE_WORD,
                     DEFAULT_WAKE_ENABLE, DEFAULT_WAKE_SENSITIVITY, DEFAULT_WAKE_WORD)
 
@@ -123,6 +124,8 @@ _GOC = {
     CONF_WAKE_SENSITIVITY: DEFAULT_WAKE_SENSITIVITY,
     CONF_ADB_SERVER: DEFAULT_ADB_SERVER, CONF_ADB_MODE: DEFAULT_ADB_MODE, CONF_ADB_TU_DONG: False, CONF_PHIM_MA: DEFAULT_PHIM_MA, CONF_PHIM_NGUON: DEFAULT_PHIM_NGUON,
     CONF_DUONG_PHAT: DEFAULT_DUONG_PHAT, CONF_AIRPLAY_PORT: DEFAULT_AIRPLAY_PORT,
+    CONF_TTS_SONG_SONG: DEFAULT_TTS_SONG_SONG, CONF_HA_NHAC_XUONG: DEFAULT_HA_NHAC_XUONG,
+    CONF_HA_NHAC_NAC: DEFAULT_HA_NHAC_NAC,
 }
 
 
@@ -211,7 +214,10 @@ class R1OptionsFlow(OptionsFlowWithReload):
                                 CONF_PHIM_MA: (user_input.get(CONF_PHIM_MA) or DEFAULT_PHIM_MA).strip(),
                                 CONF_PHIM_NGUON: user_input.get(CONF_PHIM_NGUON, DEFAULT_PHIM_NGUON),
                                 CONF_DUONG_PHAT: user_input.get(CONF_DUONG_PHAT, DEFAULT_DUONG_PHAT),
-                                CONF_AIRPLAY_PORT: user_input.get(CONF_AIRPLAY_PORT, DEFAULT_AIRPLAY_PORT)}
+                                CONF_AIRPLAY_PORT: user_input.get(CONF_AIRPLAY_PORT, DEFAULT_AIRPLAY_PORT),
+                                CONF_TTS_SONG_SONG: user_input.get(CONF_TTS_SONG_SONG, DEFAULT_TTS_SONG_SONG),
+                                CONF_HA_NHAC_XUONG: user_input.get(CONF_HA_NHAC_XUONG, DEFAULT_HA_NHAC_XUONG),
+                                CONF_HA_NHAC_NAC: user_input.get(CONF_HA_NHAC_NAC, DEFAULT_HA_NHAC_NAC)}
                 if user_input.get(CONF_NANG_CAO):
                     return await self.async_step_nang_cao()
                 return self._luu({})
@@ -230,6 +236,9 @@ class R1OptionsFlow(OptionsFlowWithReload):
             vol.Optional(CONF_PHIM_NGUON, default=v.get(CONF_PHIM_NGUON, phim_nguon(entry))): vol.In(["adb", "apk", "tat"]),
             vol.Optional(CONF_DUONG_PHAT, default=v.get(CONF_DUONG_PHAT, duong_phat(entry))): vol.In(list(DUONG_PHAT_GIA_TRI)),
             vol.Optional(CONF_AIRPLAY_PORT, default=v.get(CONF_AIRPLAY_PORT, airplay_port(entry))): vol.All(int, vol.Range(min=1, max=65535)),
+            vol.Optional(CONF_TTS_SONG_SONG, default=v.get(CONF_TTS_SONG_SONG, tts_song_song_airplay(entry))): bool,
+            vol.Optional(CONF_HA_NHAC_XUONG, default=v.get(CONF_HA_NHAC_XUONG, ha_nhac_xuong(entry))): bool,
+            vol.Optional(CONF_HA_NHAC_NAC, default=v.get(CONF_HA_NHAC_NAC, ha_nhac_nac(entry))): vol.All(int, vol.Range(min=1, max=14)),
             vol.Optional(CONF_ROTATE_KEY, default=False): bool,
             vol.Optional(CONF_GHEP_LAI, default=False): bool,
             vol.Optional(CONF_NANG_CAO, default=False): bool,
