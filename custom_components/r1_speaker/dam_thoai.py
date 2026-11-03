@@ -168,6 +168,10 @@ class R1Talk:
         """Ai đang giữ phiên ``s``: nhãn bên mở khai, không thì theo loại phiên, không thì «không xác định» (KHÔNG bịa)."""
         return s.nhan or NHAN_THEO_LOAI.get(s.kind) or NHAN_KHONG_RO
 
+    def tu_choi(self, kind: str, nhan: str | None = None) -> R1SessionBusy:
+        """Lỗi từ chối cho phiên ``kind`` xin chỗ khi đang có phiên khác (kiểm trước, chưa chiếm gì); dùng cho bên cần kiểm nhiều loa rồi mới chiếm."""
+        return self._refuse(kind, lam_sach_nhan(nhan))
+
     def _refuse(self, kind: str, nhan: str | None = None) -> R1SessionBusy:
         cur = self.session
         assert cur is not None

@@ -124,6 +124,9 @@
       },
       "kdl_ngay_cn": {
         "name": "Khởi động lại chủ nhật"
+      },
+      "kenh": {
+        "name": "Kênh đàm thoại"
       }
     },
     "sensor": {
@@ -345,7 +348,9 @@
           "khoi_dong_lai_bat": "Khởi động lại loa theo lịch (mặc định TẮT; phòng ngừa)",
           "khoi_dong_lai_gio": "Giờ khởi động lại (giờ địa phương)",
           "khoi_dong_lai_ngay": "Các ngày trong tuần được khởi động lại",
-          "khoi_dong_lai_khi_treo": "Tự khởi động lại loa MỘT lần khi loa treo (mạng còn thông nhưng ứng dụng trên loa im; cần ADB; mặc định TẮT; cách nhau ít nhất 6 giờ)"
+          "khoi_dong_lai_khi_treo": "Tự khởi động lại loa MỘT lần khi loa treo (mạng còn thông nhưng ứng dụng trên loa im; cần ADB; mặc định TẮT; cách nhau ít nhất 6 giờ)",
+          "kenh": "Tên kênh đàm thoại loa này tham gia (các loa khai cùng tên thì thành một kênh; để trống = không vào kênh nào)",
+          "kenh_kieu": "Kiểu kênh: ptt (bấm-để-nói qua dịch vụ/công tắc) hoặc voice (tự bật khi có tiếng)"
         }
       },
       "nang_cao": {
@@ -752,6 +757,34 @@
         "entity_id": {
           "name": "Loa",
           "description": "Một thực thể bất kỳ của loa trong phòng."
+        }
+      }
+    },
+    "noi_kenh": {
+      "name": "Nói vào kênh đàm thoại",
+      "description": "Bắt đầu nói vào một kênh đàm thoại từ loa này (kênh phải đang mở; loa phải là thành viên).",
+      "fields": {
+        "kenh": {
+          "name": "Kênh",
+          "description": "Tên kênh, như đã đặt trong tuỳ chọn của các loa."
+        },
+        "nguon": {
+          "name": "Loa nguồn",
+          "description": "Một thực thể bất kỳ của loa đang nói."
+        }
+      }
+    },
+    "dung_kenh": {
+      "name": "Dừng nói vào kênh đàm thoại",
+      "description": "Dừng người đang nói trong một kênh (để trống nguồn thì dừng bất kỳ ai đang nói).",
+      "fields": {
+        "kenh": {
+          "name": "Kênh",
+          "description": "Tên kênh, như đã đặt trong tuỳ chọn của các loa."
+        },
+        "nguon": {
+          "name": "Loa nguồn",
+          "description": "Tuỳ chọn: chỉ dừng khi loa này là người đang nói."
         }
       }
     }

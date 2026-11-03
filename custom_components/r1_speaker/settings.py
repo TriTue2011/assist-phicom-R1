@@ -16,6 +16,7 @@ from homeassistant.config_entries import ConfigEntry
 from .agc import AgcSettings, LimiterSettings
 from .noise_suppress import NoiseSettings
 from .const import ADB_SERVER_LOCAL, CONF_ADB_MODE, CONF_ADB_SERVER, CONF_ADB_TU_DONG, CONF_PHIM_MA, CONF_PHIM_NGUON, DEFAULT_ADB_MODE, DEFAULT_ADB_SERVER, DEFAULT_PHIM_MA, DEFAULT_PHIM_NGUON
+from .const import CONF_KENH, CONF_KENH_KIEU, DEFAULT_KENH_KIEU, KENH_KIEU
 from .const import CONF_AIRPLAY_PORT, CONF_DUONG_PHAT, DEFAULT_AIRPLAY_PORT, DEFAULT_DUONG_PHAT, DUONG_PHAT_GIA_TRI
 from .const import (CONF_KDL_BAT, CONF_KDL_GIO, CONF_KDL_NGAY, CONF_KDL_TU_PHUC_HOI, DEFAULT_KDL_BAT, DEFAULT_KDL_GIO,
                     DEFAULT_KDL_NGAY, DEFAULT_KDL_TU_PHUC_HOI, KDL_NGAY_MA)
@@ -93,6 +94,17 @@ def wake_mode(entry: ConfigEntry) -> str:
 def ha_url(entry: ConfigEntry) -> str:
     """Địa chỉ HA mà loa / go2rtc gọi tới (đã kiểm ở options flow); trống = chưa đặt."""
     return str(conf(entry, CONF_HA_URL, "") or "").strip().rstrip("/")
+
+
+def kenh_ten(entry: ConfigEntry) -> str:
+    """Tên kênh đàm thoại mà loa này tham gia (trống = không tham gia kênh nào)."""
+    return str(conf(entry, CONF_KENH, "") or "").strip()
+
+
+def kenh_kieu(entry: ConfigEntry) -> str:
+    """Kiểu kênh: ``ptt`` hoặc ``voice``; giá trị lạ → mặc định ``ptt``."""
+    kieu = str(conf(entry, CONF_KENH_KIEU, DEFAULT_KENH_KIEU) or "").strip()
+    return kieu if kieu in KENH_KIEU else DEFAULT_KENH_KIEU
 
 
 def play_address(entry: ConfigEntry) -> tuple[str, int]:

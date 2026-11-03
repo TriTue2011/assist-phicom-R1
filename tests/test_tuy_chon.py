@@ -55,12 +55,14 @@ async def test_form_co_du_truong(hass, r1):
     khoa = {str(k) for k in res["data_schema"].schema}
     # Form chính chỉ còn thứ người dùng biết; khoá/cổng nghe mic tự cấp, mục chết đã gỡ khỏi form.
     # NV287 thêm 3 trường tuỳ chọn (tin song song + ducking) — mặc định đều TẮT nên hành vi cũ giữ nguyên.
-    assert khoa == {"host", "port", "ha_url", "adb_server", "adb_mode", "adb_tu_dong_dong", "phim_ma", "phim_nguon", "duong_phat", "airplay_port", "tts_song_song_airplay", "ha_nhac_xuong", "ha_nhac_nac", "khoi_dong_lai_bat", "khoi_dong_lai_gio", "khoi_dong_lai_ngay", "khoi_dong_lai_khi_treo", "rotate_intercom_key", "ghep_lai_apk", "nang_cao"}
+    # NV292 thêm 2 trường tuỳ chọn kênh đàm thoại (tên kênh + kiểu) — mặc định: không vào kênh nào.
+    assert khoa == {"host", "port", "ha_url", "adb_server", "adb_mode", "adb_tu_dong_dong", "phim_ma", "phim_nguon", "duong_phat", "airplay_port", "tts_song_song_airplay", "ha_nhac_xuong", "ha_nhac_nac", "kenh", "kenh_kieu", "khoi_dong_lai_bat", "khoi_dong_lai_gio", "khoi_dong_lai_ngay", "khoi_dong_lai_khi_treo", "rotate_intercom_key", "ghep_lai_apk", "nang_cao"}
     macdinh = {str(k): k.default() for k in res["data_schema"].schema
                if k.default is not vol.UNDEFINED}
     assert macdinh["host"] == "127.0.0.1" and macdinh["port"] == r1.port
     assert macdinh["duong_phat"] == "dlna" and macdinh["airplay_port"] == 5012     # mặc định = hành vi cũ, AirPlay tắt
     assert macdinh["tts_song_song_airplay"] is False and macdinh["ha_nhac_xuong"] is False and macdinh["ha_nhac_nac"] == 5
+    assert macdinh["kenh"] == "" and macdinh["kenh_kieu"] == "ptt"
     res = await hass.config_entries.options.async_configure(
         res["flow_id"], {"host": "127.0.0.1", "port": r1.port, "nang_cao": True})
     assert res["type"] is FlowResultType.FORM and res["step_id"] == "nang_cao"

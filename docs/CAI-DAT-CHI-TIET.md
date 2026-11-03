@@ -80,6 +80,7 @@ Hai chế độ, **bạn chọn một** (ô «Chế độ đóng ADB» ở tuỳ
 | Tắt mic | switch | Bật = mic ngừng (HA đóng luồng, không dò từ đánh thức, không nghe được). Dùng khi muốn riêng tư | |
 | Assist (bật/tắt) | switch | Tắt = vệ tinh Assist không nghe/không đáp (luồng mic vẫn chảy) | |
 | Đàm thoại | switch | Phiên song công do HA mở/giữ mở (thẻ dùng mic điện thoại, xem mục 6) | |
+| Kênh đàm thoại | switch | Mở/đóng kênh đàm thoại loa–loa của loa này (NV292): bật = mở kênh, cả nhóm nghe một tiếng bip; tắt = đóng kênh. Kênh gồm các loa khai cùng tên ở Tuỳ chọn → «Tên kênh đàm thoại» (để trống = không vào kênh nào); kiểu `ptt` (bấm-để-nói qua dịch vụ `noi_kenh` / `dung_kenh`) hoặc `voice` (tự bật khi có tiếng). Nửa công: một người nói một lúc; tiếng đi qua đúng đường bộ đàm (`intercom.py`), không dựng giao thức thứ hai; nhạc ở loa đích tạm dừng rồi trả lại như NV287; loa đích bận thì từ chối kèm câu nêu rõ ai đang giữ (cơ chế nhãn NV291). Kênh mặc định TẮT, mở tối đa 30 phút, tối đa 6 loa, đóng khi còn dưới 2 loa hoặc nguồn mất mic. **Chưa thử trên loa thật** | |
 | Mic loa song song | switch | **Bật** = song công (hai bên nói cùng lúc, mặc định); **tắt** = nửa công (HA bỏ tiếng mic khi loa đang phát). Không liên quan «giữ để nói» hay «bật mic luôn» | |
 | Đèn theo nhạc | switch | Bật/tắt đèn theo nhạc của firmware | |
 | Độ sáng đèn nhạc / Sắc độ đèn nhạc | number | Chỉnh đèn theo nhạc (firmware) | 0–100 / 1–100 |

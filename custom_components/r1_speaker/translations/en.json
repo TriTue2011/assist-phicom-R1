@@ -124,6 +124,9 @@
       },
       "kdl_ngay_cn": {
         "name": "Restart on Sunday"
+      },
+      "kenh": {
+        "name": "Intercom channel"
       }
     },
     "sensor": {
@@ -345,7 +348,9 @@
           "khoi_dong_lai_bat": "Restart the speaker on a schedule (OFF by default; preventive)",
           "khoi_dong_lai_gio": "Restart time (local time)",
           "khoi_dong_lai_ngay": "Days of the week to restart",
-          "khoi_dong_lai_khi_treo": "Restart the speaker by itself ONCE when it hangs (network up, speaker app silent; needs ADB; OFF by default; at least 6 hours between restarts)"
+          "khoi_dong_lai_khi_treo": "Restart the speaker by itself ONCE when it hangs (network up, speaker app silent; needs ADB; OFF by default; at least 6 hours between restarts)",
+          "kenh": "Intercom channel name this speaker joins (speakers with the same name form one channel; empty = no channel)",
+          "kenh_kieu": "Channel mode: ptt (push-to-talk via service/switch) or voice (auto-start on voice)"
         }
       },
       "nang_cao": {
@@ -752,6 +757,34 @@
         "entity_id": {
           "name": "Speaker",
           "description": "Any entity of a speaker in the conference."
+        }
+      }
+    },
+    "noi_kenh": {
+      "name": "Speak into an intercom channel",
+      "description": "Start speaking into an intercom channel from this speaker (the channel must be open; the speaker must be a member).",
+      "fields": {
+        "kenh": {
+          "name": "Channel",
+          "description": "Channel name, as set in the speakers' options."
+        },
+        "nguon": {
+          "name": "Source speaker",
+          "description": "Any entity of the speaker speaking."
+        }
+      }
+    },
+    "dung_kenh": {
+      "name": "Stop speaking into an intercom channel",
+      "description": "Stop the current speaker in a channel (empty source stops whoever is speaking).",
+      "fields": {
+        "kenh": {
+          "name": "Channel",
+          "description": "Channel name, as set in the speakers' options."
+        },
+        "nguon": {
+          "name": "Source speaker",
+          "description": "Optional: only stops if this speaker is the one speaking."
         }
       }
     }

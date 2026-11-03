@@ -261,6 +261,23 @@ MIC_STATUSES = (MIC_TAT, MIC_NGHE, MIC_GUI)
 EVENT_WAKE = f"{DOMAIN}_wake"
 EVENT_SESSION_REFUSED = f"{DOMAIN}_session_refused"
 
+# ── Kênh đàm thoại giữa loa với loa (NV292) ──────────────────────────────────
+#: Tuỳ chọn mỗi loa: tên kênh mà loa này tham gia (trống = không tham gia kênh nào).
+CONF_KENH = "kenh"
+#: Kiểu kênh: ``ptt`` (bấm-để-nói qua dịch vụ/công tắc) hoặc ``voice`` (tự bật khi có tiếng).
+CONF_KENH_KIEU = "kenh_kieu"
+#: Mặc định bấm-để-nói: an toàn hơn tự bật (không phát tiếng nhà đi nhầm khi kênh mở).
+DEFAULT_KENH_KIEU = "ptt"
+KENH_KIEU = ("ptt", "voice")
+#: Giới hạn tài nguyên (quy tắc kho docs/PHAT-TRIEN.md): tối đa 8 kênh, mỗi kênh tối đa
+#: 6 loa (trùng trần phòng đàm thoại ``hoi_thoai.TOI_DA_LOA``), kênh mở tối đa 30 phút
+#: rồi tự đóng (trùng trần phiên song công ``DEFAULT_DUPLEX_MAX_S``).
+KENH_TOI_DA_KENH = 8
+KENH_TOI_DA_LOA = 6
+KENH_MO_TOI_DA_S = 1800.0
+#: Sự kiện kênh mở/đóng/nói/dừng (kèm ``kenh`` và, khi nói, ``nguon``).
+EVENT_KENH = f"{DOMAIN}_kenh"
+
 #: Khoá trong ``entry.data`` cho đường POST/GET bộ đàm (go2rtc không gửi được header
 #: Authorization từ lệnh exec nên khoá nằm trong URL; sinh một lần, giữ qua lần khởi động).
 CONF_INTERCOM_KEY = "intercom_key"

@@ -34,7 +34,8 @@ from .const import (CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, 
                     DEFAULT_MIC_LISTEN_PORT, DEFAULT_MIC_PORT, DEFAULT_PLAY_PORT, DEFAULT_PORT, DEFAULT_TALK_PREROLL,
                     DEFAULT_TALK_SILENCE, DEFAULT_TALK_TAIL, DEFAULT_TALK_THRESHOLD_DB, DOMAIN)
 from .settings import (khoi_dong_lai_bat, khoi_dong_lai_gio, khoi_dong_lai_khi_treo, khoi_dong_lai_ngay, airplay_port, duong_phat, tts_song_song_airplay, ha_nhac_xuong, ha_nhac_nac, adb_settings, adb_tu_dong_dong, phim_ma, phim_nguon, DuplexSettings, TalkSettings, agc_settings, conf, limiter_settings, noise_settings, wake_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
-                       speaker_port, wake_mode)
+                       speaker_port, wake_mode, kenh_ten, kenh_kieu)
+from .const import CONF_KENH, CONF_KENH_KIEU, DEFAULT_KENH_KIEU, KENH_KIEU
 from .const import CONF_ADB_MODE, CONF_ADB_SERVER, CONF_ADB_TU_DONG, CONF_PHIM_MA, CONF_PHIM_NGUON, DEFAULT_ADB_MODE, DEFAULT_ADB_SERVER, DEFAULT_PHIM_MA, DEFAULT_PHIM_NGUON
 from .const import CONF_AIRPLAY_PORT, CONF_DUONG_PHAT, DEFAULT_AIRPLAY_PORT, DEFAULT_DUONG_PHAT, DUONG_PHAT_GIA_TRI
 from .const import (CONF_KDL_BAT, CONF_KDL_GIO, CONF_KDL_NGAY, CONF_KDL_TU_PHUC_HOI, DEFAULT_KDL_BAT, DEFAULT_KDL_GIO, DEFAULT_KDL_NGAY,
@@ -132,6 +133,8 @@ _GOC = {
     CONF_HA_NHAC_NAC: DEFAULT_HA_NHAC_NAC,
     CONF_KDL_BAT: DEFAULT_KDL_BAT, CONF_KDL_GIO: DEFAULT_KDL_GIO, CONF_KDL_NGAY: list(DEFAULT_KDL_NGAY),
     CONF_KDL_TU_PHUC_HOI: DEFAULT_KDL_TU_PHUC_HOI,
+    # NV292: kênh đàm thoại loa–loa (mặc định: không vào kênh nào).
+    CONF_KENH: "", CONF_KENH_KIEU: DEFAULT_KENH_KIEU,
 }
 
 
@@ -235,7 +238,9 @@ class R1OptionsFlow(OptionsFlowWithReload):
                                 CONF_KDL_BAT: user_input.get(CONF_KDL_BAT, DEFAULT_KDL_BAT),
                                 CONF_KDL_GIO: _gio_hhmm(user_input.get(CONF_KDL_GIO)),
                                 CONF_KDL_NGAY: [m for m in KDL_NGAY_MA if m in user_input.get(CONF_KDL_NGAY, DEFAULT_KDL_NGAY)],
-                                CONF_KDL_TU_PHUC_HOI: user_input.get(CONF_KDL_TU_PHUC_HOI, DEFAULT_KDL_TU_PHUC_HOI)}
+                                CONF_KDL_TU_PHUC_HOI: user_input.get(CONF_KDL_TU_PHUC_HOI, DEFAULT_KDL_TU_PHUC_HOI),
+                                CONF_KENH: (user_input.get(CONF_KENH) or "").strip(),
+                                CONF_KENH_KIEU: user_input.get(CONF_KENH_KIEU, DEFAULT_KENH_KIEU)}
                 if user_input.get(CONF_NANG_CAO):
                     return await self.async_step_nang_cao()
                 return self._luu({})
@@ -266,6 +271,9 @@ class R1OptionsFlow(OptionsFlowWithReload):
             vol.Optional(CONF_ROTATE_KEY, default=False): bool,
             vol.Optional(CONF_GHEP_LAI, default=False): bool,
             vol.Optional(CONF_NANG_CAO, default=False): bool,
+            # NV292: kênh đàm thoại loa–loa (các loa khai cùng tên thì thành một kênh).
+            vol.Optional(CONF_KENH, default=v.get(CONF_KENH, kenh_ten(entry))): str,
+            vol.Optional(CONF_KENH_KIEU, default=v.get(CONF_KENH_KIEU, kenh_kieu(entry))): vol.In(list(KENH_KIEU)),
         }))
 
     def _luu(self, nang_cao: dict[str, Any]) -> ConfigFlowResult:

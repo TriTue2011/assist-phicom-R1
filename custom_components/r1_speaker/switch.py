@@ -21,6 +21,8 @@ from .coordinator import R1ConfigEntry, R1Coordinator
 from . import thuc_the_tuy_chon
 from .dam_thoai import nhan_tu_context
 from .entity import R1Entity, R1MicEntity, R1MusicLightEntity, preregister
+from .kenh import hub
+from .settings import kenh_ten
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -58,6 +60,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
                         R1ParallelSwitch(entry),
                         R1MusicLightSwitch(entry.runtime_data),
                         R1BluetoothSwitch(entry.runtime_data), *thuc_the_tuy_chon.switches(hass, entry)])
+    # NV292: mỗi loa có kênh thì có thêm một công tắc mở/đóng kênh của nó.
+    if kenh_ten(entry):
+        preregister(hass, entry, "switch", f"{entry.entry_id}_kenh", "r1_kenh")
+        async_add_entities([R1ChannelSwitch(entry)])
 
 
 class R1Switch(R1Entity, SwitchEntity):
@@ -327,3 +333,48 @@ class R1MusicLightSwitch(R1MusicLightEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._dat(MUSIC_LIGHT_ENABLE, 0, music_light_enable=False)
+
+
+class R1ChannelSwitch(R1MicEntity, SwitchEntity):
+    """Kênh đàm thoại loa–loa (NV292): bật = mở kênh (cả nhóm nghe một tiếng bip),
+    tắt = đóng kênh. Mỗi loa có kênh thì có một công tắc; trạng thái lấy từ quản
+    lý kênh dùng chung nên các loa cùng kênh bật/tắt đồng bộ. Không nhớ qua lần
+    khởi động lại: HA khởi động lại thì kênh đóng (mặc định TẮT, riêng tư)."""
+
+    _attr_translation_key = "kenh"
+
+    def __init__(self, entry: R1ConfigEntry) -> None:
+        super().__init__(entry, "kenh")
+        self._ten = kenh_ten(entry)
+
+    @property
+    def _ql(self):
+        return hub(self.hass)
+
+    @property
+    def is_on(self) -> bool:
+        try:
+            return self._ql.kenh(self._ten).mo
+        except HomeAssistantError:
+            return False
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        try:
+            tt = self._ql.trang_thai(self._ten)
+        except HomeAssistantError:
+            return {"kenh": self._ten, "dang_mo": False}
+        return {"kenh": tt["ten"], "kieu": tt["kieu"], "thanh_vien": tt["thanh_vien"],
+                "nguoi_dang_noi": tt["nguoi_noi"], "dang_mo": tt["mo"]}
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self._ql.add_listener(self.async_write_ha_state))
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._ql.async_mo(self._ten)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._ql.dong(self._ten)
+        self.async_write_ha_state()

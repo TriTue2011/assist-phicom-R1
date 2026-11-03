@@ -56,6 +56,7 @@ from .mic import R1Mic
 from .mic_server import R1MicServer
 from .playback import R1Playback
 from .phim import Phim, dang_ky_dich_vu as dang_ky_dich_vu_phim
+from .kenh import dang_ky_dich_vu as dang_ky_dich_vu_kenh, hub as kenh_hub
 from .phim_adb import PhimAdb
 from .settings import (adb_settings, adb_tu_dong_dong, phim_ma, phim_nguon, DuplexSettings, TalkSettings, agc_settings, cong_nghe_trong, limiter_settings, mic_host_hieu_luc, noise_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
                        speaker_port, wake_mode)
@@ -91,6 +92,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     dang_ky_dich_vu_bao_thuc(hass)
     dang_ky_dich_vu_hoi_thoai(hass)
     dang_ky_dich_vu_phim(hass)
+    dang_ky_dich_vu_kenh(hass)
     den_chinh.dang_ky_dich_vu(hass)
     lenh_apk.dang_ky(hass)
     nang_cao.dang_ky_dich_vu(hass)
@@ -317,6 +319,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
     entry.async_on_unload(async_track_time_interval(hass, coordinator.khoi_dong_lai.nhip, timedelta(seconds=KDL_NHIP_GIAY)))
     _don_thuc_the_cu(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    # NV292: loa này nạp xong → gộp lại định nghĩa kênh từ tuỳ chọn mọi loa.
+    kenh_hub(hass).lam_moi(hass.config_entries.async_entries(DOMAIN))
     coordinator.lights.start()
     # Loa nối lại vào HA (vừa khởi động lại) → áp lại đèn hiện tại.
     entry.async_on_unload(coordinator.mic_server.add_state_listener(coordinator.lights.ap_dung_lai))
@@ -325,6 +329,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
 
 async def async_remove_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> None:
     """Xoá mục: nhả cổng nghe mic nếu máy chủ của mục còn giữ (mục xoá lúc «chưa nạp» thì HA không dỡ tải)."""
+    kenh_hub(hass).loai_loa(entry.entry_id)          # NV292: rời mọi kênh đang mở
     coordinator = getattr(entry, "runtime_data", None)
     if coordinator is not None and getattr(coordinator, "mic_server", None) is not None:
         await coordinator.mic_server.async_close()
@@ -334,6 +339,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
     coordinator = entry.runtime_data
     ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if ok:
+        # NV292: loa này dỡ tải → rời mọi kênh đang mở (kênh còn dưới 2 loa thì đóng).
+        kenh_hub(hass).loai_loa(entry.entry_id)
         await coordinator.lights.async_close()
         await coordinator.mic_server.async_close()
         await coordinator.duplex.async_close()

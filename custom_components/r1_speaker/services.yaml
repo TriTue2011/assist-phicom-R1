@@ -135,6 +135,27 @@ stop_conference:
       selector:
         entity:
           integration: r1_speaker
+noi_kenh:
+  fields:
+    kenh:
+      required: true
+      selector:
+        text:
+    nguon:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+dung_kenh:
+  fields:
+    kenh:
+      required: true
+      selector:
+        text:
+    nguon:
+      selector:
+        entity:
+          integration: r1_speaker
 set_main_light:
   fields:
     entity_id:
