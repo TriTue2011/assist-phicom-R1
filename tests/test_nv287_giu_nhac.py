@@ -359,9 +359,11 @@ async def test_tin_song_song_airplay_khong_dung_dlna_dang_phat(hass, r1, dmr, ra
     assert [a["CurrentURI"] for a in dmr.called("SetAVTransportURI")] == [MUSIC]
 
 
-async def test_tin_song_song_khi_nhac_o_airplay_thi_ve_duong_thuong(hass, r1, dmr, raop, nguon):
-    """Nhạc đang ở AirPlay thì không có DLNA để giữ: tin song song không áp dụng,
-    về đường tạm dừng/khôi phục thường (tin vẫn phát hết, nhạc đặt lại)."""
+async def test_tin_song_song_khi_nhac_o_airplay_ma_dlna_khong_len_thi_ve_duong_thuong(hass, r1, dmr, raop, nguon, monkeypatch):
+    """Nhạc đang ở AirPlay: từ NV303 tin đi DLNA song song; renderer DLNA không lên được thì về đường tạm dừng/khôi phục thường
+    (tin vẫn phát hết, nhạc đặt lại)."""
+    monkeypatch.setattr(r1_mp, "DLNA_TIN_NGUOC_SAN_SANG", 0.6)
+    dmr.enabled = lambda: False
     nguon.so_goi[TTS] = 20
     await them(hass, r1, raop, "airplay", tts_song_song_airplay=True)
     await phat(hass, MUSIC)

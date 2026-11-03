@@ -137,7 +137,7 @@ class R1GioKhoiDongLaiTime(_TuyChon, TimeEntity):
 
 
 #: Tên thực thể gợi ý (``<domain>.<tên>``) theo khoá dịch; khoá nào không có ở đây thì dùng ``r1_<khoá>``.
-_TEN_GOI_Y = {"tin_nguoc_nhac": "r1_tin_bao_song_song", "kdl_bat": "r1_khoi_dong_lai_lich", "kdl_khi_treo": "r1_khoi_dong_lai_khi_treo",
+_TEN_GOI_Y = {"tin_nguoc_nhac": "r1_tin_bao_nguoc_nhac", "kdl_bat": "r1_khoi_dong_lai_lich", "kdl_khi_treo": "r1_khoi_dong_lai_khi_treo",
               "kdl_gio": "r1_gio_khoi_dong_lai", **{f"kdl_ngay_{m}": f"r1_khoi_dong_lai_{m}" for m in const.KDL_NGAY_MA}}
 
 
