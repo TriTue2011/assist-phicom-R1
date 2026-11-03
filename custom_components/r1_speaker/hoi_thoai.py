@@ -34,6 +34,7 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN, EVENT_HOI_THOAI
 from .tron_tieng import CHE_DO, DIEN_THOAI, KHUNG_S, LOA, BoTron
+from .dam_thoai import nhan_tu_context, nhan_tu_yeu_cau
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -123,7 +124,7 @@ class Phong:
 
     # ── Mở ───────────────────────────────────────────────────────
 
-    async def async_start(self) -> None:
+    async def async_start(self, nhan: str | None = None) -> None:
         """Mở phiên song công của MỌI loa; một loa không mở được thì đóng lại các loa đã mở rồi ném lỗi (không để phòng nửa vời)."""
         da_mo: list[LoaCuaPhong] = []
         try:
@@ -131,7 +132,7 @@ class Phong:
                 d = b.duplex
                 if d.active or d.downlink_busy or d.phong is not None:
                     raise HomeAssistantError(f"{b.ten}: đang có phiên đàm thoại khác")
-                await d.async_start()                 # chiếm chỗ qua R1Talk.claim; Assist/bộ đàm đang bận thì R1SessionBusy
+                await d.async_start(nhan)             # chiếm chỗ qua R1Talk.claim; Assist/bộ đàm đang bận thì R1SessionBusy
                 da_mo.append(b)
                 d.downlink_busy = True
         except BaseException:
@@ -269,7 +270,7 @@ class HoiThoai:
     def phong_theo_bo_loa(self, ma_loa: set[str]) -> Phong | None:
         return next((p for p in self._phong.values() if set(p._loa) == ma_loa), None)
 
-    async def mo(self, loa: list[LoaCuaPhong], *, giua_cac_loa: bool = True, che_do: str = "tron") -> Phong:
+    async def mo(self, loa: list[LoaCuaPhong], *, giua_cac_loa: bool = True, che_do: str = "tron", nhan: str | None = None) -> Phong:
         if not 1 <= len(loa) <= TOI_DA_LOA:
             raise HomeAssistantError(f"Phòng đàm thoại cần 1–{TOI_DA_LOA} loa.")
         if len({b.ma for b in loa}) != len(loa):
@@ -282,7 +283,7 @@ class HoiThoai:
         p = Phong(self.hass, loa, giua_cac_loa=giua_cac_loa, che_do=che_do, tren_dong=self._go)
         self._phong[p.ma] = p                          # đăng ký TRƯỚC khi mở: hai lệnh mở cùng lúc không cùng chiếm một loa
         try:
-            await p.async_start()
+            await p.async_start(nhan)
         except BaseException:
             self._phong.pop(p.ma, None)
             raise
@@ -317,7 +318,7 @@ def dang_ky_dich_vu(hass: HomeAssistant) -> None:
     async def _mo(call) -> None:
         loa = [loa_tu_thuc_the(hass, e) for e in call.data["entity_ids"]]
         try:
-            await hub(hass).mo(loa, giua_cac_loa=call.data["giua_cac_loa"], che_do=call.data["che_do"])
+            await hub(hass).mo(loa, giua_cac_loa=call.data["giua_cac_loa"], che_do=call.data["che_do"], nhan=await nhan_tu_context(hass, call.context))
         except HomeAssistantError as exc:
             raise ServiceValidationError(str(exc)) from exc
 
@@ -375,7 +376,7 @@ class HoiThoaiWsView(HomeAssistantView):
         tu_mo = False
         try:
             if phong is None:
-                phong = await h.mo(loa, giua_cac_loa=request.query.get("giua") == "1", che_do=che_do)
+                phong = await h.mo(loa, giua_cac_loa=request.query.get("giua") == "1", che_do=che_do, nhan=nhan_tu_yeu_cau(request))
                 tu_mo = True
         except HomeAssistantError as exc:                # loa bận, chưa nối mic/kênh phát, hoặc Assist đang giữ phiên
             return await tu_choi(MA_LOI_MO, str(exc))

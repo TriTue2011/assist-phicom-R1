@@ -22,11 +22,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol
 
+from homeassistant.components.http import KEY_HASS_USER
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_call_later
@@ -41,6 +43,41 @@ _LOGGER = logging.getLogger(__name__)
 
 class R1SessionBusy(HomeAssistantError):
     """Đang có một phiên khác — phiên mới bị từ chối."""
+
+
+#: NV291 — nhãn bên giữ phiên (tên máy khách khai báo khi mở, hoặc người dùng HA của kết nối). Có thể là dữ liệu cá nhân: cắt độ dài,
+#: bỏ ký tự điều khiển, KHÔNG ghi ra nhật ký (chỉ vào câu lỗi trả về, sự kiện và thuộc tính hiển thị).
+NHAN_TOI_DA = 40
+NHAN_KHONG_RO = "một thiết bị không xác định"
+#: Phiên do chính loa tự mở / do từ gọi thì bên mở là loa / từ gọi — biết từ CẤU TRÚC (loại phiên), không đoán theo địa chỉ IP. Loại khác
+#: (nút, bộ đàm, song công…) không tự biết ai mở: nếu bên mở không khai thì để «không xác định», không bịa.
+NHAN_THEO_LOAI = {"wake": "chính loa", "wake_ha": "từ gọi", "assist": "từ gọi"}
+
+
+def lam_sach_nhan(v: Any) -> str | None:
+    """Nhãn sạch (≤ ``NHAN_TOI_DA`` ký tự, không ký tự điều khiển / định dạng, khoảng trắng gộp) hoặc None nếu rỗng / không phải chuỗi."""
+    if not isinstance(v, str):
+        return None
+    ra = "".join(" " if c.isspace() else c for c in v if c.isspace() or not unicodedata.category(c).startswith("C"))
+    ra = " ".join(ra.split())[:NHAN_TOI_DA].strip()
+    return ra or None
+
+
+async def nhan_tu_context(hass: HomeAssistant, context: Any) -> str | None:
+    """Nhãn từ NGƯỜI DÙNG HA của cuộc gọi dịch vụ (``context.user_id``): tên người dùng đã làm sạch, None nếu cuộc gọi không do người dùng
+    nào (tự động hoá hệ thống…) hoặc người dùng không còn."""
+    uid = getattr(context, "user_id", None)
+    user = await hass.auth.async_get_user(uid) if uid else None
+    return lam_sach_nhan(user.name) if user else None
+
+
+def nhan_tu_yeu_cau(request: Any) -> str | None:
+    """Nhãn từ yêu cầu HTTP/WebSocket: tên máy khách khai báo khi mở (``?nhan=``), không có thì người dùng HA đã xác thực của kết nối."""
+    khai = lam_sach_nhan(request.query.get("nhan"))
+    if khai:
+        return khai
+    user = request.get(KEY_HASS_USER)
+    return lam_sach_nhan(user.name) if user is not None else None
 
 
 class SessionDriver(Protocol):
@@ -59,6 +96,7 @@ class Session:
     setup: asyncio.Task | None = None
     watchdog: asyncio.Task | None = None
     ended: str | None = None
+    nhan: str | None = None                     # NV291: ai mở phiên (đã làm sạch); None = bên mở không khai
 
 
 class R1Talk:
@@ -69,6 +107,7 @@ class R1Talk:
         self.session: Session | None = None
         self.refused = 0
         self.last_refusal: str | None = None
+        self.last_refusal_nhan: dict[str, str] | None = None
         self.last_end: str | None = None
         self.last_wake: datetime | None = None
         self.last_wake_word: str | None = None
@@ -124,20 +163,32 @@ class R1Talk:
 
     # ── Mở / đóng phiên ───────────────────────────────────────────────────────
 
-    def _refuse(self, kind: str) -> R1SessionBusy:
+    @staticmethod
+    def nhan_cua(s: Session) -> str:
+        """Ai đang giữ phiên ``s``: nhãn bên mở khai, không thì theo loại phiên, không thì «không xác định» (KHÔNG bịa)."""
+        return s.nhan or NHAN_THEO_LOAI.get(s.kind) or NHAN_KHONG_RO
+
+    def _refuse(self, kind: str, nhan: str | None = None) -> R1SessionBusy:
         cur = self.session
         assert cur is not None
-        tuoi = time.monotonic() - cur.started
-        msg = (f"Loa R1 đang có phiên đàm thoại (nguồn: {cur.kind}, đã mở {tuoi:.0f} giây): "
-               f"phiên «{kind}» bị từ chối. Chờ phiên đó kết thúc (tối đa "
-               f"{const.SESSION_MAX_S:.0f} giây) hoặc tắt mic để đóng ngay.")
+        return R1SessionBusy(self.ghi_tu_choi(kind, nhan, cur.kind, self.nhan_cua(cur), time.monotonic() - cur.started))
+
+    def ghi_tu_choi(self, kind: str, nhan: str | None, loai_ban: str, ban_boi: str, tuoi: float) -> str:
+        """Ghi một lần từ chối (bộ đếm, thuộc tính, sự kiện, nhật ký KHÔNG mang nhãn) và trả câu lỗi cho người bị từ chối. Cả phiên bị phiên khác
+        giữ lẫn kênh phát đàm thoại bị điện thoại khác giữ (``dam_thoai_ws``) đi qua đây nên câu nào cũng nêu ai đang giữ."""
+        bi_tu_choi_boi = nhan or NHAN_THEO_LOAI.get(kind) or NHAN_KHONG_RO
+        msg = (f"Loa R1 đang được dùng bởi {ban_boi} (phiên {loai_ban} — đã mở {tuoi:.0f} giây). Chờ phiên đó kết thúc (tối đa "
+               f"{const.SESSION_MAX_S:.0f} giây) hoặc tắt mic để đóng ngay; phiên «{kind}» của {bi_tu_choi_boi} bị từ chối.")
         self.refused += 1
         self.last_refusal = msg
-        _LOGGER.warning(msg)
+        self.last_refusal_nhan = {"ban_boi": ban_boi, "bi_tu_choi_boi": bi_tu_choi_boi}
+        # Nhật ký KHÔNG mang nhãn (có thể là tên người): chỉ loại phiên và tuổi.
+        _LOGGER.warning("Loa R1 đang có phiên đàm thoại (nguồn: %s, đã mở %.0f giây): phiên «%s» bị từ chối", loai_ban, tuoi, kind)
         self.hass.bus.async_fire(const.EVENT_SESSION_REFUSED, {
-            "ban": cur.kind, "bi_tu_choi": kind, "tuoi_giay": round(tuoi, 1)})
+            "ban": loai_ban, "bi_tu_choi": kind, "tuoi_giay": round(tuoi, 1),
+            "ban_boi": ban_boi, "bi_tu_choi_boi": bi_tu_choi_boi})
         self._notify()
-        return R1SessionBusy(msg)
+        return msg
 
     def _check_mic(self) -> None:
         m = self.mic
@@ -149,13 +200,14 @@ class R1Talk:
         if not m.available:
             raise HomeAssistantError("Luồng mic của loa chưa nối được: chưa mở được phiên.")
 
-    def _open(self, kind: str) -> Session:
+    def _open(self, kind: str, nhan: str | None = None) -> Session:
         """Phần ĐỒNG BỘ của mở phiên: chiếm chỗ ngay (trước mọi await) nên hai lời xin gần
-        nhau không thể cùng thắng."""
+        nhau không thể cùng thắng. ``nhan``: ai mở (xem ``lam_sach_nhan``)."""
+        nhan = lam_sach_nhan(nhan)
         if self.session is not None:
-            raise self._refuse(kind)
+            raise self._refuse(kind, nhan)
         self._check_mic()
-        s = self.session = Session(kind)
+        s = self.session = Session(kind, nhan=nhan)
         s.release_mic = self.mic.want()
         s.watchdog = self.hass.async_create_background_task(
             self._canh(s), "r1_speaker session watchdog")
@@ -165,9 +217,9 @@ class R1Talk:
     async def _setup(self, s: Session) -> None:
         s.music = await self.music.hold()
 
-    async def async_start(self, kind: str) -> Session:
+    async def async_start(self, kind: str, nhan: str | None = None) -> Session:
         """Mở phiên và bắt đầu nghe ngay (bỏ qua bước từ gọi). Từ chối → ``R1SessionBusy``."""
-        s = self._open(kind)
+        s = self._open(kind, nhan)
         s.setup = self.hass.async_create_task(self._setup(s))
         try:
             await s.setup
@@ -194,11 +246,12 @@ class R1Talk:
         return s
 
     @callback
-    def claim(self, kind: str) -> Callable[[], None]:
+    def claim(self, kind: str, nhan: str | None = None) -> Callable[[], None]:
         """Chiếm chỗ phiên mà KHÔNG nghe, KHÔNG giữ nhạc (bộ đàm). Hàm trả về nhả chỗ."""
+        nhan = lam_sach_nhan(nhan)
         if self.session is not None:
-            raise self._refuse(kind)
-        s = self.session = Session(kind)
+            raise self._refuse(kind, nhan)
+        s = self.session = Session(kind, nhan=nhan)
         self._notify()
         return lambda: self.end(s, "xong", cut=False)
 
@@ -331,4 +384,6 @@ class R1Talk:
             "phia_loa": "da_ket_noi" if self.last_alive else "CHO_PHIA_LOA",
             "ket_thuc_gan_nhat": self.last_end, "so_lan_tu_choi": self.refused,
             "tu_choi_gan_nhat": self.last_refusal,
+            "phien_dang_giu_boi": self.nhan_cua(self.session) if self.session else None,
+            "tu_choi_gan_nhat_nhan": self.last_refusal_nhan,
         }

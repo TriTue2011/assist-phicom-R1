@@ -380,7 +380,9 @@ def test_giao_dien_dam_thoai_bat_nghe_giu_noi_mic_luon_song_song_va_gain(tmp_pat
     assert c["acTrongCuChi"] == [[True, 16000]]                           # AudioContext tạo NGAY trong cử chỉ bấm
     assert c["xinMic"] == 0 and c["tiengDi"] == 0 and c["chuoi"] == []    # chỉ NGHE: không xin mic, không gửi gì
     assert c["nut"] == "Tắt đàm thoại" and "Đang nghe loa" in c["trangThai"] and "Assist tạm nghỉ" in c["trangThai"]
-    assert c["sign"] == [["auth/sign_path", "/api/r1_speaker/dam_thoai/sensor.r1_trang_thai_mic/ws"]]
+    # đường ký kèm ``?nhan=`` (tên máy khách khai báo, NV291): thẻ không biết hass.user trong trang thử nên nhãn chỉ là nền tảng trình duyệt
+    assert [x[0] for x in c["sign"]] == ["auth/sign_path"] and len(c["sign"]) == 1
+    assert c["sign"][0][1].startswith("/api/r1_speaker/dam_thoai/sensor.r1_trang_thai_mic/ws?nhan=")
     assert "Điện thoại đang nói" in r["huongDienThoai"] and "Song song" in r["huongSongSong"]
     g = r["giu"]
     assert g["xinMic"] == 1 and g["khoa"] is False and g["mau"] is True and "Đang nói" in g["chu"]
@@ -527,10 +529,11 @@ def test_giao_dien_the_dam_thoai_nhieu_loa_chon_loa_noi_loa_va_duong_websocket(t
     assert r["hai"] == {"chips": ["Phicomm R1*", "Bếp*"], "bat": False, "mic": "Đang nghe"}               # chọn thêm loa 2: nối được; trạng thái vẫn của loa đầu
     assert json.loads(r["nhieu"]) == [["r1_speaker", "start_conference", {"entity_ids": ["switch.r1_dam_thoai", "switch.r1_dam_thoai_2"], "che_do": "quyen_noi"}]]
     # Đàm thoại bằng điện thoại: từ hai loa đi đường PHÒNG (một WebSocket chứa mọi loa đã chọn), một loa đi đường cũ
-    assert r["duongNhieu"] == ["/api/r1_speaker/hoi_thoai/ws?e=switch.r1_dam_thoai&e=switch.r1_dam_thoai_2&che_do=quyen_noi"]
+    assert len(r["duongNhieu"]) == 1 and r["duongNhieu"][0].startswith(
+        "/api/r1_speaker/hoi_thoai/ws?e=switch.r1_dam_thoai&e=switch.r1_dam_thoai_2&che_do=quyen_noi&nhan=")
     assert r["dtMo"] is True and r["dtDongKhiDoiLoa"] is True
     assert r["chonLoa2"] == {"chips": ["Phicomm R1", "Bếp*"], "mic": "Tắt", "bat": True}                  # chọn loa nào thì đàm thoại loa đó (trạng thái mic của loa 2)
-    assert r["duongMot"] == ["/api/r1_speaker/dam_thoai/sensor.r1_mic_2/ws"]
+    assert len(r["duongMot"]) == 1 and r["duongMot"][0].startswith("/api/r1_speaker/dam_thoai/sensor.r1_mic_2/ws?nhan=")
     assert r["conLai"] == ["Phicomm R1", "Bếp*"]                                                         # không bỏ được loa chọn cuối cùng
     # Phòng đang mở (thuộc tính của cảm biến mic): nút thành «Ngắt nối», liệt kê loa, ô «cùng một phòng» phản ánh chế độ và bị khoá
     assert r["dangNoi"] == {"bat": "Ngắt nối", "tt": "Đang nối: Phicomm R1, Bếp", "chung": True, "khoaChung": True}

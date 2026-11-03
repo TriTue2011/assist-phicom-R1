@@ -19,6 +19,7 @@ from .client import R1Client, R1Error
 from .const import BT_DOI_DOC_LAI, MUSIC_LIGHT_ENABLE
 from .coordinator import R1ConfigEntry, R1Coordinator
 from . import thuc_the_tuy_chon
+from .dam_thoai import nhan_tu_context
 from .entity import R1Entity, R1MicEntity, R1MusicLightEntity, preregister
 
 
@@ -264,7 +265,7 @@ class R1IntercomSwitch(R1MicEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         if not self._duplex.active:
-            await self._duplex.async_start()
+            await self._duplex.async_start(await nhan_tu_context(self.hass, self._context))
         self._duplex.luon = True
         self.async_write_ha_state()
 

@@ -225,7 +225,7 @@ class IntercomView(HomeAssistantView):
             return web.Response(status=409, text="intercom already in use")
         try:
             # Một phiên một lúc: đang có phiên đàm thoại Assist thì bộ đàm cũng bị từ chối rõ.
-            nha_cho = coordinator.talk.claim("bo_dam")
+            nha_cho = coordinator.talk.claim("bo_dam", request.query.get("nhan"))
         except R1SessionBusy as exc:
             return web.Response(status=409, text=str(exc))
         phien.busy = True

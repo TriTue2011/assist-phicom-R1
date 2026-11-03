@@ -51,7 +51,7 @@ class DuplexGia:
         self._audio, self._doi = [], []
         self.da_phat = []                      # [(pcm, vox)]
 
-    async def async_start(self):
+    async def async_start(self, nhan=None):
         if self.loi_mo:
             raise self.loi_mo
         self.active = True

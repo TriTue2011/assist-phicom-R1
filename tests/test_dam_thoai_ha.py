@@ -161,7 +161,7 @@ async def test_phien_thu_hai_qua_nut_bi_tu_choi_co_thong_bao(hass, r1, pcm_serve
     dmr = await nhac()
     dmr.start_music(MUSIC)
     await _talk(e).async_start("button")
-    with pytest.raises(HomeAssistantError, match="đang có phiên đàm thoại"):
+    with pytest.raises(HomeAssistantError, match="đang được dùng bởi"):
         await _talk(e).async_start("button")                                  # từ chối NGAY, không treo
     st = hass.states.get(MICST)
     assert st.attributes["so_lan_tu_choi"] == 1 and "button" in st.attributes["tu_choi_gan_nhat"]

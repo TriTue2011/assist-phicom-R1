@@ -31,6 +31,7 @@ from .const import ADB_PORT, KDL_NHIP_GIAY
 from .const import (CARD_GOP_URL, CARD_URL, CHUCNANG_CARD_URL, CONF_INTERCOM_KEY, CONF_MIC_CHUA_GHEP, CONF_MIC_LISTEN_KEY, CONF_MIC_LISTEN_PORT, DOMAIN, SETTINGS_CARD_URL, TALK_CARD_URL,
                     WAKE_SPEAKER)
 from .cong_vao import PingView, WakeView
+from .dam_thoai import nhan_tu_context
 from .dam_thoai_ws import DamThoaiWsView
 from .hoi_thoai import HoiThoaiWsView, dang_ky_dich_vu as dang_ky_dich_vu_hoi_thoai
 from .ghep_khoa import GhepKhoaView
@@ -142,7 +143,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         return entry.runtime_data
 
     async def _mo_song_cong(call: ServiceCall) -> None:
-        await _coordinator(call).duplex.async_start()
+        await _coordinator(call).duplex.async_start(await nhan_tu_context(hass, call.context))
 
     async def _dong_song_cong(call: ServiceCall) -> None:
         _coordinator(call).duplex.end("nguoi_dung_ket_thuc")

@@ -45,7 +45,7 @@ from homeassistant.exceptions import HomeAssistantError
 from . import const
 from .hang_doi import day_bo_cu_nhat
 from .cong_vao import tu_choi_401, xac_thuc
-from .dam_thoai import R1SessionBusy, R1Talk
+from .dam_thoai import NHAN_KHONG_RO, R1SessionBusy, R1Talk, lam_sach_nhan
 from .intercom import level_db
 from .mic import R1Mic
 from .playback import R1PlayError, R1Playback
@@ -148,6 +148,7 @@ class R1Duplex:
         self._vad_factory = vad_factory      # None = microVAD thật; test tiêm VAD giả
         self.active = False
         self.downlink_busy = False           # đang có một POST DuplexView bơm xuống loa
+        self.downlink_nhan: str | None = None   # NV291: ai đang giữ kênh phát (nhãn do bên mở khai); None = không khai
         self.started_at: float | None = None
         self.last_end: str | None = None
         self.play_seconds = 0.0
@@ -255,8 +256,18 @@ class R1Duplex:
 
     # ── Mở / đóng phiên ───────────────────────────────────────────────────────
 
-    async def async_start(self) -> None:
-        """Mở phiên song công: mic mở liên tục, KHÔNG ngưỡng im lặng tự đóng."""
+    def chu_hien_tai(self) -> str:
+        """Ai đang giữ kênh phát / phiên song công: nhãn bên giữ kênh, không thì nhãn của phiên, không thì «không xác định»."""
+        s = self.talk.session
+        return self.downlink_nhan or (self.talk.nhan_cua(s) if s is not None else NHAN_KHONG_RO)
+
+    def tu_choi_kenh(self, nhan: str | None) -> str:
+        """Câu lỗi (và ghi sự kiện / thuộc tính) cho bên xin kênh phát khi kênh đang có bên khác giữ."""
+        tuoi = time.monotonic() - self.started_at if self.active else 0.0
+        return self.talk.ghi_tu_choi("song_cong", nhan, "song_cong", self.chu_hien_tai(), tuoi)
+
+    async def async_start(self, nhan: str | None = None) -> None:
+        """Mở phiên song công: mic mở liên tục, KHÔNG ngưỡng im lặng tự đóng. ``nhan``: ai mở (NV291)."""
         if self.active:
             raise HomeAssistantError("Phiên đàm thoại song công đang mở.")
         if not self.mic.configured:
@@ -270,7 +281,7 @@ class R1Duplex:
                 "Chưa có kênh phát về loa (APK loa chưa nối về HA, hoặc chưa cấu hình play_port): "
                 "chưa mở được phiên song công.")
         # Chiếm chỗ phiên NGAY (đồng bộ): Assist/bộ đàm đang bận → R1SessionBusy.
-        self._release = self.talk.claim("song_cong")
+        self._release = self.talk.claim("song_cong", nhan)
         try:
             vad = self._vad_factory() if self._vad_factory is not None else None
             self._gate = VadGate(self.settings, vad)
@@ -463,13 +474,14 @@ class DuplexView(HomeAssistantView):
         _entry, coordinator = found
         duplex: R1Duplex = coordinator.duplex
         if duplex.downlink_busy:
-            return web.Response(status=409, text="duplex downlink already in use")
+            return web.Response(status=409, text=duplex.tu_choi_kenh(lam_sach_nhan(request.query.get("nhan"))))
         try:
             if not duplex.active:
-                await duplex.async_start()
+                await duplex.async_start(lam_sach_nhan(request.query.get("nhan")))
         except (R1SessionBusy, HomeAssistantError) as exc:
             return web.Response(status=409, text=str(exc))
         duplex.downlink_busy = True
+        duplex.downlink_nhan = lam_sach_nhan(request.query.get("nhan"))
         ly_do = "nguoi_dung_ket_thuc"
         _LOGGER.debug("duplex %s: open", _entry.title)
         try:
@@ -479,6 +491,7 @@ class DuplexView(HomeAssistantView):
             ly_do = "mat_ket_noi"
         finally:
             duplex.downlink_busy = False
+            duplex.downlink_nhan = None
             duplex.end(ly_do)
             await duplex.async_settle()
             _LOGGER.debug("duplex %s: closed, %.1f s played", _entry.title,

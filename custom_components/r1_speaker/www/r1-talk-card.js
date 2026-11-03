@@ -577,6 +577,15 @@
     }
 
     /* Gọi TRONG cử chỉ bấm: AudioContext tạo và resume ngay đây (iOS/Android chỉ cho phát khi bắt đầu từ cử chỉ). */
+    /* Tên máy khách khai báo cho HA khi mở đàm thoại (hiện cho người thứ hai khi loa đang bận): ô cấu hình ``ten_thiet_bi`` nếu có, không thì
+       «<người dùng HA> · <nền tảng trình duyệt>». Không đoán theo địa chỉ IP, không có danh sách tên. */
+    _nhanThietBi() {
+      var cfg = this._cfg ? this._cfg() : {}, u = this._hass && this._hass.user && this._hass.user.name;
+      if (cfg && typeof cfg.ten_thiet_bi === "string" && cfg.ten_thiet_bi.trim()) return cfg.ten_thiet_bi.trim().slice(0, 40);
+      var nen = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
+      return ((u || "") + (u && nen ? " · " : "") + nen).slice(0, 40);
+    }
+
     _dtMo() {
       var self = this, t = this._t || TEXT.vi, m = buildModel(this._hass, this._cfg());
       var eid = m.mic.entity || m.talk.entity;
@@ -589,8 +598,8 @@
       this._dtHienThi();
       var dsEnt = this._entChon();
       var duong = dsEnt.length >= 2                                           // nhiều loa: một WebSocket tới phòng đàm thoại (HA trộn tiếng)
-        ? "/api/r1_speaker/hoi_thoai/ws?" + dsEnt.map(function (e) { return "e=" + encodeURIComponent(e); }).join("&") + (this._chung ? "&che_do=quyen_noi" : "")
-        : "/api/r1_speaker/dam_thoai/" + eid + "/ws";
+        ? "/api/r1_speaker/hoi_thoai/ws?" + dsEnt.map(function (e) { return "e=" + encodeURIComponent(e); }).join("&") + (this._chung ? "&che_do=quyen_noi" : "") + "&nhan=" + encodeURIComponent(this._nhanThietBi())
+        : "/api/r1_speaker/dam_thoai/" + eid + "/ws?nhan=" + encodeURIComponent(this._nhanThietBi());
       this._hass.callWS({ type: "auth/sign_path", path: duong, expires: 30 })
         .then(function (r) {
           if (!r || self._dt !== dt) return;
@@ -606,6 +615,7 @@
           ws.onclose = function (e) {
             if (self._dt !== dt) return;
             var tt = self._t || TEXT.vi;
+            if (dt.loiRieng) { self._dtDong(dt.loiRieng); return; }      // câu lỗi cụ thể của HA («đang được dùng bởi …») không bị nuốt thành lỗi chung
             var ly = e.code === 4409 ? tt.dt_busy : e.code === 4400 ? tt.dt_fail : e.code === 4001 ? tt.dt_ended : tt.dt_lost;
             self._dtDong(ly);
           };
@@ -652,7 +662,7 @@
 
     _dtNhan(dt, e) {
       if (typeof e.data === "string") {
-        try { var j = JSON.parse(e.data); if (j.loi) this._dtHienThi(j.loi); } catch (x) { /* bỏ qua */ }
+        try { var j = JSON.parse(e.data); if (j.loi) { dt.loiRieng = String(j.loi); this._dtHienThi(j.loi); } } catch (x) { /* bỏ qua */ }
         return;
       }
       var ac = dt.ac, i16 = new Int16Array(e.data);

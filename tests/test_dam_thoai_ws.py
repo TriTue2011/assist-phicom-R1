@@ -108,7 +108,7 @@ async def test_hai_dien_thoai_mot_loa_thi_cai_thu_hai_bi_tu_choi(hass, r1, hass_
     await cho(lambda: d.downlink_busy)
     ws2 = await client.ws_connect(URL)
     msg = await ws2.receive(timeout=2)
-    assert msg.type == WSMsgType.TEXT and "kênh phát khác" in json.loads(msg.data)["loi"]
+    assert msg.type == WSMsgType.TEXT and "đang được dùng bởi" in json.loads(msg.data)["loi"]
     assert (await ws2.receive(timeout=2)).type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED)
     assert ws2.close_code == 4409
     assert d.active                                          # kênh thứ nhất không bị ảnh hưởng

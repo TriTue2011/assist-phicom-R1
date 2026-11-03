@@ -22,7 +22,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN
-from .dam_thoai import R1SessionBusy
+from .dam_thoai import R1SessionBusy, nhan_tu_yeu_cau
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,14 +59,15 @@ class DamThoaiWsView(HomeAssistantView):
         ws = web.WebSocketResponse(heartbeat=20.0, max_msg_size=1 << 16)
         await ws.prepare(request)
 
+        nhan = nhan_tu_yeu_cau(request)
         if duplex.downlink_busy:
-            await ws.send_json({"loi": "Loa đang có kênh phát khác (điện thoại khác hoặc POST /duplex)."})
+            await ws.send_json({"loi": duplex.tu_choi_kenh(nhan)})          # nêu AI đang giữ kênh (điện thoại khác hoặc POST /duplex)
             await ws.close(code=MA_BAN)
             return ws
         tu_mo = False
         try:
             if not duplex.active:
-                await duplex.async_start()
+                await duplex.async_start(nhan)
                 tu_mo = True
         except (R1SessionBusy, HomeAssistantError) as exc:
             await ws.send_json({"loi": str(exc)})
@@ -74,6 +75,7 @@ class DamThoaiWsView(HomeAssistantView):
             return ws
 
         duplex.downlink_busy = True
+        duplex.downlink_nhan = nhan
         dem = bytearray()
 
         def tu_loa(khuc: bytes) -> None:
@@ -120,6 +122,7 @@ class DamThoaiWsView(HomeAssistantView):
             huy_nghe()
             huy_doi()
             duplex.downlink_busy = False
+            duplex.downlink_nhan = None
             if tu_mo and not duplex.luon:
                 duplex.end(ly_do)
         return ws
