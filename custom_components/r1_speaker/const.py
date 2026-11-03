@@ -302,3 +302,39 @@ CARD_GOP_URL = "/r1_speaker/r1-card.js"
 
 #: Sau lệnh bật/tắt Bluetooth chờ ngần này giây rồi đọc lại trạng thái qua ADB để xác nhận.
 BT_DOI_DOC_LAI = 2.0
+
+# ── NV288 — khởi động lại loa theo lịch + theo dõi «Loa phản hồi» ────────────────────────────
+#: Tuỳ chọn (cùng nguồn lưu với hộp tuỳ chọn HA). Mặc định TẮT: chủ máy chỉ bật khi muốn.
+CONF_KDL_BAT = "khoi_dong_lai_bat"
+DEFAULT_KDL_BAT = False
+#: Giờ trong ngày (giờ địa phương của HA), dạng «HH:MM».
+CONF_KDL_GIO = "khoi_dong_lai_gio"
+DEFAULT_KDL_GIO = "04:00"
+#: Các ngày trong tuần được khởi động lại: danh sách mã thứ (``t2``…``t7``, ``cn``); mặc định mọi ngày.
+CONF_KDL_NGAY = "khoi_dong_lai_ngay"
+KDL_NGAY_MA = ("t2", "t3", "t4", "t5", "t6", "t7", "cn")           # theo ``date.weekday()``: thứ hai = 0 … chủ nhật = 6
+DEFAULT_KDL_NGAY = KDL_NGAY_MA
+#: Công tắc riêng cho tự phục hồi khi loa treo. Mặc định TẮT.
+CONF_KDL_TU_PHUC_HOI = "khoi_dong_lai_khi_treo"
+DEFAULT_KDL_TU_PHUC_HOI = False
+
+#: Nhịp kiểm lịch + đánh giá «Loa phản hồi» (giây).
+KDL_NHIP_GIAY = 30
+#: Tới giờ mà loa đang có phiên (Assist, đàm thoại, báo thức) hoặc đang phát nhạc thì HOÃN, tối đa ngần này phút, rồi mới khởi động.
+#: ĐỀ XUẤT, CHƯA ĐO.
+KDL_HOAN_TOI_DA_PHUT = 45
+#: HA bật lại (hoặc nạp lại tích hợp) muộn quá ngần này phút sau giờ lịch thì BỎ lượt đó, không khởi động loa giữa buổi. ĐỀ XUẤT, CHƯA ĐO.
+KDL_CUA_SO_BU_PHUT = 90
+#: Một tín hiệu ứng dụng (get_info, nhịp tim APK) im quá ngần này giây thì coi là «im». Vòng hỏi get_info là 10 giây, nhịp tim
+#: chung ngưỡng WAKE_ALIVE_S. ĐỀ XUẤT, CHƯA ĐO — chưa có một lần treo thật nào được ghi lại để căn.
+PHAN_HOI_NGUONG_IM_GIAY = 150.0
+#: Thử bắt tay TCP tới loa (xem loa có trả lời ở tầng mạng không): quá ngần này giây = không trả lời.
+PHAN_HOI_TCP_TOI_DA_GIAY = 3.0
+#: Sau lệnh khởi động lại do chính HA gửi, loa cần thời gian lên lại: trong ngần này phút không kết luận «treo». ĐỀ XUẤT, CHƯA ĐO.
+PHAN_HOI_CHO_KHOI_DONG_PHUT = 5
+#: Tự phục hồi: «treo» phải liên tục ít nhất ngần này phút mới được khởi động lại, và sau MỘT lần thì nghỉ ít nhất ngần này giờ
+#: (lưu qua khởi động lại HA — không bao giờ lặp vòng). ĐỀ XUẤT, CHƯA ĐO.
+KDL_TREO_TOI_THIEU_PHUT = 15
+KDL_NGHI_SAU_TU_PHUC_HOI_GIO = 6
+#: Lý do khởi động lại, ghi vào nhật ký và vào thuộc tính của cảm biến.
+KDL_LY_DO_LICH, KDL_LY_DO_TREO, KDL_LY_DO_BAM = "lich", "treo", "bam"

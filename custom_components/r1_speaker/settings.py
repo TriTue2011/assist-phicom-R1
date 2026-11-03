@@ -8,6 +8,7 @@ mọi chỗ đọc qua đây, mặc định lấy từ ``const.py``.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import time
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -16,6 +17,8 @@ from .agc import AgcSettings, LimiterSettings
 from .noise_suppress import NoiseSettings
 from .const import ADB_SERVER_LOCAL, CONF_ADB_MODE, CONF_ADB_SERVER, CONF_ADB_TU_DONG, CONF_PHIM_MA, CONF_PHIM_NGUON, DEFAULT_ADB_MODE, DEFAULT_ADB_SERVER, DEFAULT_PHIM_MA, DEFAULT_PHIM_NGUON
 from .const import CONF_AIRPLAY_PORT, CONF_DUONG_PHAT, DEFAULT_AIRPLAY_PORT, DEFAULT_DUONG_PHAT, DUONG_PHAT_GIA_TRI
+from .const import (CONF_KDL_BAT, CONF_KDL_GIO, CONF_KDL_NGAY, CONF_KDL_TU_PHUC_HOI, DEFAULT_KDL_BAT, DEFAULT_KDL_GIO,
+                    DEFAULT_KDL_NGAY, DEFAULT_KDL_TU_PHUC_HOI, KDL_NGAY_MA)
 from .const import CONF_TTS_SONG_SONG, DEFAULT_TTS_SONG_SONG, CONF_HA_NHAC_XUONG, DEFAULT_HA_NHAC_XUONG, CONF_HA_NHAC_NAC, DEFAULT_HA_NHAC_NAC
 from .const import (CONF_WAKE_ENABLE, CONF_WAKE_SENSITIVITY, CONF_WAKE_WORD,
                     DEFAULT_WAKE_ENABLE, DEFAULT_WAKE_SENSITIVITY, DEFAULT_WAKE_WORD)
@@ -241,3 +244,32 @@ def adb_settings(entry: ConfigEntry) -> tuple[str, str]:
     if mode == "server" and not server:                # chọn tay «server» mà bỏ trống ô: dùng adb-server cục bộ
         server = ADB_SERVER_LOCAL
     return server, mode
+
+
+def khoi_dong_lai_bat(entry: ConfigEntry) -> bool:
+    """NV288: loa tự khởi động lại theo lịch. Mặc định TẮT."""
+    return conf(entry, CONF_KDL_BAT, DEFAULT_KDL_BAT) is True
+
+
+def khoi_dong_lai_gio(entry: ConfigEntry) -> time:
+    """Giờ lịch (giờ địa phương). Nhận «HH:MM» hoặc «HH:MM:SS» (bộ chọn giờ của HA trả giây); giá trị hỏng rơi về mặc định."""
+    for gia_tri in (conf(entry, CONF_KDL_GIO, DEFAULT_KDL_GIO), DEFAULT_KDL_GIO):
+        try:
+            return time.fromisoformat(str(gia_tri).strip()).replace(second=0, microsecond=0)
+        except ValueError:
+            continue
+    raise AssertionError("DEFAULT_KDL_GIO không hợp lệ")          # pragma: no cover — hằng số trong mã
+
+
+def khoi_dong_lai_ngay(entry: ConfigEntry) -> frozenset[str]:
+    """Mã các thứ được chọn (``t2``…``cn``). Danh sách rỗng là một lựa chọn hợp lệ (không ngày nào); không phải danh sách hoặc có mã lạ
+    thì bỏ mã lạ, kiểu hỏng hẳn rơi về mặc định (mọi ngày)."""
+    v = conf(entry, CONF_KDL_NGAY, DEFAULT_KDL_NGAY)
+    if not isinstance(v, (list, tuple, set, frozenset)):
+        return frozenset(DEFAULT_KDL_NGAY)
+    return frozenset(m for m in v if m in KDL_NGAY_MA)
+
+
+def khoi_dong_lai_khi_treo(entry: ConfigEntry) -> bool:
+    """NV288: HA được phép khởi động lại loa MỘT lần khi loa «treo» (mạng thông, ứng dụng im). Mặc định TẮT."""
+    return conf(entry, CONF_KDL_TU_PHUC_HOI, DEFAULT_KDL_TU_PHUC_HOI) is True

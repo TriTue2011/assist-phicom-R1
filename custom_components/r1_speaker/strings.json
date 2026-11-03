@@ -122,6 +122,9 @@
       },
       "apk": {
         "name": "Speaker APK"
+      },
+      "khoi_dong_lai_cuoi": {
+        "name": "Last restart"
       }
     },
     "media_player": {
@@ -225,6 +228,9 @@
       },
       "light_service": {
         "name": "Light service"
+      },
+      "phan_hoi": {
+        "name": "Speaker responding"
       }
     },
     "button": {
@@ -282,7 +288,11 @@
           "airplay_port": "The speaker's AirPlay (RAOP) port, default 5012; change it if AirPlay cannot connect after the speaker restarted",
           "tts_song_song_airplay": "Announcements in parallel via AirPlay while music stays on DLNA (default OFF — not yet measured on a real speaker whether it can mix DLNA + RAOP; enable only after the measurement in docs/PHAT-RA-LOA.md)",
           "ha_nhac_xuong": "Duck background music while a parallel announcement plays (only applies when parallel AirPlay announcements are on; music drops by ha_nhac_nac steps, then returns to the exact previous level, even if the announcement errors)",
-          "ha_nhac_nac": "Ducking steps (speaker 0–15 scale)"
+          "ha_nhac_nac": "Ducking steps (speaker 0–15 scale)",
+          "khoi_dong_lai_bat": "Restart the speaker on a schedule (OFF by default; preventive)",
+          "khoi_dong_lai_gio": "Restart time (local time)",
+          "khoi_dong_lai_ngay": "Days of the week to restart",
+          "khoi_dong_lai_khi_treo": "Restart the speaker by itself ONCE when it hangs (network up, speaker app silent; needs ADB; OFF by default; at least 6 hours between restarts)"
         }
       },
       "nang_cao": {
@@ -704,6 +714,17 @@
         "phat_nhac": "Music playing (HA effect)",
         "loi": "Error",
         "tat_mic": "Microphone muted"
+      }
+    },
+    "khoi_dong_lai_ngay": {
+      "options": {
+        "t2": "Monday",
+        "t3": "Tuesday",
+        "t4": "Wednesday",
+        "t5": "Thursday",
+        "t6": "Friday",
+        "t7": "Saturday",
+        "cn": "Sunday"
       }
     }
   },

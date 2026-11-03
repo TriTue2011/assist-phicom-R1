@@ -7,7 +7,9 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from . import const
 from .coordinator import R1ConfigEntry
+from .phan_hoi import CHUA_BIET, PHAN_HOI
 from .entity import R1MicEntity, preregister
 
 
@@ -16,7 +18,45 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
     preregister(hass, entry, "binary_sensor", f"{entry.entry_id}_intercom", "r1_bo_dam")
     preregister(hass, entry, "binary_sensor", f"{entry.entry_id}_wake", "r1_tu_danh_thuc")
     preregister(hass, entry, "binary_sensor", f"{entry.entry_id}_light_service", "r1_dich_vu_den")
-    async_add_entities([R1IntercomLink(entry), R1WakeTrigger(entry), R1LightService(entry)])
+    preregister(hass, entry, "binary_sensor", f"{entry.entry_id}_phan_hoi", "r1_loa_phan_hoi")
+    async_add_entities([R1IntercomLink(entry), R1WakeTrigger(entry), R1LightService(entry), R1PhanHoi(entry)])
+
+
+class R1PhanHoi(R1MicEntity, BinarySensorEntity):
+    """«Loa phản hồi» (NV288): bật = ít nhất một tín hiệu ứng dụng (get_info, nhịp tim APK) còn tươi; tắt = loa im, thuộc tính ``ly_do`` nói rõ
+    ``treo`` (mạng còn thông, ứng dụng im) hay ``mat_mang`` (không trả lời ở tầng TCP) hay ``dang_khoi_dong``; chưa biết (HA mới chạy) thì không
+    có trạng thái. Thuộc tính ``lan_cuoi`` là lần cuối từng tín hiệu còn sống — số liệu thô để căn ngưỡng sau lần treo thật đầu tiên.
+    Luôn khả dụng: chính lúc loa im mới là lúc cần đọc nó."""
+
+    _attr_translation_key = "phan_hoi"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _unrecorded_attributes = frozenset({"lan_cuoi", "nguong_im_giay"})
+
+    def __init__(self, entry: R1ConfigEntry) -> None:
+        super().__init__(entry, "phan_hoi")
+
+    @property
+    def _ph(self):
+        return self._entry.runtime_data.phan_hoi
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    @property
+    def is_on(self) -> bool | None:
+        return None if self._ph.ly_do == CHUA_BIET else self._ph.ly_do == PHAN_HOI
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        ph = self._ph
+        return {"ly_do": ph.ly_do, "treo_tu": ph.treo_tu.isoformat() if ph.treo_tu else None,
+                "lan_cuoi": {k: v.isoformat() if v else None for k, v in ph.lan_cuoi.items()},
+                "nguong_im_giay": const.PHAN_HOI_NGUONG_IM_GIAY}
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self._ph.add_listener(self.async_write_ha_state))
 
 
 class R1IntercomLink(R1MicEntity, BinarySensorEntity):

@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import secrets
+from datetime import time
 from typing import Any
 
 import voluptuous as vol
 from homeassistant.config_entries import (ConfigEntry, ConfigFlow, ConfigFlowResult,
                                           OptionsFlowWithReload)
 from homeassistant.core import callback
+from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .adb_client import AdbDevice, AdbError
@@ -31,10 +33,12 @@ from .const import (CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, 
                     CONF_TALK_SILENCE, CONF_TALK_TAIL, CONF_TALK_THRESHOLD_DB, DEFAULT_HOST,
                     DEFAULT_MIC_LISTEN_PORT, DEFAULT_MIC_PORT, DEFAULT_PLAY_PORT, DEFAULT_PORT, DEFAULT_TALK_PREROLL,
                     DEFAULT_TALK_SILENCE, DEFAULT_TALK_TAIL, DEFAULT_TALK_THRESHOLD_DB, DOMAIN)
-from .settings import (airplay_port, duong_phat, tts_song_song_airplay, ha_nhac_xuong, ha_nhac_nac, adb_settings, adb_tu_dong_dong, phim_ma, phim_nguon, DuplexSettings, TalkSettings, agc_settings, conf, limiter_settings, noise_settings, wake_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
+from .settings import (khoi_dong_lai_bat, khoi_dong_lai_gio, khoi_dong_lai_khi_treo, khoi_dong_lai_ngay, airplay_port, duong_phat, tts_song_song_airplay, ha_nhac_xuong, ha_nhac_nac, adb_settings, adb_tu_dong_dong, phim_ma, phim_nguon, DuplexSettings, TalkSettings, agc_settings, conf, limiter_settings, noise_settings, wake_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
                        speaker_port, wake_mode)
 from .const import CONF_ADB_MODE, CONF_ADB_SERVER, CONF_ADB_TU_DONG, CONF_PHIM_MA, CONF_PHIM_NGUON, DEFAULT_ADB_MODE, DEFAULT_ADB_SERVER, DEFAULT_PHIM_MA, DEFAULT_PHIM_NGUON
 from .const import CONF_AIRPLAY_PORT, CONF_DUONG_PHAT, DEFAULT_AIRPLAY_PORT, DEFAULT_DUONG_PHAT, DUONG_PHAT_GIA_TRI
+from .const import (CONF_KDL_BAT, CONF_KDL_GIO, CONF_KDL_NGAY, CONF_KDL_TU_PHUC_HOI, DEFAULT_KDL_BAT, DEFAULT_KDL_GIO, DEFAULT_KDL_NGAY,
+                    DEFAULT_KDL_TU_PHUC_HOI, KDL_NGAY_MA)
 from .const import CONF_TTS_SONG_SONG, DEFAULT_TTS_SONG_SONG, CONF_HA_NHAC_XUONG, DEFAULT_HA_NHAC_XUONG, CONF_HA_NHAC_NAC, DEFAULT_HA_NHAC_NAC
 from .const import (CONF_WAKE_ENABLE, CONF_WAKE_SENSITIVITY, CONF_WAKE_WORD,
                     DEFAULT_WAKE_ENABLE, DEFAULT_WAKE_SENSITIVITY, DEFAULT_WAKE_WORD)
@@ -126,6 +130,8 @@ _GOC = {
     CONF_DUONG_PHAT: DEFAULT_DUONG_PHAT, CONF_AIRPLAY_PORT: DEFAULT_AIRPLAY_PORT,
     CONF_TTS_SONG_SONG: DEFAULT_TTS_SONG_SONG, CONF_HA_NHAC_XUONG: DEFAULT_HA_NHAC_XUONG,
     CONF_HA_NHAC_NAC: DEFAULT_HA_NHAC_NAC,
+    CONF_KDL_BAT: DEFAULT_KDL_BAT, CONF_KDL_GIO: DEFAULT_KDL_GIO, CONF_KDL_NGAY: list(DEFAULT_KDL_NGAY),
+    CONF_KDL_TU_PHUC_HOI: DEFAULT_KDL_TU_PHUC_HOI,
 }
 
 
@@ -139,6 +145,14 @@ _DSP_GOC = {k: _GOC[k] for k in (
 #: nếu đã có sẵn trong options — lưu form không được làm rơi khoá đầu nhận mic người dùng đã đặt từ trước.
 _AN = (CONF_MIC_HOST, CONF_MIC_PORT, CONF_MIC_LISTEN_PORT, CONF_MIC_LISTEN_KEY, CONF_PLAY_HOST,
        CONF_PLAY_PORT, CONF_WAKE_MODE, CONF_WAKE_ENABLE, CONF_WAKE_WORD, CONF_WAKE_SENSITIVITY)
+
+
+def _gio_hhmm(v: Any) -> str:
+    """Giờ từ bộ chọn giờ của HA («HH:MM:SS») về dạng lưu «HH:MM»; trống hoặc hỏng → mặc định."""
+    try:
+        return time.fromisoformat(str(v).strip()).strftime("%H:%M")
+    except ValueError:
+        return DEFAULT_KDL_GIO
 
 
 def _overrides(entry: ConfigEntry, chosen: dict[str, Any]) -> dict[str, Any]:
@@ -217,7 +231,11 @@ class R1OptionsFlow(OptionsFlowWithReload):
                                 CONF_AIRPLAY_PORT: user_input.get(CONF_AIRPLAY_PORT, DEFAULT_AIRPLAY_PORT),
                                 CONF_TTS_SONG_SONG: user_input.get(CONF_TTS_SONG_SONG, DEFAULT_TTS_SONG_SONG),
                                 CONF_HA_NHAC_XUONG: user_input.get(CONF_HA_NHAC_XUONG, DEFAULT_HA_NHAC_XUONG),
-                                CONF_HA_NHAC_NAC: user_input.get(CONF_HA_NHAC_NAC, DEFAULT_HA_NHAC_NAC)}
+                                CONF_HA_NHAC_NAC: user_input.get(CONF_HA_NHAC_NAC, DEFAULT_HA_NHAC_NAC),
+                                CONF_KDL_BAT: user_input.get(CONF_KDL_BAT, DEFAULT_KDL_BAT),
+                                CONF_KDL_GIO: _gio_hhmm(user_input.get(CONF_KDL_GIO)),
+                                CONF_KDL_NGAY: [m for m in KDL_NGAY_MA if m in user_input.get(CONF_KDL_NGAY, DEFAULT_KDL_NGAY)],
+                                CONF_KDL_TU_PHUC_HOI: user_input.get(CONF_KDL_TU_PHUC_HOI, DEFAULT_KDL_TU_PHUC_HOI)}
                 if user_input.get(CONF_NANG_CAO):
                     return await self.async_step_nang_cao()
                 return self._luu({})
@@ -239,6 +257,12 @@ class R1OptionsFlow(OptionsFlowWithReload):
             vol.Optional(CONF_TTS_SONG_SONG, default=v.get(CONF_TTS_SONG_SONG, tts_song_song_airplay(entry))): bool,
             vol.Optional(CONF_HA_NHAC_XUONG, default=v.get(CONF_HA_NHAC_XUONG, ha_nhac_xuong(entry))): bool,
             vol.Optional(CONF_HA_NHAC_NAC, default=v.get(CONF_HA_NHAC_NAC, ha_nhac_nac(entry))): vol.All(int, vol.Range(min=1, max=14)),
+            vol.Optional(CONF_KDL_BAT, default=v.get(CONF_KDL_BAT, khoi_dong_lai_bat(entry))): bool,
+            vol.Optional(CONF_KDL_GIO, default=v.get(CONF_KDL_GIO, khoi_dong_lai_gio(entry).strftime("%H:%M:%S"))): selector.TimeSelector(),
+            vol.Optional(CONF_KDL_NGAY, default=v.get(CONF_KDL_NGAY, [m for m in KDL_NGAY_MA if m in khoi_dong_lai_ngay(entry)])):
+                selector.SelectSelector(selector.SelectSelectorConfig(
+                    options=list(KDL_NGAY_MA), multiple=True, mode=selector.SelectSelectorMode.LIST, translation_key="khoi_dong_lai_ngay")),
+            vol.Optional(CONF_KDL_TU_PHUC_HOI, default=v.get(CONF_KDL_TU_PHUC_HOI, khoi_dong_lai_khi_treo(entry))): bool,
             vol.Optional(CONF_ROTATE_KEY, default=False): bool,
             vol.Optional(CONF_GHEP_LAI, default=False): bool,
             vol.Optional(CONF_NANG_CAO, default=False): bool,

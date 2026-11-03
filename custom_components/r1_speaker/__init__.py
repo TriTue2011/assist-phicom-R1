@@ -27,7 +27,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from . import cai_ung_dung, den_chinh, giao_dien, lenh_apk, media_player, nang_cao
 from .client import R1Client
-from .const import ADB_PORT
+from .const import ADB_PORT, KDL_NHIP_GIAY
 from .const import (CARD_GOP_URL, CARD_URL, CHUCNANG_CARD_URL, CONF_INTERCOM_KEY, CONF_MIC_CHUA_GHEP, CONF_MIC_LISTEN_KEY, CONF_MIC_LISTEN_PORT, DOMAIN, SETTINGS_CARD_URL, TALK_CARD_URL,
                     WAKE_SPEAKER)
 from .cong_vao import PingView, WakeView
@@ -39,6 +39,8 @@ from .den import R1Lights, dang_ky_dich_vu as dang_ky_dich_vu_den
 from .adb_client import AdbDevice
 from .cai_ung_dung import BoCai
 from .he_thong import HeThongLoa
+from .khoi_dong_lai import KhoiDongLai
+from .phan_hoi import PhanHoi
 from .bao_thuc import BaoThuc, dang_ky_dich_vu as dang_ky_dich_vu_bao_thuc
 from .den_apk import ApkLights, LightsRouter
 from .tu_dong_dong_adb import TuDongDongAdb
@@ -305,6 +307,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
     coordinator.bao_thuc = BaoThuc(hass, entry, coordinator)
     await coordinator.bao_thuc.async_load()
     entry.async_on_unload(coordinator.bao_thuc.huy)
+    # NV288: «Loa phản hồi» + khởi động lại theo lịch / tự phục hồi khi treo; một nhịp chung, lệnh nào cũng ghi lý do.
+    coordinator.phan_hoi = PhanHoi(hass, entry, coordinator)
+    coordinator.khoi_dong_lai = KhoiDongLai(hass, entry, coordinator)
+    await coordinator.khoi_dong_lai.async_load()
+    await coordinator.khoi_dong_lai.cap_nhat_hieu_luc()
+    await coordinator.phan_hoi.danh_gia()
+    entry.async_on_unload(async_track_time_interval(hass, coordinator.khoi_dong_lai.nhip, timedelta(seconds=KDL_NHIP_GIAY)))
     _don_thuc_the_cu(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     coordinator.lights.start()

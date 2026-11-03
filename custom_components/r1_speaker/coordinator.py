@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -11,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .client import R1Client, R1Error, R1State, with_overrides
 from .const import DOMAIN, SCAN_INTERVAL
@@ -25,6 +27,8 @@ from .song_cong import R1Duplex
 
 if TYPE_CHECKING:
     from .den import R1Lights
+    from .khoi_dong_lai import KhoiDongLai
+    from .phan_hoi import PhanHoi
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -48,6 +52,10 @@ class R1Coordinator(DataUpdateCoordinator[R1State]):
     lights: "R1Lights"
     apps: "BoCai"
     he_thong: "HeThongLoa"
+    khoi_dong_lai: "KhoiDongLai"
+    phan_hoi: "PhanHoi"
+    #: Lần cuối ``get_info`` đọc THÀNH CÔNG (tín hiệu «ứng dụng trên loa còn chạy» của ``phan_hoi.py``).
+    lan_doc_thanh_cong: datetime | None = None
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, client: R1Client) -> None:
         super().__init__(hass, _LOGGER, config_entry=entry, name=DOMAIN,
@@ -57,6 +65,7 @@ class R1Coordinator(DataUpdateCoordinator[R1State]):
     async def _async_update_data(self) -> R1State:
         try:
             tt = await self.client.async_fetch()
+            self.lan_doc_thanh_cong = dt_util.utcnow()
             self._lan_hong = 0
             ir.async_delete_issue(self.hass, DOMAIN, f"cong_dieu_khien_{self.config_entry.entry_id}")
             return tt

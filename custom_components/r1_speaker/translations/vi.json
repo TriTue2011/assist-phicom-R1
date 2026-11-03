@@ -122,6 +122,9 @@
       },
       "apk": {
         "name": "APK trên loa"
+      },
+      "khoi_dong_lai_cuoi": {
+        "name": "Lần khởi động lại cuối"
       }
     },
     "media_player": {
@@ -225,6 +228,9 @@
       },
       "light_service": {
         "name": "Dịch vụ đèn"
+      },
+      "phan_hoi": {
+        "name": "Loa phản hồi"
       }
     },
     "button": {
@@ -282,7 +288,11 @@
           "airplay_port": "Cổng AirPlay (RAOP) của loa, mặc định 5012; đổi nếu AirPlay không nối được sau khi loa khởi động lại",
           "tts_song_song_airplay": "Tin báo đi AirPlay SONG SONG trong khi nhạc vẫn ở DLNA (mặc định TẮT — chưa đo trên loa thật xem loa có trộn được DLNA + RAOP hay không; chỉ bật sau khi đo theo docs/PHAT-RA-LOA.md)",
           "ha_nhac_xuong": "Hạ nhạc nền trong lúc tin song song phát (chỉ có tác dụng khi tin song song bật; nhạc nhỏ đi ha_nhac_nac nấc rồi trả đúng mức cũ, kể cả khi tin lỗi)",
-          "ha_nhac_nac": "Số nấc hạ khi ducking (thang 0–15 của loa)"
+          "ha_nhac_nac": "Số nấc hạ khi ducking (thang 0–15 của loa)",
+          "khoi_dong_lai_bat": "Khởi động lại loa theo lịch (mặc định TẮT; phòng ngừa)",
+          "khoi_dong_lai_gio": "Giờ khởi động lại (giờ địa phương)",
+          "khoi_dong_lai_ngay": "Các ngày trong tuần được khởi động lại",
+          "khoi_dong_lai_khi_treo": "Tự khởi động lại loa MỘT lần khi loa treo (mạng còn thông nhưng ứng dụng trên loa im; cần ADB; mặc định TẮT; cách nhau ít nhất 6 giờ)"
         }
       },
       "nang_cao": {
@@ -704,6 +714,17 @@
         "phat_nhac": "Phát nhạc (hiệu ứng của HA)",
         "loi": "Lỗi",
         "tat_mic": "Tắt mic"
+      }
+    },
+    "khoi_dong_lai_ngay": {
+      "options": {
+        "t2": "Thứ hai",
+        "t3": "Thứ ba",
+        "t4": "Thứ tư",
+        "t5": "Thứ năm",
+        "t6": "Thứ sáu",
+        "t7": "Thứ bảy",
+        "cn": "Chủ nhật"
       }
     }
   },

@@ -12,8 +12,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .adb_client import AdbError
-from .client import R1Error
-from .const import DOMAIN
+from .const import DOMAIN, KDL_LY_DO_BAM
 from .coordinator import R1ConfigEntry
 from .entity import preregister
 
@@ -117,12 +116,4 @@ class R1RebootButton(ButtonEntity):
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry.entry_id)})
 
     async def async_press(self) -> None:
-        try:
-            await self._entry.runtime_data.apps.dev.reboot()
-            return
-        except (AdbError, OSError, TimeoutError) as exc:
-            loi_adb = exc or type(exc).__name__
-        try:                                                        # ADB mạng đóng/hỏng: đi đường cổng 8080
-            await self._entry.runtime_data.client.reboot_shell()
-        except R1Error as exc:
-            raise HomeAssistantError(f"Không khởi động lại được loa (ADB: {loi_adb}; cổng 8080: {exc})") from exc
+        await self._entry.runtime_data.khoi_dong_lai.thuc_hien(KDL_LY_DO_BAM)

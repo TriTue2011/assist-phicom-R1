@@ -8,6 +8,7 @@ from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTime, SIGNAL_S
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import DOMAIN, MIC_STATUSES
@@ -28,13 +29,49 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
     preregister(hass, entry, "sensor", f"{entry.entry_id}_settings", "r1_cai_dat")
     preregister(hass, entry, "sensor", f"{entry.entry_id}_bao_thuc_ke_tiep", "r1_bao_thuc_ke_tiep")
     preregister(hass, entry, "sensor", f"{entry.entry_id}_apk", "r1_apk")
-    async_add_entities([R1MicStatus(entry), R1Settings(entry), R1BaoThucSensor(entry), R1ApkSensor(entry)])
+    preregister(hass, entry, "sensor", f"{entry.entry_id}_khoi_dong_lai_cuoi", "r1_khoi_dong_lai_cuoi")
+    async_add_entities([R1MicStatus(entry), R1Settings(entry), R1BaoThucSensor(entry), R1ApkSensor(entry), R1KhoiDongLaiCuoi(entry)])
     ht = entry.runtime_data.he_thong
     for khoa, obj in (("cpu", "r1_cpu"), ("ram", "r1_ram"), ("bo_nho", "r1_bo_nho"), ("wifi", "r1_song_wifi"),
                       ("thoi_gian_chay", "r1_thoi_gian_chay")):
         preregister(hass, entry, "sensor", f"{entry.entry_id}_{khoa}", obj)
     async_add_entities(R1HeThongSensor(entry, ht, d) for d in HE_THONG)
     entry.async_create_background_task(hass, ht.async_refresh(), "r1 he thong lan dau")
+
+
+class R1KhoiDongLaiCuoi(SensorEntity):
+    """``sensor.r1_khoi_dong_lai_cuoi`` (NV288): lúc HA gửi lệnh khởi động lại loa gần nhất; thuộc tính ``ly_do`` (``lich`` / ``treo`` / ``bam``),
+    ``ket_qua`` (``ok`` hoặc ``loi: …``), ``ke_tiep`` (lượt lịch kế tiếp), ``dang_hoan`` (lý do đang hoãn, nếu có). Nhớ qua khởi động lại HA."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "khoi_dong_lai_cuoi"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, entry: R1ConfigEntry) -> None:
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_khoi_dong_lai_cuoi"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry.entry_id)})
+
+    @property
+    def _kdl(self):
+        return self._entry.runtime_data.khoi_dong_lai
+
+    @property
+    def native_value(self):
+        lc = self._kdl.lan_cuoi
+        return dt_util.parse_datetime(lc["luc"]) if lc else None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        lc = self._kdl.lan_cuoi or {}
+        ke_tiep = self._kdl.ke_tiep()
+        return {"ly_do": lc.get("ly_do"), "chi_tiet": lc.get("chi_tiet"), "ket_qua": lc.get("ket_qua"),
+                "ke_tiep": ke_tiep.isoformat() if ke_tiep else None, "dang_hoan": self._kdl.dang_hoan}
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self._kdl.add_listener(self.async_write_ha_state))
 
 
 class R1BaoThucSensor(SensorEntity):
