@@ -53,6 +53,9 @@
       },
       "ha_nhac_nac": {
         "name": "Số nấc hạ nhạc"
+      },
+      "cong_airplay": {
+        "name": "Cổng AirPlay"
       }
     },
     "switch": {

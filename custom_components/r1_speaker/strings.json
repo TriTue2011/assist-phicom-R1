@@ -53,6 +53,9 @@
       },
       "ha_nhac_nac": {
         "name": "Ducking steps"
+      },
+      "cong_airplay": {
+        "name": "AirPlay port"
       }
     },
     "switch": {

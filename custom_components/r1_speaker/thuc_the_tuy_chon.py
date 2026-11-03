@@ -124,6 +124,23 @@ class R1NacHaNhacNumber(_TuyChon, NumberEntity):
         self._ghi(int(round(value)))
 
 
+class R1CongAirplayNumber(_TuyChon, NumberEntity):
+    """Cổng AirPlay (RAOP) của loa, cùng tuỳ chọn ``airplay_port``; đổi nếu AirPlay không nối được sau khi loa khởi động lại."""
+
+    _attr_native_min_value, _attr_native_max_value, _attr_native_step = 1, 65535, 1
+    _attr_mode = NumberMode.BOX
+
+    def __init__(self, entry: R1ConfigEntry) -> None:
+        super().__init__(entry, "cong_airplay", const.CONF_AIRPLAY_PORT, const.DEFAULT_AIRPLAY_PORT, settings.airplay_port)
+
+    @property
+    def native_value(self) -> float:
+        return self._doc(self._entry)
+
+    async def async_set_native_value(self, value: float) -> None:
+        self._ghi(int(round(value)))
+
+
 class R1GioKhoiDongLaiTime(_TuyChon, TimeEntity):
     def __init__(self, entry: R1ConfigEntry) -> None:
         super().__init__(entry, "kdl_gio", const.CONF_KDL_GIO, const.DEFAULT_KDL_GIO, settings.khoi_dong_lai_gio)
@@ -162,7 +179,7 @@ def selects(hass: HomeAssistant, entry: R1ConfigEntry) -> list:
 
 
 def numbers(hass: HomeAssistant, entry: R1ConfigEntry) -> list:
-    return _dang_ky(hass, entry, "number", [R1NacHaNhacNumber(entry)])
+    return _dang_ky(hass, entry, "number", [R1NacHaNhacNumber(entry), R1CongAirplayNumber(entry)])
 
 
 def times(hass: HomeAssistant, entry: R1ConfigEntry) -> list:

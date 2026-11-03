@@ -96,6 +96,7 @@ Hai chế độ, **bạn chọn một** (ô «Chế độ đóng ADB» ở tuỳ
 | Đường phát | select | Đường phát nhạc và tin ra loa: chỉ DLNA (mặc định) / DLNA trước, hỏng thì AirPlay / AirPlay trước, hỏng thì DLNA / chỉ AirPlay. Cùng tuỳ chọn `duong_phat` của hộp tuỳ chọn | cấu hình |
 | Tin báo đi đường ngược với nhạc | switch | Cùng tuỳ chọn `tts_song_song_airplay`: nhạc AirPlay thì tin báo đi DLNA, nhạc DLNA thì tin báo đi AirPlay; nhạc không dừng, lỗi thì rơi về đường thường (tạm dừng nhạc, phát tin, khôi phục). Mặc định TẮT (chưa đo trên loa thật xem loa có trộn được hai đường) | cấu hình |
 | Hạ nhạc nền khi loa nói | switch | Cùng tuỳ chọn `ha_nhac_xuong`: nhạc nhỏ đi trong lúc tin song song phát rồi trả đúng mức cũ. Mặc định TẮT | cấu hình |
+| Cổng AirPlay | number | Cùng tuỳ chọn `airplay_port`: cổng AirPlay (RAOP) của loa, 1–65535, mặc định 5012; đổi nếu AirPlay không nối được sau khi loa khởi động lại | cấu hình |
 | Số nấc hạ nhạc | number | Cùng tuỳ chọn `ha_nhac_nac`: 1–14 nấc (thang 0–15 của loa), mặc định 5 | cấu hình |
 | Khởi động lại theo lịch | switch | Bật/tắt lịch khởi động lại (mục 1), cùng tuỳ chọn `khoi_dong_lai_bat`. Mặc định TẮT | cấu hình |
 | Giờ khởi động lại | time | Giờ của lịch (giờ địa phương của HA), tuỳ chọn `khoi_dong_lai_gio`, mặc định 04:00 | cấu hình |

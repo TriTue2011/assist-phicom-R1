@@ -75,6 +75,7 @@
       play_title: "Phát nhạc & tin báo", path: "Đường phát",
       path_note: "Nhạc và tin báo ra loa bằng đường nào. AirPlay do tích hợp tự gửi, cần ffmpeg trên máy chạy HA.",
       paths: { dlna: "Chỉ DLNA (mặc định)", dlna_truoc: "DLNA trước, hỏng thì AirPlay", airplay_truoc: "AirPlay trước, hỏng thì DLNA", airplay: "Chỉ AirPlay" },
+      port: "Cổng AirPlay", port_note: "Cổng AirPlay (RAOP) của loa, mặc định 5012; đổi nếu AirPlay không nối được sau khi loa khởi động lại.",
       parallel: "Tin báo đi đường ngược với nhạc",
       parallel_note: "Chưa đo trên loa thật: chỉ bật khi muốn thử. Nhạc AirPlay thì tin báo qua DLNA, nhạc DLNA thì tin báo qua AirPlay, nhạc không dừng; lỗi thì về đường thường.",
       duck_title: "Nâng cao: hạ nhạc nền", duck: "Hạ nhạc nền khi loa nói", duck_nac: "Số nấc hạ",
@@ -136,6 +137,7 @@
       play_title: "Music & announcements", path: "Playback path",
       path_note: "Which path music and announcements take to the speaker. AirPlay is sent by this integration and needs ffmpeg on the HA host.",
       paths: { dlna: "DLNA only (default)", dlna_truoc: "DLNA first, AirPlay if it fails", airplay_truoc: "AirPlay first, DLNA if it fails", airplay: "AirPlay only" },
+      port: "AirPlay port", port_note: "The speaker's AirPlay (RAOP) port, default 5012; change it if AirPlay cannot connect after the speaker restarted.",
       parallel: "Announcements on the opposite path to the music",
       parallel_note: "Not measured on a real speaker: enable only to experiment. Music on AirPlay → announcement over DLNA, music on DLNA → announcement over AirPlay; the music keeps playing; on error it falls back to the normal path.",
       duck_title: "Advanced: duck background music", duck: "Duck music while speaking", duck_nac: "Ducking steps",
@@ -184,7 +186,7 @@
       mic_gain: all("number", "mic_gain")[0], mute: all("switch", "mute")[0],
       bands: all("number", "eq_band"),
       duong_phat: all("select", "duong_phat")[0], tin_nguoc: all("switch", "tin_nguoc_nhac")[0],
-      duck: all("switch", "ha_nhac_xuong")[0], duck_nac: all("number", "ha_nhac_nac")[0],
+      duck: all("switch", "ha_nhac_xuong")[0], duck_nac: all("number", "ha_nhac_nac")[0], cong_airplay: all("number", "cong_airplay")[0],
       kdl_bat: all("switch", "kdl_bat")[0], kdl_gio: all("time", "kdl_gio")[0], kdl_khi_treo: all("switch", "kdl_khi_treo")[0],
       kdl_ngay: DAYS.map(function (d) { return all("switch", "kdl_ngay_" + d)[0]; }),
       reboot: all("button", "reboot")[0], kdl_cuoi: all("sensor", "khoi_dong_lai_cuoi")[0], phan_hoi: all("binary_sensor", "phan_hoi")[0],
@@ -231,7 +233,7 @@
       play: {
         path: { entity: ent.duong_phat || null, present: !!ent.duong_phat, available: isUp(sel), value: isUp(sel) ? sel.state : null,
                 options: (sel && sel.attributes && sel.attributes.options) || [] },
-        parallel: sw(ent.tin_nguoc), duck: sw(ent.duck), duckNac: level(ent.duck_nac, 1, 14, 1),
+        parallel: sw(ent.tin_nguoc), duck: sw(ent.duck), duckNac: level(ent.duck_nac, 1, 14, 1), port: level(ent.cong_airplay, 1, 65535, 1),
       },
       restart: {
         enabled: sw(ent.kdl_bat), onHang: sw(ent.kdl_khi_treo),
@@ -243,7 +245,7 @@
         resp: { present: !!ent.phan_hoi, reason: pa.ly_do || null },
       },
     };
-    sys.entities = [sys.play.path, sys.play.parallel, sys.play.duck, sys.play.duckNac, sys.restart.enabled, sys.restart.onHang,
+    sys.entities = [sys.play.path, sys.play.parallel, sys.play.duck, sys.play.duckNac, sys.play.port, sys.restart.enabled, sys.restart.onHang,
                     sys.restart.time, sys.restart.button].concat(sys.restart.days).map(function (x) { return x.entity; }).filter(Boolean);
     return {
       found: !!(ent.settings || ent.volume || bands.length),
@@ -552,6 +554,8 @@
     h += '<div class="row"><label>' + esc(t.path) + '</label><select data-sys-sel="' + esc(P.path.entity || "") + '"' + (P.path.available ? "" : " disabled") + ">" +
       opts.map(function (o) { return '<option value="' + esc(o) + '"' + (P.path.value === o ? " selected" : "") + ">" + esc(t.paths[o] || o) + "</option>"; }).join("") +
       '</select></div><div class="note">' + esc(t.path_note) + "</div>";
+    h += '<div class="row"><label>' + esc(t.port) + '</label><input type="number" data-sys-num="' + esc(P.port.entity || "") + '" min="1" max="65535" step="1" value="' +
+      esc(P.port.value === null ? "" : P.port.value) + '"' + (P.port.available ? "" : " disabled") + '></div><div class="note">' + esc(t.port_note) + "</div>";
     h += swRow(t.parallel, P.parallel, "data-sys-sw", t.parallel_note);
     h += '<details class="grp adv2" data-sec="duck"><summary>' + esc(t.duck_title) + "</summary>" + swRow(t.duck, P.duck, "data-sys-sw", t.duck_note) +
       '<div class="row"><label>' + esc(t.duck_nac) + "</label>" +
@@ -767,6 +771,9 @@
       });
       all("[data-sys-nac]", function (el) {
         el.addEventListener("change", function () { dispatch({ type: "sysnum", entity: el.dataset.sysNac, value: el.value }); });
+      });
+      all("[data-sys-num]", function (el) {
+        el.addEventListener("change", function () { if (el.value !== "") dispatch({ type: "sysnum", entity: el.dataset.sysNum, value: el.value }); });
       });
       all("[data-sys-time]", function (el) {
         el.addEventListener("change", function () { if (el.value) dispatch({ type: "time", entity: el.dataset.sysTime, value: el.value }); });

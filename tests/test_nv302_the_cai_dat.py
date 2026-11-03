@@ -40,7 +40,7 @@ async def _goi(hass, domain, dich_vu, **dl):
 async def test_du_thuc_the_chuan_va_gia_tri_mac_dinh(hass, r1):
     await _them(hass, r1)
     mong = {("switch", "tin_nguoc_nhac"): "off", ("switch", "ha_nhac_xuong"): "off", ("switch", "kdl_bat"): "off",
-            ("switch", "kdl_khi_treo"): "off", ("number", "ha_nhac_nac"): "5", ("select", "duong_phat"): "dlna",
+            ("switch", "kdl_khi_treo"): "off", ("number", "ha_nhac_nac"): "5", ("number", "cong_airplay"): "5012", ("select", "duong_phat"): "dlna",
             ("time", "kdl_gio"): "04:00:00", **{("switch", f"kdl_ngay_{m}"): "on" for m in THU}}
     for (domain, khoa), trang_thai in mong.items():
         assert hass.states.get(_eid(hass, domain, khoa)).state == trang_thai, (domain, khoa)
@@ -53,13 +53,14 @@ async def test_doi_qua_thuc_the_ghi_vao_tuy_chon_va_gia_tri_mac_dinh_thi_bo_khoa
     await _goi(hass, "switch", "turn_on", entity_id=_eid(hass, "switch", "tin_nguoc_nhac"))
     await _goi(hass, "switch", "turn_on", entity_id=_eid(hass, "switch", "ha_nhac_xuong"))
     await _goi(hass, "number", "set_value", entity_id=_eid(hass, "number", "ha_nhac_nac"), value=9)
+    await _goi(hass, "number", "set_value", entity_id=_eid(hass, "number", "cong_airplay"), value=5013)
     await _goi(hass, "switch", "turn_on", entity_id=_eid(hass, "switch", "kdl_bat"))
     await _goi(hass, "switch", "turn_on", entity_id=_eid(hass, "switch", "kdl_khi_treo"))
     await _goi(hass, "time", "set_value", entity_id=_eid(hass, "time", "kdl_gio"), time="05:30:00")
     await _goi(hass, "switch", "turn_off", entity_id=_eid(hass, "switch", "kdl_ngay_t3"))
     await _goi(hass, "switch", "turn_off", entity_id=_eid(hass, "switch", "kdl_ngay_cn"))
     assert dict(e.options) == {
-        "duong_phat": "airplay_truoc", "tts_song_song_airplay": True, "ha_nhac_xuong": True, "ha_nhac_nac": 9,
+        "duong_phat": "airplay_truoc", "tts_song_song_airplay": True, "ha_nhac_xuong": True, "ha_nhac_nac": 9, "airplay_port": 5013,
         "khoi_dong_lai_bat": True, "khoi_dong_lai_khi_treo": True, "khoi_dong_lai_gio": "05:30",
         "khoi_dong_lai_ngay": ["t2", "t4", "t5", "t6", "t7"]}
     assert hass.states.get(_eid(hass, "switch", "kdl_ngay_t3")).state == "off"
@@ -69,6 +70,7 @@ async def test_doi_qua_thuc_the_ghi_vao_tuy_chon_va_gia_tri_mac_dinh_thi_bo_khoa
     await _goi(hass, "switch", "turn_off", entity_id=_eid(hass, "switch", "tin_nguoc_nhac"))
     await _goi(hass, "switch", "turn_off", entity_id=_eid(hass, "switch", "ha_nhac_xuong"))
     await _goi(hass, "number", "set_value", entity_id=_eid(hass, "number", "ha_nhac_nac"), value=5)
+    await _goi(hass, "number", "set_value", entity_id=_eid(hass, "number", "cong_airplay"), value=5012)
     await _goi(hass, "switch", "turn_off", entity_id=_eid(hass, "switch", "kdl_bat"))
     await _goi(hass, "switch", "turn_off", entity_id=_eid(hass, "switch", "kdl_khi_treo"))
     await _goi(hass, "time", "set_value", entity_id=_eid(hass, "time", "kdl_gio"), time="04:00:00")
@@ -149,7 +151,7 @@ async def test_mo_hinh_the_doc_dung_thuc_the_va_lenh_goi_la_dich_vu_chuan(hass, 
     assert [(d["code"], d["on"]) for d in R["days"]] == [(m_, m_ != "t3") for m_ in THU]
     assert R["button"]["entity"] == "button.r1_khoi_dong_lai" and R["resp"]["reason"] in ("phan_hoi", "chua_biet")
     ids = S["entities"]
-    assert len(ids) == len(set(ids)) == 8 + 7 - 0 + 0 and all(i.split(".")[0] in ("switch", "select", "number", "time", "button") for i in ids)
+    assert len(ids) == len(set(ids)) == 9 + 7 and all(i.split(".")[0] in ("switch", "select", "number", "time", "button") for i in ids)
 
     def goi(a):
         return _node("c.makeCall(i.m,i.a)", m=m, a=a)
@@ -217,6 +219,7 @@ const cl=(s)=>{q(s).click();};
 q('[data-day]').click();
 const sel=q("[data-sys-sel]"); sel.value="airplay"; sel.dispatchEvent(new Event("change"));
 const tm=q("[data-sys-time]"); tm.value="05:10"; tm.dispatchEvent(new Event("change"));
+const nb=q("[data-sys-num]"); nb.value="5099"; nb.dispatchEvent(new Event("change"));
 const sw0=q("[data-sys-sw]"); sw0.checked=!sw0.checked; sw0.dispatchEvent(new Event("change"));
 window.confirm=()=>true; q("[data-reboot]").click();
 document.getElementById("out").textContent=JSON.stringify({tran,vande:nho_,dem,calls,n,W});
@@ -238,5 +241,5 @@ async def test_giao_dien_375px_khong_tran_chu_14_cham_44_va_goi_dich_vu(hass, r1
     assert r["W"] == 375 and r["n"] > 40                                   # thật sự đã đo trong khung 375 px
     assert r["dem"] == {"ngay": 7, "sw": 4}
     loai = [c[:2] for c in r["calls"]]
-    assert loai == [["switch", "turn_off"], ["select", "select_option"], ["time", "set_value"], ["switch", "turn_on"], ["button", "press"]]
-    assert r["calls"][1][2]["option"] == "airplay" and r["calls"][2][2]["time"] == "05:10:00"
+    assert loai == [["switch", "turn_off"], ["select", "select_option"], ["time", "set_value"], ["number", "set_value"], ["switch", "turn_on"], ["button", "press"]]
+    assert r["calls"][1][2]["option"] == "airplay" and r["calls"][2][2]["time"] == "05:10:00" and r["calls"][3][2]["value"] == 5099
