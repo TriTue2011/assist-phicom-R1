@@ -7,8 +7,10 @@ chủ máy chủ động rút nguồn), nên mọi ngưỡng ở ``const.py`` l�
 
 Hai loại tín hiệu độc lập:
 
-* **Ứng dụng** (chứng tỏ phần mềm trên loa đang chạy): ``get_info`` đọc thành công qua cổng 8080 (vòng hỏi của coordinator) và nhịp tim
-  của APK (``R1Talk.alive``). Một trong hai còn tươi (≤ ``PHAN_HOI_NGUONG_IM_GIAY``) thì loa **phản hồi**.
+* **Ứng dụng** (chứng tỏ phần mềm trên loa đang chạy): ``get_info`` đọc thành công qua cổng 8080 (vòng hỏi của coordinator), nhịp tim
+  của APK (``R1Talk.alive`` — phía loa gọi ``/api/r1_speaker/ping`` chưa chắc đã có) và APK đang nối vào đầu nhận mic của HA
+  (``mic_server.receiving``; phiên đó đứt khi loa tắt hẳn, nhưng một loa đơ giữa chừng có thể còn giữ kết nối TCP một lúc — nên ghi vào
+  ``lan_cuoi`` để lần treo thật sau này cho biết có đáng tin hay không). Một trong ba còn tươi (≤ ``PHAN_HOI_NGUONG_IM_GIAY``) thì loa **phản hồi**.
 * **Mạng** (chứng tỏ máy trên loa còn trả lời ở tầng TCP): bắt tay TCP tới cổng điều khiển 8080 và tới cổng ADB 5555 (nếu ADB chưa đóng).
   «Bị từ chối» cũng là có trả lời (máy bên kia gửi RST); chỉ quá hạn hoặc không có đường tới mới là «không thông». Chỉ thử khi mọi
   tín hiệu ứng dụng đã im — loa khoẻ thì không tốn một gói nào.
@@ -41,7 +43,7 @@ PHAN_HOI, TREO, MAT_MANG, DANG_KHOI_DONG, CHUA_BIET = "phan_hoi", "treo", "mat_m
 HONG = (TREO, MAT_MANG)
 
 #: Tên tín hiệu trong thuộc tính ``lan_cuoi``.
-TIN_HIEU = ("get_info", "apk_nhip_tim", "tcp_8080", "adb_5555")
+TIN_HIEU = ("get_info", "apk_nhip_tim", "apk_ket_noi", "tcp_8080", "adb_5555")
 
 
 async def thu_tcp(host: str, port: int, toi_da: float) -> str:
@@ -73,6 +75,8 @@ class PhanHoi:
         self.lan_cuoi: dict[str, datetime | None] = dict.fromkeys(TIN_HIEU)
         self._khoi_dong_luc: datetime | None = None
         self._da_thay_ung_dung = False
+        #: Sau lệnh khởi động lại, phiên APK cũ còn mở thêm một lúc: chỉ tính «APK đang nối» sau khi thấy nó đứt rồi nối lại.
+        self._cho_apk_dut = False
         self._nguoi_nghe: list[Callable[[], None]] = []
 
     def add_listener(self, cb: Callable[[], None]) -> Callable[[], None]:
@@ -83,6 +87,7 @@ class PhanHoi:
         """HA vừa gửi lệnh khởi động lại: một lúc nữa loa mất mạng rồi ứng dụng im là BÌNH THƯỜNG, không phải treo."""
         self._khoi_dong_luc = self._dong_ho()
         self._da_thay_ung_dung = False
+        self._cho_apk_dut = True
 
     def _nho(self, ten: str, luc: datetime | None) -> None:
         if luc is not None and (self.lan_cuoi[ten] is None or luc > self.lan_cuoi[ten]):
@@ -94,13 +99,18 @@ class PhanHoi:
         c = self._coordinator
         self._nho("get_info", getattr(c, "lan_doc_thanh_cong", None))
         self._nho("apk_nhip_tim", getattr(getattr(c, "talk", None), "last_alive", None))
+        if getattr(getattr(c, "mic_server", None), "receiving", False):
+            if not self._cho_apk_dut:
+                self._nho("apk_ket_noi", bay_gio)
+        else:
+            self._cho_apk_dut = False
         def con_tuoi(ten: str) -> bool:
             luc = self.lan_cuoi[ten]
             if luc is None or (self._khoi_dong_luc is not None and luc <= self._khoi_dong_luc):
                 return False                    # tín hiệu có TRƯỚC lệnh khởi động lại thì không chứng minh loa đã lên lại
             return (bay_gio - luc).total_seconds() <= const.PHAN_HOI_NGUONG_IM_GIAY
 
-        song = con_tuoi("get_info") or con_tuoi("apk_nhip_tim")
+        song = con_tuoi("get_info") or con_tuoi("apk_nhip_tim") or con_tuoi("apk_ket_noi")
         if song:
             ly_do, self._da_thay_ung_dung, self._khoi_dong_luc = PHAN_HOI, True, None
         elif (self._khoi_dong_luc is not None

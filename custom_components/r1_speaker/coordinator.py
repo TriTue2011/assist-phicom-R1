@@ -65,6 +65,8 @@ class R1Coordinator(DataUpdateCoordinator[R1State]):
     async def _async_update_data(self) -> R1State:
         try:
             tt = await self.client.async_fetch()
+            if not self.last_update_success:
+                _LOGGER.warning("Loa R1 %s đọc được trở lại", self.client.host)       # MỘT lần mỗi lần có lại (lúc mất cũng đã báo đúng một lần)
             self.lan_doc_thanh_cong = dt_util.utcnow()
             self._lan_hong = 0
             ir.async_delete_issue(self.hass, DOMAIN, f"cong_dieu_khien_{self.config_entry.entry_id}")

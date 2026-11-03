@@ -307,6 +307,7 @@ async def test_cong_dieu_khien_tat_ma_may_van_tra_loi_tcp_la_treo(hass, r1, free
     await tien(hass, freezer, t, t + timedelta(minutes=3))
     assert hass.states.get(CAM_BIEN).state == "on"
     assert caplog.text.count("đã phản hồi trở lại") == 1
+    assert caplog.text.count("đọc được trở lại") == 1                    # coordinator: WARNING MỘT lần khi có lại (mục 2d)
 
 
 async def test_khong_co_duong_toi_loa_la_mat_mang_khong_phai_treo(hass, r1, freezer, caplog):
@@ -475,3 +476,23 @@ def test_gio_va_ngay_hong_roi_ve_mac_dinh():
     assert st.khoi_dong_lai_ngay(e) == frozenset(const.KDL_NGAY_MA)
     e.options["khoi_dong_lai_ngay"] = ["t2", "xx", "cn"]
     assert st.khoi_dong_lai_ngay(e) == frozenset({"t2", "cn"})
+
+
+async def test_apk_dang_noi_vao_ha_thi_khong_ket_luan_treo_du_cong_8080_tat(hass, r1, freezer_tick):
+    """8080 tắt nhưng APK vẫn nối vào đầu nhận mic của HA: còn một tín hiệu ứng dụng nên KHÔNG phải treo (không được tự khởi động lại)."""
+    from .test_den_nhac import KHOA, _cong_trong, _noi_apk
+    freezer = freezer_tick
+    cong = _cong_trong()
+    e, dev = await dung(hass, r1, freezer, gio("2026-11-04", 10, 0), khoi_dong_lai_khi_treo=True,
+                        mic_host="127.0.0.1", mic_port=9, mic_listen_port=cong, mic_listen_key=KHOA)
+    reader, writer = await _noi_apk(e, cong)
+    t = await tien(hass, freezer, gio("2026-11-04", 10, 0), gio("2026-11-04", 10, 1))
+    await r1.stop()
+    t = await tien(hass, freezer, t, t + timedelta(minutes=40), buoc=60)
+    st = hass.states.get(CAM_BIEN)
+    assert st.attributes["ly_do"] == "phan_hoi" and st.attributes["lan_cuoi"]["apk_ket_noi"] is not None
+    assert dev.reboot_goi == 0
+    writer.close()
+    await hass.async_block_till_done()
+    await tien(hass, freezer, t, t + timedelta(minutes=5), buoc=60)       # APK đứt, 8080 vẫn tắt: lúc đó mới là treo
+    assert hass.states.get(CAM_BIEN).attributes["ly_do"] == "treo"
