@@ -97,7 +97,7 @@ def test_giao_dien_the_gop_dong_mac_dinh_va_khong_trung_cai_dat(tmp_path):
     c = r["caiDat"]
     assert c["settings"] and not c["talk"] and not c["eq"]
     assert not c["vol"] and c["eq"] == 0 and not c["mute"]                               # không trùng
-    assert c["micGain"] and not c["nutDong"] and c["tabCon"] == 3                        # mở sẵn, ba nhóm
+    assert c["micGain"] and not c["nutDong"] and c["tabCon"] == 4                        # mở sẵn, bốn nhóm
     assert r["eq"] == {"thanVao": True, "talk": False, "eq": True, "settings": False}
     assert r["dongLai"] == {"thanVao": True, "talk": False, "eq": False, "settings": False}
     assert "r1-card 2026-" in r["ver"] and "đàm thoại 2026-" in r["ver"]       # ghi phiên bản để đối chiếu

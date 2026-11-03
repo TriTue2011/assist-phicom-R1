@@ -110,7 +110,7 @@ khiển. Nếu thẻ không hiện (HA không có `frontend`), thêm tay: Cài �
 ⋮ → Tài nguyên → `/r1_speaker/r1-eq-card.js`, loại **Mô-đun JavaScript**.
 
 **Thẻ cài đặt (ẩn):** `type: custom:r1-settings-card` (tự nạp từ `/r1_speaker/r1-settings-card.js`).
-Mặc định chỉ có tiêu đề và nút «Cài đặt»; bấm nút mới mở ba nhóm Âm thanh / Ánh sáng / Kết nối. Đèn
+Mặc định chỉ có tiêu đề và nút «Cài đặt»; bấm nút mới mở bốn nhóm Âm thanh / Ánh sáng / Kết nối / Phát & khởi động lại. Nhóm «Phát & khởi động lại» chỉnh ngay đường phát, tin báo song song, hạ nhạc nền, lịch khởi động lại (giờ + từng thứ trong tuần), tự khởi động lại khi loa treo và nút «Khởi động lại ngay»; mỗi dòng là một thực thể chuẩn lưu vào tuỳ chọn của tích hợp (đổi ở thẻ hay ở hộp tuỳ chọn đều thấy ở cả hai nơi). Đèn
 theo chức năng chỉ SÁNG khi có dịch vụ đèn trên loa (chưa có) — xem `DEN-LED.md`.
 
 ## 3. Assist và bộ đàm

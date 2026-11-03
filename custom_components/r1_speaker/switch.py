@@ -18,6 +18,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .client import R1Client, R1Error
 from .const import BT_DOI_DOC_LAI, MUSIC_LIGHT_ENABLE
 from .coordinator import R1ConfigEntry, R1Coordinator
+from . import thuc_the_tuy_chon
 from .entity import R1Entity, R1MicEntity, R1MusicLightEntity, preregister
 
 
@@ -55,7 +56,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
     async_add_entities([R1MuteSwitch(entry), R1AssistSwitch(entry), R1IntercomSwitch(entry),
                         R1ParallelSwitch(entry),
                         R1MusicLightSwitch(entry.runtime_data),
-                        R1BluetoothSwitch(entry.runtime_data)])
+                        R1BluetoothSwitch(entry.runtime_data), *thuc_the_tuy_chon.switches(hass, entry)])
 
 
 class R1Switch(R1Entity, SwitchEntity):

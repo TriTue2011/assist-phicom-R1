@@ -391,7 +391,7 @@ def test_giao_dien_the_cai_dat_an_hien_ba_nhom_va_goi_dich_vu(tmp_path):
     assert m, out.stderr[-500:]
     r = json.loads(html_lib.unescape(m.group(1)))
     assert r["dau"] == {"panel": False, "tabs": 0, "nut": "false"}          # mặc định ẨN
-    assert r["mo"] == {"panel": "audio", "tabs": 3, "eq": 2, "nut": "true"}   # bấm → hiện, ba nhóm
+    assert r["mo"] == {"panel": "audio", "tabs": 4, "eq": 2, "nut": "true"}   # bấm → hiện, bốn nhóm (thêm «Phát & khởi động lại»)
     assert r["anh"]["panel"] == "light" and r["anh"]["blocks"] == 8        # tám chức năng, kể cả phát nhạc
     assert "CHƯA sáng" in r["anh"]["sink"]
     assert r["thu0"] == {"zone": "day", "hieuUng": "co_dinh", "ochon": 2}      # mục Thử: đáy, hiệu ứng đầu, 2 thông số

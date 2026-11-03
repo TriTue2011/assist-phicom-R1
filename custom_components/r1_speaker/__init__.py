@@ -65,7 +65,7 @@ _LOGGER = logging.getLogger(__name__)
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 PLATFORMS = [Platform.ASSIST_SATELLITE, Platform.BINARY_SENSOR, Platform.BUTTON, Platform.EVENT, Platform.MEDIA_PLAYER,
-             Platform.NUMBER, Platform.SELECT, Platform.SENSOR, Platform.SWITCH, Platform.UPDATE]
+             Platform.NUMBER, Platform.SELECT, Platform.SENSOR, Platform.SWITCH, Platform.TIME, Platform.UPDATE]
 
 _WWW = Path(__file__).parent / "www"
 _CARDS = ((CARD_URL, _WWW / "r1-eq-card.js"), (TALK_CARD_URL, _WWW / "r1-talk-card.js"),

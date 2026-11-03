@@ -50,6 +50,9 @@
       },
       "light_master": {
         "name": "Light brightness"
+      },
+      "ha_nhac_nac": {
+        "name": "Ducking steps"
       }
     },
     "switch": {
@@ -85,6 +88,39 @@
       },
       "bluetooth": {
         "name": "Bluetooth"
+      },
+      "tin_nguoc_nhac": {
+        "name": "Parallel AirPlay announcements"
+      },
+      "ha_nhac_xuong": {
+        "name": "Duck music while speaking"
+      },
+      "kdl_bat": {
+        "name": "Scheduled restart"
+      },
+      "kdl_khi_treo": {
+        "name": "Restart when hung"
+      },
+      "kdl_ngay_t2": {
+        "name": "Restart on Monday"
+      },
+      "kdl_ngay_t3": {
+        "name": "Restart on Tuesday"
+      },
+      "kdl_ngay_t4": {
+        "name": "Restart on Wednesday"
+      },
+      "kdl_ngay_t5": {
+        "name": "Restart on Thursday"
+      },
+      "kdl_ngay_t6": {
+        "name": "Restart on Friday"
+      },
+      "kdl_ngay_t7": {
+        "name": "Restart on Saturday"
+      },
+      "kdl_ngay_cn": {
+        "name": "Restart on Sunday"
       }
     },
     "sensor": {
@@ -217,6 +253,15 @@
           "bao_thuc_hoan": "Alarm: snooze",
           "hen_gio_tat_nhac_30": "Sleep timer 30 min (fade out)"
         }
+      },
+      "duong_phat": {
+        "name": "Playback path",
+        "state": {
+          "dlna": "DLNA only (default)",
+          "dlna_truoc": "DLNA first, AirPlay if it fails",
+          "airplay_truoc": "AirPlay first, DLNA if it fails",
+          "airplay": "AirPlay only"
+        }
       }
     },
     "binary_sensor": {
@@ -264,6 +309,11 @@
             }
           }
         }
+      }
+    },
+    "time": {
+      "kdl_gio": {
+        "name": "Restart time"
       }
     }
   },

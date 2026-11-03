@@ -50,6 +50,9 @@
       },
       "light_master": {
         "name": "Độ sáng đèn"
+      },
+      "ha_nhac_nac": {
+        "name": "Số nấc hạ nhạc"
       }
     },
     "switch": {
@@ -85,6 +88,39 @@
       },
       "bluetooth": {
         "name": "Bluetooth"
+      },
+      "tin_nguoc_nhac": {
+        "name": "Tin báo song song AirPlay"
+      },
+      "ha_nhac_xuong": {
+        "name": "Hạ nhạc nền khi loa nói"
+      },
+      "kdl_bat": {
+        "name": "Khởi động lại theo lịch"
+      },
+      "kdl_khi_treo": {
+        "name": "Tự khởi động lại khi loa treo"
+      },
+      "kdl_ngay_t2": {
+        "name": "Khởi động lại thứ hai"
+      },
+      "kdl_ngay_t3": {
+        "name": "Khởi động lại thứ ba"
+      },
+      "kdl_ngay_t4": {
+        "name": "Khởi động lại thứ tư"
+      },
+      "kdl_ngay_t5": {
+        "name": "Khởi động lại thứ năm"
+      },
+      "kdl_ngay_t6": {
+        "name": "Khởi động lại thứ sáu"
+      },
+      "kdl_ngay_t7": {
+        "name": "Khởi động lại thứ bảy"
+      },
+      "kdl_ngay_cn": {
+        "name": "Khởi động lại chủ nhật"
       }
     },
     "sensor": {
@@ -217,6 +253,15 @@
           "bao_thuc_hoan": "Báo thức: hoãn (báo lại sau)",
           "hen_gio_tat_nhac_30": "Hẹn giờ tắt nhạc 30 phút (nhỏ dần)"
         }
+      },
+      "duong_phat": {
+        "name": "Đường phát",
+        "state": {
+          "dlna": "Chỉ DLNA (mặc định)",
+          "dlna_truoc": "DLNA trước, hỏng thì AirPlay",
+          "airplay_truoc": "AirPlay trước, hỏng thì DLNA",
+          "airplay": "Chỉ AirPlay"
+        }
       }
     },
     "binary_sensor": {
@@ -264,6 +309,11 @@
             }
           }
         }
+      }
+    },
+    "time": {
+      "kdl_gio": {
+        "name": "Giờ khởi động lại"
       }
     }
   },

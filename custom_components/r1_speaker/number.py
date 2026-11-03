@@ -12,6 +12,7 @@ from .const import (DEFAULT_MIC_GAIN_DB, EQ_BAND_NAMES, EQ_BANDS, EQ_MAX, EQ_MIN
                     MUSIC_LIGHT_CHROMA, MUSIC_LIGHT_LUMA, MUSIC_LIGHT_RANGE, STRENGTH_MAX, STRENGTH_MIN, VOL_MAX,
                     VOL_MIN)
 from .coordinator import R1ConfigEntry, R1Coordinator
+from . import thuc_the_tuy_chon
 from .entity import R1Entity, R1MicEntity, R1MusicLightEntity, device_info, preregister
 
 
@@ -31,7 +32,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
     ])
     preregister(hass, entry, "number", f"{entry.entry_id}_mic_gain", "r1_tang_mic")
     preregister(hass, entry, "number", f"{entry.entry_id}_hoan_phut", "r1_hoan_bao_thuc")
-    async_add_entities([R1MicGain(entry), R1LightMaster(entry), R1HoanBaoThuc(entry)])
+    async_add_entities([R1MicGain(entry), R1LightMaster(entry), R1HoanBaoThuc(entry), *thuc_the_tuy_chon.numbers(hass, entry)])
 
 
 class R1Volume(R1Entity, NumberEntity):

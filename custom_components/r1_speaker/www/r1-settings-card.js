@@ -6,7 +6,11 @@
  *   Ánh sáng  — mục «Thử đèn» RIÊNG (chọn vùng, hiệu ứng, thông số rồi bấm Thử; không lưu), và cài đặt đèn theo
  *               chức năng: mỗi chức năng có bật/tắt + hai vùng (đáy, viền), mỗi vùng một hiệu ứng với bộ thông số
  *               RIÊNG của hiệu ứng đó (form dựng từ danh mục ``danh_muc`` do HA gửi);
- *   Kết nối   — host, cổng, ha_url, khoá bộ đàm (chỉ «đã có / chưa có», KHÔNG hiện giá trị khoá).
+ *   Kết nối   — host, cổng, ha_url, khoá bộ đàm (chỉ «đã có / chưa có», KHÔNG hiện giá trị khoá);
+ *   Phát & khởi động lại (NV302) — đường phát nhạc/tin, tin báo đi đường ngược với nhạc, hạ nhạc nền; lịch khởi động lại
+ *               (bật/tắt, giờ, từng thứ trong tuần), tự khởi động lại khi loa treo, nút «Khởi động lại ngay», lần cuối + lý do.
+ *               MỖI cài đặt là MỘT thực thể chuẩn (switch / select / number / time) của tích hợp, lưu vào tuỳ chọn của mục
+ *               (cùng nguồn với hộp tuỳ chọn HA): thẻ chỉ đọc/ghi qua thực thể, KHÔNG có nơi lưu thứ hai.
  *
  * Thẻ KHÔNG gọi loa: chỉ đọc thực thể HA (sensor.r1_cai_dat và các thực thể EQ / âm lượng / mic) và
  * gọi dịch vụ HA (number.set_value, switch.turn_on/off, r1_speaker.set_light_function,
@@ -20,11 +24,12 @@
  */
 (function () {
   "use strict";
-  var BUILD = "2026-10-23.30";
+  var BUILD = "2026-11-03.31";
 
   var PLATFORM = "r1_speaker";
   var FUNCTIONS = ["cho", "nghe", "nghi", "phan_hoi", "dam_thoai", "phat_nhac", "loi", "tat_mic"];
-  var TABS = ["audio", "light", "conn"];
+  var TABS = ["audio", "light", "conn", "sys"];
+  var DAYS = ["t2", "t3", "t4", "t5", "t6", "t7", "cn"];
   var OPTIONS_PATH = "/config/integrations/integration/r1_speaker";
   var TEXT = {
     vi: {
@@ -66,6 +71,26 @@
       apk_note: "Chạy lệnh trên một máy có adb. Loa đã cấu hình rồi thì lệnh đổi cấu hình bị BỎ QUA: chạy trước adb shell /system/bin/pm clear vn.r1.bodam (xoá cấu hình cũ).",
       apk_show: "Hiện lệnh cài APK (quản trị viên)", apk_hide: "Ẩn lệnh", apk_err: "Không lấy được lệnh",
       unconfirmed: "chưa xác nhận",
+      sys: "Phát & khởi động lại",
+      play_title: "Phát nhạc & tin báo", path: "Đường phát",
+      path_note: "Nhạc và tin báo ra loa bằng đường nào. AirPlay do tích hợp tự gửi, cần ffmpeg trên máy chạy HA.",
+      paths: { dlna: "Chỉ DLNA (mặc định)", dlna_truoc: "DLNA trước, hỏng thì AirPlay", airplay_truoc: "AirPlay trước, hỏng thì DLNA", airplay: "Chỉ AirPlay" },
+      parallel: "Tin báo song song AirPlay",
+      parallel_note: "Chưa đo trên loa thật: chỉ bật khi muốn thử. Nhạc ở DLNA thì tin báo đi AirPlay cùng lúc, nhạc không dừng.",
+      duck_title: "Nâng cao: hạ nhạc nền", duck: "Hạ nhạc nền khi loa nói", duck_nac: "Số nấc hạ",
+      duck_note: "Chưa đo trên loa thật. Chỉ có tác dụng khi tin báo song song bật; nhạc nhỏ đi rồi trả đúng mức cũ.",
+      rs_title: "Khởi động lại loa",
+      resp: "Tình trạng loa", resp_state: { phan_hoi: "Loa đang phản hồi", treo: "Loa TREO: mạng còn thông nhưng ứng dụng trên loa im",
+        mat_mang: "Loa MẤT MẠNG: không trả lời", dang_khoi_dong: "Loa đang khởi động lại", chua_biet: "Chưa biết (vừa khởi động HA)" },
+      rs_sched: "Khởi động lại theo lịch", rs_time: "Giờ khởi động lại", rs_days: "Các ngày trong tuần",
+      rs_sched_note: "Mặc định tắt. Tới giờ mà loa đang có phiên hoặc đang phát nhạc thì hoãn tối đa 45 phút.",
+      day: { t2: "T2", t3: "T3", t4: "T4", t5: "T5", t6: "T6", t7: "T7", cn: "CN" },
+      day_full: { t2: "Thứ hai", t3: "Thứ ba", t4: "Thứ tư", t5: "Thứ năm", t6: "Thứ sáu", t7: "Thứ bảy", cn: "Chủ nhật" },
+      rs_hang: "Tự khởi động lại khi loa treo",
+      rs_hang_note: "Mặc định tắt. Chỉ khi mạng còn thông mà loa im từ 15 phút, cần ADB; tối đa một lần mỗi 6 giờ. Loa mất mạng thì HA không làm được gì.",
+      rs_now: "Khởi động lại ngay", rs_now_confirm: "Khởi động lại loa ngay bây giờ? Loa sẽ im khoảng nửa phút.",
+      rs_last: "Lần khởi động lại cuối", rs_never: "chưa có", rs_reason: "lý do", rs_next: "Lần tới theo lịch", rs_defer: "Đang hoãn vì",
+      rs_reasons: { lich: "lịch", treo: "loa treo", bam: "bấm tay" }, rs_failed: "không thành",
     },
     en: {
       title: "R1 speaker — Settings", open: "Settings", close: "Close",
@@ -107,6 +132,26 @@
       apk_note: "Run it from a machine with adb. A speaker that is already configured IGNORES the command: first run adb shell /system/bin/pm clear vn.r1.bodam (clears the old configuration).",
       apk_show: "Show APK setup command (administrators)", apk_hide: "Hide command", apk_err: "Could not get the command",
       unconfirmed: "unconfirmed",
+      sys: "Playback & restart",
+      play_title: "Music & announcements", path: "Playback path",
+      path_note: "Which path music and announcements take to the speaker. AirPlay is sent by this integration and needs ffmpeg on the HA host.",
+      paths: { dlna: "DLNA only (default)", dlna_truoc: "DLNA first, AirPlay if it fails", airplay_truoc: "AirPlay first, DLNA if it fails", airplay: "AirPlay only" },
+      parallel: "Parallel AirPlay announcements",
+      parallel_note: "Not measured on a real speaker: enable only to experiment. With music on DLNA, announcements go out over AirPlay at the same time and the music keeps playing.",
+      duck_title: "Advanced: duck background music", duck: "Duck music while speaking", duck_nac: "Ducking steps",
+      duck_note: "Not measured on a real speaker. Only applies when parallel announcements are on; music drops, then returns to the exact previous level.",
+      rs_title: "Restart the speaker",
+      resp: "Speaker status", resp_state: { phan_hoi: "Speaker is responding", treo: "Speaker is HUNG: network up but its app is silent",
+        mat_mang: "Speaker OFFLINE: no answer", dang_khoi_dong: "Speaker is restarting", chua_biet: "Unknown (HA just started)" },
+      rs_sched: "Scheduled restart", rs_time: "Restart time", rs_days: "Days of the week",
+      rs_sched_note: "Off by default. If a session or music is active at that time, it waits up to 45 minutes.",
+      day: { t2: "Mon", t3: "Tue", t4: "Wed", t5: "Thu", t6: "Fri", t7: "Sat", cn: "Sun" },
+      day_full: { t2: "Monday", t3: "Tuesday", t4: "Wednesday", t5: "Thursday", t6: "Friday", t7: "Saturday", cn: "Sunday" },
+      rs_hang: "Restart by itself when hung",
+      rs_hang_note: "Off by default. Only when the network is up but the speaker has been silent for 15 minutes; needs ADB; at most once per 6 hours. If the speaker is offline HA can do nothing.",
+      rs_now: "Restart now", rs_now_confirm: "Restart the speaker now? It will be silent for about half a minute.",
+      rs_last: "Last restart", rs_never: "none yet", rs_reason: "reason", rs_next: "Next scheduled", rs_defer: "Postponed because",
+      rs_reasons: { lich: "schedule", treo: "hung speaker", bam: "button" }, rs_failed: "failed",
     },
   };
 
@@ -138,6 +183,11 @@
       settings: all("sensor", "settings")[0], volume: all("number", "volume")[0],
       mic_gain: all("number", "mic_gain")[0], mute: all("switch", "mute")[0],
       bands: all("number", "eq_band"),
+      duong_phat: all("select", "duong_phat")[0], tin_nguoc: all("switch", "tin_nguoc_nhac")[0],
+      duck: all("switch", "ha_nhac_xuong")[0], duck_nac: all("number", "ha_nhac_nac")[0],
+      kdl_bat: all("switch", "kdl_bat")[0], kdl_gio: all("time", "kdl_gio")[0], kdl_khi_treo: all("switch", "kdl_khi_treo")[0],
+      kdl_ngay: DAYS.map(function (d) { return all("switch", "kdl_ngay_" + d)[0]; }),
+      reboot: all("button", "reboot")[0], kdl_cuoi: all("sensor", "khoi_dong_lai_cuoi")[0], phan_hoi: all("binary_sensor", "phan_hoi")[0],
     };
   }
 
@@ -171,8 +221,33 @@
                active: al.dang_ap_dung === k };
     });
     var fw = al.den_nhac_firmware || {};
+    var sw = function (id) {
+      var q = stateOf(hass, id);
+      return { entity: id || null, present: !!id, available: isUp(q), on: isUp(q) ? q.state === "on" : null };
+    };
+    var sel = stateOf(hass, ent.duong_phat), tm = stateOf(hass, ent.kdl_gio), last = stateOf(hass, ent.kdl_cuoi), ph = stateOf(hass, ent.phan_hoi);
+    var la = (last && last.attributes) || {}, pa = (ph && ph.attributes) || {};
+    var sys = {
+      play: {
+        path: { entity: ent.duong_phat || null, present: !!ent.duong_phat, available: isUp(sel), value: isUp(sel) ? sel.state : null,
+                options: (sel && sel.attributes && sel.attributes.options) || [] },
+        parallel: sw(ent.tin_nguoc), duck: sw(ent.duck), duckNac: level(ent.duck_nac, 1, 14, 1),
+      },
+      restart: {
+        enabled: sw(ent.kdl_bat), onHang: sw(ent.kdl_khi_treo),
+        time: { entity: ent.kdl_gio || null, present: !!ent.kdl_gio, available: isUp(tm), value: isUp(tm) ? String(tm.state).slice(0, 5) : null },
+        days: DAYS.map(function (d, i) { var x = sw(ent.kdl_ngay[i]); x.code = d; return x; }),
+        button: { entity: ent.reboot || null, present: !!ent.reboot },
+        last: { present: !!ent.kdl_cuoi, at: isUp(last) ? last.state : null, reason: la.ly_do || null, result: la.ket_qua || null,
+                next: la.ke_tiep || null, deferring: la.dang_hoan || null },
+        resp: { present: !!ent.phan_hoi, reason: pa.ly_do || null },
+      },
+    };
+    sys.entities = [sys.play.path, sys.play.parallel, sys.play.duck, sys.play.duckNac, sys.restart.enabled, sys.restart.onHang,
+                    sys.restart.time, sys.restart.button].concat(sys.restart.days).map(function (x) { return x.entity; }).filter(Boolean);
     return {
       found: !!(ent.settings || ent.volume || bands.length),
+      sys: sys,
       gop: config.gop === true,
       offline: !!ent.settings && !isUp(st),
       settings: { entity: ent.settings || null, present: !!ent.settings },
@@ -232,6 +307,12 @@
     if (a.type === "mute" && model.audio.mute.entity) {
       return ["switch", a.on ? "turn_on" : "turn_off", { entity_id: model.audio.mute.entity }];
     }
+    var sysOk = function (id) { return !!id && model.sys && model.sys.entities.indexOf(id) >= 0; };        // chỉ thực thể của thẻ này
+    if (a.type === "sw" && sysOk(a.entity)) return ["switch", a.on ? "turn_on" : "turn_off", { entity_id: a.entity }];
+    if (a.type === "sel" && sysOk(a.entity) && typeof a.value === "string") return ["select", "select_option", { entity_id: a.entity, option: a.value }];
+    if (a.type === "sysnum" && sysOk(a.entity) && isFinite(Number(a.value))) return ["number", "set_value", { entity_id: a.entity, value: Number(a.value) }];
+    if (a.type === "time" && sysOk(a.entity) && /^\d{2}:\d{2}$/.test(String(a.value))) return ["time", "set_value", { entity_id: a.entity, time: a.value + ":00" }];
+    if (a.type === "reboot" && sysOk(a.entity)) return ["button", "press", { entity_id: a.entity }];
     if (!sid) return null;
     var coerce = function (field, v) {
       if (field === "enabled" || field === "rim" || field === "bat") return v === true || v === "true" || v === "on";
@@ -454,6 +535,52 @@
       '<div class="note">' + esc(t.conn_note) + '</div><button class="sec" data-goto>' + esc(t.goto) + "</button></div>";
   }
 
+  /* ── Nhóm «Phát & khởi động lại» (NV302): mỗi dòng là MỘT thực thể chuẩn; thẻ chỉ gọi dịch vụ chuẩn của thực thể đó. ── */
+  function fmtAt(iso, lg) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    return d.toLocaleString(lg === "vi" ? "vi-VN" : "en-GB", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
+  }
+  function swRow(label, x, attr, note) {
+    return '<div class="row"><label>' + esc(label) + '</label><input type="checkbox" ' + attr + '="' + esc(x.entity || "") + '"' +
+      (x.on ? " checked" : "") + (x.available ? "" : " disabled") + "></div>" + (note ? '<div class="note">' + esc(note) + "</div>" : "");
+  }
+  function htmlSys(m, t, lg) {
+    var S = m.sys, P = S.play, R = S.restart, h = '<div data-panel="sys">';
+    h += '<details class="grp" open data-sec="play"><summary><b>' + esc(t.play_title) + "</b></summary>";
+    var opts = (P.path.options.length ? P.path.options : Object.keys(t.paths));
+    h += '<div class="row"><label>' + esc(t.path) + '</label><select data-sys-sel="' + esc(P.path.entity || "") + '"' + (P.path.available ? "" : " disabled") + ">" +
+      opts.map(function (o) { return '<option value="' + esc(o) + '"' + (P.path.value === o ? " selected" : "") + ">" + esc(t.paths[o] || o) + "</option>"; }).join("") +
+      '</select></div><div class="note">' + esc(t.path_note) + "</div>";
+    h += swRow(t.parallel, P.parallel, "data-sys-sw", t.parallel_note);
+    h += '<details class="grp adv2" data-sec="duck"><summary>' + esc(t.duck_title) + "</summary>" + swRow(t.duck, P.duck, "data-sys-sw", t.duck_note) +
+      '<div class="row"><label>' + esc(t.duck_nac) + "</label>" +
+      slider('data-sys-nac="' + esc(P.duckNac.entity || "") + '"', P.duckNac.value, 1, 14, 1, !P.duckNac.available) +
+      '<span class="val">' + esc(P.duckNac.value === null ? "—" : P.duckNac.value) + "</span></div></details></details>";
+    h += '<details class="grp" open data-sec="restart"><summary><b>' + esc(t.rs_title) + "</b></summary>";
+    if (R.resp.present) h += '<div class="status ' + (R.resp.reason === "phan_hoi" ? "ok" : (R.resp.reason === "treo" || R.resp.reason === "mat_mang" ? "warn" : "")) +
+      '" data-resp="' + esc(R.resp.reason || "") + '">' + esc(t.resp + ": " + (t.resp_state[R.resp.reason] || "—")) + "</div>";
+    h += swRow(t.rs_sched, R.enabled, "data-sys-sw", t.rs_sched_note);
+    h += '<div class="row"><label>' + esc(t.rs_time) + '</label><input type="time" data-sys-time="' + esc(R.time.entity || "") + '" value="' + esc(R.time.value || "") + '"' +
+      (R.time.available ? "" : " disabled") + "></div>";
+    h += '<div class="lbl">' + esc(t.rs_days) + '</div><div class="days" role="group" aria-label="' + esc(t.rs_days) + '">';
+    R.days.forEach(function (d) {
+      h += '<button class="chip' + (d.on ? " sel" : "") + '" data-day="' + esc(d.entity || "") + '" aria-pressed="' + (d.on ? "true" : "false") +
+        '" aria-label="' + esc(t.day_full[d.code]) + '"' + (d.available ? "" : " disabled") + ">" + esc(t.day[d.code]) + "</button>";
+    });
+    h += "</div>";
+    h += swRow(t.rs_hang, R.onHang, "data-sys-sw", t.rs_hang_note);
+    h += '<button class="sec" data-reboot="' + esc(R.button.entity || "") + '"' + (R.button.present ? "" : " disabled") + ">" + esc(t.rs_now) + "</button>";
+    if (R.last.present) {
+      var l = R.last, rs = l.reason ? (t.rs_reasons[l.reason] || l.reason) : null;
+      h += '<div class="status" data-last>' + esc(t.rs_last + ": " + (l.at ? fmtAt(l.at, lg) : t.rs_never) +
+        (rs ? " (" + t.rs_reason + ": " + rs + (l.result && l.result !== "ok" ? ", " + t.rs_failed : "") + ")" : "")) + "</div>";
+      if (l.next) h += '<div class="note" data-next>' + esc(t.rs_next + ": " + fmtAt(l.next, lg)) + "</div>";
+      if (l.deferring) h += '<div class="note" data-defer>' + esc(t.rs_defer + ": " + l.deferring) + "</div>";
+    }
+    return h + "</details></div>";
+  }
+
   /* HTML thuần của thẻ. Đóng: chỉ tiêu đề + nút. Mở: ba tab + nhóm đang chọn. */
   function renderHtml(m, ui, t, lg) {
     lg = lg || "vi";
@@ -467,24 +594,31 @@
         '" aria-selected="' + (ui.tab === k ? "true" : "false") + '">' + esc(t[k]) + "</button>";
     });
     h += "</div>";
-    h += ui.tab === "light" ? htmlLight(m, t, lg, ui) : (ui.tab === "conn" ? htmlConn(m, t) : htmlAudio(m, t));
+    h += ui.tab === "light" ? htmlLight(m, t, lg, ui) : (ui.tab === "conn" ? htmlConn(m, t) : (ui.tab === "sys" ? htmlSys(m, t, lg) : htmlAudio(m, t)));
     return h + "</ha-card>";
   }
 
   var CSS = [
-    ":host{display:block}", "ha-card{padding:12px 16px}", "h2{margin:0;font-size:1.1em}",
+    ":host{display:block}", "ha-card{padding:12px 16px;font-size:14px;box-sizing:border-box;max-width:100%;overflow-x:hidden}", "h2{margin:0;font-size:1.1em}",
     ".head{display:flex;align-items:center;justify-content:space-between;gap:8px}",
-    ".row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0}",
+    ".row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0;min-height:44px;flex-wrap:wrap}",
+    ".row label{flex:1 1 150px;min-width:0}", "input[type=checkbox]{width:28px;height:28px;flex:none}",
+    "select,input[type=time],input[type=number]{font:inherit;min-height:44px;max-width:100%;box-sizing:border-box}", "input[type=range]{min-height:44px}",
     ".row input[type=range]{flex:1}", ".val{min-width:3em;text-align:right}",
     "section{margin-top:10px;border-top:1px solid var(--divider-color,#ddd);padding-top:6px}",
     "section.active{border-left:3px solid var(--primary-color,#03a9f4);padding-left:8px}",
-    ".tabs{display:flex;gap:6px;margin:10px 0}", ".tab.sel{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff)}",
-    "button{font:inherit;padding:6px 14px;border-radius:8px;border:1px solid var(--divider-color,#bbb);",
+    ".tabs{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}", ".tab.sel{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff)}",
+    "button{font:inherit;min-height:44px;min-width:44px;padding:6px 14px;border-radius:8px;border:1px solid var(--divider-color,#bbb);",
     "background:transparent;color:inherit;cursor:pointer}", "button.sec{margin-top:4px}",
-    ".warn{color:var(--error-color,#db4437)}", ".small{font-size:.8em}", ".note{font-size:.8em;opacity:.75}", ".grp{font-weight:600;margin-top:8px}", "input[type=number]{width:90px}", "pre.lenh{white-space:pre-wrap;word-break:break-all;font-size:.75em;user-select:all;margin:6px 0}",
+    ".warn{color:var(--error-color,#db4437)}", ".small{font-size:14px}", ".note{font-size:14px;opacity:.8}", ".grp{font-weight:600;margin-top:8px}", "input[type=number]{width:90px}", "pre.lenh{white-space:pre-wrap;word-break:break-all;font-size:.75em;user-select:all;margin:6px 0}",
     ".ok{color:var(--success-color,#43a047)}", ".sink{margin:8px 0;font-size:.9em}",
     ".zone{margin:6px 0 6px 6px;padding-left:8px;border-left:2px solid var(--divider-color,#ddd)}", ".zname{font-weight:600;font-size:.9em}", ".gtitle{margin-top:14px}",
-    ".tag{font-size:.75em;padding:1px 6px;border-radius:8px;background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff)}",
+    "details[data-sec]{font-weight:400}", "details[data-sec]>summary{font-weight:600}",
+    ".days{display:flex;gap:4px;margin:4px 0 8px}", ".chip{flex:1 1 0;min-width:44px;padding:6px 0;text-align:center}",
+    ".chip.sel{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff)}", ".lbl{margin-top:6px}",
+    ".status{margin:8px 0}", "details.adv2{margin-top:8px}", "details.adv2>summary{min-height:44px;display:flex;align-items:center;cursor:pointer}",
+    "summary{min-height:44px;display:flex;align-items:center;cursor:pointer}",
+    ".tag{font-size:14px;padding:1px 6px;border-radius:8px;background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff)}",
   ].join("");
 
   class R1SettingsCard extends (typeof HTMLElement !== "undefined" ? HTMLElement : Object) {
@@ -625,6 +759,27 @@
           dispatch({ type: "main", field: el.dataset.mainField, value: el.type === "checkbox" ? el.checked : el.value });
         });
       });
+      all("[data-sys-sw]", function (el) {
+        el.addEventListener("change", function () { dispatch({ type: "sw", entity: el.dataset.sysSw, on: el.checked }); });
+      });
+      all("[data-sys-sel]", function (el) {
+        el.addEventListener("change", function () { dispatch({ type: "sel", entity: el.dataset.sysSel, value: el.value }); });
+      });
+      all("[data-sys-nac]", function (el) {
+        el.addEventListener("change", function () { dispatch({ type: "sysnum", entity: el.dataset.sysNac, value: el.value }); });
+      });
+      all("[data-sys-time]", function (el) {
+        el.addEventListener("change", function () { if (el.value) dispatch({ type: "time", entity: el.dataset.sysTime, value: el.value }); });
+      });
+      all("[data-day]", function (el) {
+        el.addEventListener("click", function () { dispatch({ type: "sw", entity: el.dataset.day, on: el.getAttribute("aria-pressed") !== "true" }); });
+      });
+      all("[data-reboot]", function (el) {
+        el.addEventListener("click", function () {
+          var t = TEXT[lang(self._hass)];
+          if (typeof window.confirm !== "function" || window.confirm(t.rs_now_confirm)) dispatch({ type: "reboot", entity: el.dataset.reboot });
+        });
+      });
       all("[data-opt]", function (el) {
         el.addEventListener("change", function () {
           var bat = el.dataset.bool === "1";
@@ -648,6 +803,6 @@
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = { buildModel: buildModel, renderHtml: renderHtml, initialUi: initialUi, reduceUi: reduceUi,
-                       makeCall: makeCall, thuEffective: thuEffective, TEXT: TEXT, FUNCTIONS: FUNCTIONS, TABS: TABS };
+                       makeCall: makeCall, thuEffective: thuEffective, TEXT: TEXT, FUNCTIONS: FUNCTIONS, TABS: TABS, DAYS: DAYS };
   }
 })();

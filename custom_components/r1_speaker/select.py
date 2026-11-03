@@ -13,6 +13,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN, EQ_MAX, EQ_MIN, EQ_PRESET_MB
 from .coordinator import R1ConfigEntry, R1Coordinator
+from . import thuc_the_tuy_chon
 from .entity import R1Entity, R1MicEntity, preregister
 from .phim import CU_CHI, danh_sach
 
@@ -23,7 +24,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
     preregister(hass, entry, "select", f"{entry.entry_id}-pipeline", "r1_tro_ly")
     for cc in CU_CHI:
         preregister(hass, entry, "select", f"{entry.entry_id}_phim_{cc}", f"r1_phim_nhan_{cc}")
-    async_add_entities([R1PipelineSelect(hass, entry), R1EqPreset(entry.runtime_data), *[R1PhimSelect(entry, cc) for cc in CU_CHI]])
+    async_add_entities([R1PipelineSelect(hass, entry), R1EqPreset(entry.runtime_data), *[R1PhimSelect(entry, cc) for cc in CU_CHI],
+                        *thuc_the_tuy_chon.selects(hass, entry)])
 
 
 class R1PhimSelect(SelectEntity, RestoreEntity):
