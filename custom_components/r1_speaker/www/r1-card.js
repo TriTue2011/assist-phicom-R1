@@ -5,7 +5,7 @@
  * dưới tên riêng (r1-*-card-n): trình duyệt/ứng dụng HA/proxy giữ bản cũ của URL cố định hàng giờ (có
  * lớp đệm còn bỏ qua cả tham số ?...), nên dùng thẳng ``<r1-talk-card>`` thì sửa xong vẫn thấy bản cũ.
  * Nếu vẫn nhận bản cũ thì dùng tạm thẻ cũ và ghi rõ ở cuối thẻ. */
-const BUILD = "2026-11-10.1";
+const BUILD = "2026-11-10.2";
 
 const TABS = [
   { id: "talk", tag: "r1-talk-card-n", ten: "Đàm thoại", cfg: { show_eq: false } },
@@ -55,8 +55,10 @@ class R1Card extends HTMLElement {
       ".tab{flex:0 0 auto;border:0;border-radius:16px;padding:6px 12px;font-size:.85rem;cursor:pointer;background:var(--secondary-background-color,#2a2a2a);color:var(--primary-text-color,#fff)}",
       ".tab.sel{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff)}",
       ".ver{font-size:.7rem;opacity:.5;padding:2px 4px}",
-      ".tieude{font-size:1.1rem;font-weight:600;padding:4px 4px 2px;display:flex;align-items:center;justify-content:space-between;gap:8px}",
-      ".kd{flex:0 0 auto;border:0;border-radius:16px;padding:6px 12px;font-size:.8rem;cursor:pointer;background:var(--error-color,#db4437);color:#fff}",
+      ".tieude{font-size:1.1rem;font-weight:600;padding:4px 4px 2px}",
+      ".hang{display:flex;align-items:flex-start;gap:8px}",
+      ".hang .tabs{flex:1 1 auto;min-width:0}",
+      ".kd{flex:0 0 auto;border:0;border-radius:16px;padding:6px 12px;margin:4px 2px 8px 0;font-size:.85rem;line-height:normal;cursor:pointer;background:var(--error-color,#db4437);color:#fff}",
       ".kd[disabled]{opacity:.5;cursor:default}",
       ".kdtt{font-size:.8rem;padding:0 4px 6px;opacity:.85;white-space:pre-wrap}",
     ].join("");
@@ -64,16 +66,14 @@ class R1Card extends HTMLElement {
     // Tên loa và hàng tab LUÔN hiện; chỉ NỘI DUNG (Đàm thoại / EQ / Cài đặt-âm thanh) đóng sẵn tới khi bấm tab.
     const head = document.createElement("div");
     head.className = "tieude";
-    const ten = document.createElement("span");
-    ten.textContent = "Loa R1";
-    head.appendChild(ten);
-    // Nút khởi động lại LUÔN hiện (không phải mở tab Cài đặt → Phát & khởi động lại): bấm là gọi nút «Khởi động lại» của loa, có xác nhận.
+    head.textContent = "Loa R1";
+    // Nút khởi động lại LUÔN hiện (không phải mở tab Cài đặt → Phát & khởi động lại), nằm CÙNG HÀNG với các tab, cùng cỡ chữ và độ cao:
+    // bấm là gọi nút «Khởi động lại» của loa, có xác nhận.
     this._kd = document.createElement("button");
     this._kd.className = "kd";
     this._kd.textContent = "↻ Khởi động lại";
     this._kd.disabled = true;
     this._kd.addEventListener("click", () => this._khoiDong());
-    head.appendChild(this._kd);
     this._root.appendChild(head);
     this._head = head;
     this._kdtt = document.createElement("div");
@@ -103,7 +103,11 @@ class R1Card extends HTMLElement {
       this._body.appendChild(el);
       this._parts[t.id] = el;
     });
-    this._body.insertBefore(bar, this._body.firstChild);
+    const hang = document.createElement("div");           // hàng tab + nút khởi động lại (nút cố định bên phải, tab cuộn được)
+    hang.className = "hang";
+    hang.appendChild(bar);
+    hang.appendChild(this._kd);
+    this._body.insertBefore(hang, this._body.firstChild);
     this._loaBar = document.createElement("div");
     this._loaBar.className = "tabs loa";
     this._body.insertBefore(this._loaBar, this._body.firstChild);
