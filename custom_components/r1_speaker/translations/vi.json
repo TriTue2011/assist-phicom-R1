@@ -59,6 +59,9 @@
       },
       "am_luong_media": {
         "name": "Âm lượng nhạc (media, AirPlay)"
+      },
+      "am_luong_tin": {
+        "name": "Âm lượng tin báo / TTS (0 = không đổi)"
       }
     },
     "switch": {

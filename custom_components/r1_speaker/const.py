@@ -104,6 +104,9 @@ DEFAULT_DSP_DONG_CO = "noi_bo"
 # Chỉ có tác dụng khi nhạc đi đường AirPlay (DLNA do loa tự tải URL nên không can thiệp được). 100 = nguyên vẹn.
 CONF_AM_LUONG_MEDIA = "am_luong_media"
 DEFAULT_AM_LUONG_MEDIA = 100
+#: Âm lượng LOA (thang 0–15) mà tin báo / TTS dùng; 0 = giữ nguyên âm lượng đang đặt. Xong tin thì trả về mức cũ.
+CONF_AM_LUONG_TIN = "am_luong_tin"
+DEFAULT_AM_LUONG_TIN = 0
 # Khử vọng trong phiên song công (trừ tiếng HA đã phát xuống loa khỏi mic). Mặc định BẬT như trước (hằng ``AEC_BAT`` cũ).
 CONF_DUPLEX_AEC = "duplex_aec"
 DEFAULT_DUPLEX_AEC = True

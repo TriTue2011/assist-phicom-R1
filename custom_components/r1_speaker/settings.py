@@ -26,7 +26,7 @@ from .const import (CONF_WAKE_ENABLE, CONF_WAKE_SENSITIVITY, CONF_WAKE_WORD,
 from .const import (CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, CONF_AGC_TARGET_DB,
                     CONF_DUPLEX_DUCK, CONF_DUPLEX_DUCK_DB, CONF_DUPLEX_HANGOVER,
                     CONF_DUPLEX_MAX_S, CONF_DUPLEX_PREROLL, CONF_DUPLEX_VAD_THRESHOLD,
-                    CONF_AM_LUONG_MEDIA, DEFAULT_AM_LUONG_MEDIA,
+                    CONF_AM_LUONG_MEDIA, CONF_AM_LUONG_TIN, DEFAULT_AM_LUONG_MEDIA, DEFAULT_AM_LUONG_TIN, VOL_MAX,
                     CONF_DSP_DONG_CO, CONF_DUPLEX_AEC, DEFAULT_DSP_DONG_CO, DEFAULT_DUPLEX_AEC, DSP_DONG_CO_GIA_TRI,
                     DEFAULT_DUPLEX_DUCK, DEFAULT_DUPLEX_DUCK_DB, DEFAULT_DUPLEX_HANGOVER,
                     DEFAULT_DUPLEX_MAX_S, DEFAULT_DUPLEX_PREROLL, DEFAULT_DUPLEX_VAD_THRESHOLD,
@@ -140,6 +140,14 @@ def am_luong_media(entry: ConfigEntry) -> float:
         return min(max(float(conf(entry, CONF_AM_LUONG_MEDIA, DEFAULT_AM_LUONG_MEDIA)), 0.0), 100.0) / 100.0
     except (TypeError, ValueError):
         return 1.0
+
+
+def am_luong_tin(entry: ConfigEntry) -> int:
+    """Mức âm lượng loa (0–15) cho tin báo / TTS; 0 = không đổi (giá trị hỏng → 0)."""
+    try:
+        return min(max(int(float(conf(entry, CONF_AM_LUONG_TIN, DEFAULT_AM_LUONG_TIN))), 0), VOL_MAX)
+    except (TypeError, ValueError):
+        return 0
 
 
 def dsp_dong_co(entry: ConfigEntry) -> str:

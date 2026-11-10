@@ -741,3 +741,53 @@ async def test_cong_tac_dam_thoai_chua_co_kenh_phat_thi_bao_loi(hass, r1, pcm_se
         await hass.services.async_call("switch", "turn_on", {"entity_id": INTERCOM}, blocking=True)
     assert _state(hass, INTERCOM) == "off"
     assert not e.runtime_data.duplex.luon and not e.runtime_data.duplex.active
+
+
+async def test_tts_am_luong_rieng_dat_truoc_tin_va_tra_lai_khi_tin_xong(hass, r1, nhac):
+    """Tuỳ chọn «Âm lượng tin báo» và extra.volume: loa đặt mức riêng cho TTS rồi trả mức cũ TRƯỚC khi nhạc phát lại."""
+    e = await _them(hass, r1, am_luong_tin=12)
+    dmr = await nhac()
+    ms = e.runtime_data.mic_server
+    ms.am_luong = (5, 15)
+    dat = []
+
+    async def gui(muc):
+        dat.append(muc)
+        ms.am_luong = (muc, 15)
+    ms.gui_am_luong = gui
+    dmr.start_music(MUSIC, position=30, ago=2)
+    await asyncio.wait_for(hass.services.async_call("media_player", "play_media", {
+        "entity_id": LOA, "media_content_id": "media-source://tts/x?message=hi", "media_content_type": "music", "announce": True}, blocking=True), 3)
+    assert dat == [12]                                           # TTS: mức riêng 12 (tuỳ chọn)
+    dmr.finish()
+    await _cho(lambda: e.runtime_data.talk.music.holds == 0, hass)
+    assert dat == [12, 5]                                        # xong tin: trả mức cũ 5, rồi nhạc phát lại
+    # ghi đè theo từng lần gọi: extra.volume 0.4 (≈ 6/15)
+    dat.clear()
+    ms.am_luong = (5, 15)
+    dmr.start_music(MUSIC, position=40, ago=2)
+    await asyncio.wait_for(hass.services.async_call("media_player", "play_media", {
+        "entity_id": LOA, "media_content_id": "media-source://tts/y?message=hi", "media_content_type": "music", "announce": True,
+        "extra": {"volume": 0.4}}, blocking=True), 3)
+    assert dat == [6]
+    dmr.finish()
+    await _cho(lambda: e.runtime_data.talk.music.holds == 0, hass)
+    assert dat == [6, 5]
+
+
+async def test_tts_khong_dat_am_luong_thi_khong_dung_vao_am_luong_loa(hass, r1, nhac):
+    e = await _them(hass, r1)                                    # am_luong_tin mặc định 0 = không đổi
+    dmr = await nhac()
+    ms = e.runtime_data.mic_server
+    ms.am_luong = (5, 15)
+    dat = []
+
+    async def gui(muc):
+        dat.append(muc)
+    ms.gui_am_luong = gui
+    dmr.start_music(MUSIC, position=30, ago=2)
+    await asyncio.wait_for(hass.services.async_call("media_player", "play_media", {
+        "entity_id": LOA, "media_content_id": "media-source://tts/x?message=hi", "media_content_type": "music", "announce": True}, blocking=True), 3)
+    dmr.finish()
+    await _cho(lambda: e.runtime_data.talk.music.holds == 0, hass)
+    assert dat == []

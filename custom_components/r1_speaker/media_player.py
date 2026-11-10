@@ -52,7 +52,7 @@ from homeassistant.util import dt as dt_util
 
 from . import const
 from .const import AIRPLAY_BAT_DAU_TOI_DA, DLNA_READY_TIMEOUT, DOMAIN
-from .settings import am_luong_media, airplay_port, ha_url, duong_phat, tts_song_song_airplay, ha_nhac_xuong, ha_nhac_nac
+from .settings import am_luong_media, am_luong_tin, airplay_port, ha_url, duong_phat, tts_song_song_airplay, ha_nhac_xuong, ha_nhac_nac
 from .dmr import R1Dmr, R1DmrError, TrangThaiDmr, UocViTri
 from .coordinator import R1ConfigEntry, R1Coordinator
 from .client import R1Error
@@ -576,17 +576,51 @@ class R1Player(R1Entity, MediaPlayerEntity):
         if tts_song_song_airplay(entry) and self._tin_co_the_nguoc_dlna() and await self._tin_dlna_song_song(media_type, media_id, **kwargs):
             return                                      # NV303: tin đã đi DLNA song song, nhạc AirPlay không bị đụng
         giu = await talk.music.hold()
+        muc_cu = await self._dat_am_luong_tin(kwargs)
         try:
             self._nhanh = True
             await self._phat(media_type, media_id, **kwargs)
         except BaseException:
             self._nhanh = False
+            await self._tra_am_luong_tin(muc_cu)
             await giu.release()
             raise
         self.coordinator.config_entry.async_create_background_task(
-            self.hass, self._theo_doi_tin(giu), f"{self.entity_id} announce")
+            self.hass, self._theo_doi_tin(giu, muc_cu), f"{self.entity_id} announce")
 
-    async def _theo_doi_tin(self, giu) -> None:
+    async def _dat_am_luong_tin(self, kwargs: dict[str, Any]) -> int | None:
+        """Đặt âm lượng LOA cho tin báo / TTS. Trả mức CŨ để trả lại khi tin xong, hoặc ``None`` nếu không đổi gì. Thứ tự: ``extra.volume``
+        (0.0–1.0, mỗi lần gọi) > tuỳ chọn «Âm lượng tin báo» (0–15; 0 = không đổi). Không đọc/đặt được thì để nguyên (tin vẫn phát)."""
+        am = self.coordinator.mic_server.am_luong
+        if am is None:
+            return None
+        extra = kwargs.get("extra") if isinstance(kwargs.get("extra"), dict) else {}
+        muc = None
+        try:
+            if extra.get("volume") is not None:
+                muc = min(max(round(float(extra["volume"]) * am[1]), 0), am[1])
+            elif am_luong_tin(self.coordinator.config_entry) > 0:
+                muc = min(am_luong_tin(self.coordinator.config_entry), am[1])
+        except (TypeError, ValueError):
+            _LOGGER.warning("%s: extra.volume không phải số 0–1, bỏ qua", self.entity_id)
+        if muc is None or muc == am[0]:
+            return None
+        try:
+            await self.coordinator.mic_server.gui_am_luong(muc)
+        except (ConnectionError, OSError, TimeoutError, ValueError) as exc:
+            _LOGGER.warning("%s: không đặt được âm lượng tin báo (%s)", self.entity_id, type(exc).__name__)
+            return None
+        return am[0]
+
+    async def _tra_am_luong_tin(self, muc_cu: int | None) -> None:
+        if muc_cu is None:
+            return
+        try:
+            await self.coordinator.mic_server.gui_am_luong(muc_cu)
+        except (ConnectionError, OSError, TimeoutError, ValueError) as exc:
+            _LOGGER.warning("%s: không trả được âm lượng cũ %s sau tin báo (%s)", self.entity_id, muc_cu, type(exc).__name__)
+
+    async def _theo_doi_tin(self, giu, muc_cu: int | None = None) -> None:
         """Chờ tin bắt đầu rồi kết thúc (theo trạng thái renderer), báo vệ tinh, nhả nhạc."""
         talk = self.coordinator.talk
         try:
@@ -608,6 +642,7 @@ class R1Player(R1Entity, MediaPlayerEntity):
         finally:
             self._nhanh = False
             talk.announce_done()
+            await self._tra_am_luong_tin(muc_cu)             # trả âm lượng TRƯỚC khi nhạc phát lại
             await giu.release()
 
     # ── NV287: tin song song qua AirPlay ────────────────────────────────────────

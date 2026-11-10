@@ -171,6 +171,24 @@ class R1AmLuongMediaNumber(_TuyChon, NumberEntity):
         self._ghi(int(round(min(max(value, 0), 100))))
 
 
+class R1AmLuongTinNumber(_TuyChon, NumberEntity):
+    """Âm lượng LOA dùng cho tin báo / TTS (0–15; 0 = không đổi). Đặt trước khi tin phát, trả mức cũ khi tin xong (nhạc phát tiếp ở mức cũ).
+    Mỗi lần gọi ``tts.speak`` / ``media_player.play_media`` cũng ghi đè được bằng ``extra: {volume: 0.0–1.0}``."""
+
+    _attr_native_min_value, _attr_native_max_value, _attr_native_step = 0, const.VOL_MAX, 1
+    _attr_mode = NumberMode.SLIDER
+
+    def __init__(self, entry: R1ConfigEntry) -> None:
+        super().__init__(entry, "am_luong_tin", const.CONF_AM_LUONG_TIN, const.DEFAULT_AM_LUONG_TIN, settings.am_luong_tin)
+
+    @property
+    def native_value(self) -> float:
+        return self._doc(self._entry)
+
+    async def async_set_native_value(self, value: float) -> None:
+        self._ghi(int(round(min(max(value, 0), const.VOL_MAX))))
+
+
 class R1CongAirplayNumber(_TuyChon, NumberEntity):
     """Cổng AirPlay (RAOP) của loa, cùng tuỳ chọn ``airplay_port``; đổi nếu AirPlay không nối được sau khi loa khởi động lại."""
 
@@ -201,7 +219,7 @@ class R1GioKhoiDongLaiTime(_TuyChon, TimeEntity):
 
 
 #: Tên thực thể gợi ý (``<domain>.<tên>``) theo khoá dịch; khoá nào không có ở đây thì dùng ``r1_<khoá>``.
-_TEN_GOI_Y = {"am_luong_media": "r1_am_luong_media", "khu_on": "r1_khu_on_mic", "khu_vong": "r1_khu_vong_song_cong", "dsp_dong_co": "r1_dong_co_xu_ly_am_thanh",
+_TEN_GOI_Y = {"am_luong_media": "r1_am_luong_media", "am_luong_tin": "r1_am_luong_tin", "khu_on": "r1_khu_on_mic", "khu_vong": "r1_khu_vong_song_cong", "dsp_dong_co": "r1_dong_co_xu_ly_am_thanh",
               "tin_nguoc_nhac": "r1_tin_bao_nguoc_nhac", "kdl_bat": "r1_khoi_dong_lai_lich", "kdl_khi_treo": "r1_khoi_dong_lai_khi_treo",
               "kdl_gio": "r1_gio_khoi_dong_lai", **{f"kdl_ngay_{m}": f"r1_khoi_dong_lai_{m}" for m in const.KDL_NGAY_MA}}
 
@@ -229,7 +247,7 @@ def selects(hass: HomeAssistant, entry: R1ConfigEntry) -> list:
 
 
 def numbers(hass: HomeAssistant, entry: R1ConfigEntry) -> list:
-    return _dang_ky(hass, entry, "number", [R1NacHaNhacNumber(entry), R1CongAirplayNumber(entry), R1AmLuongMediaNumber(entry)])
+    return _dang_ky(hass, entry, "number", [R1NacHaNhacNumber(entry), R1CongAirplayNumber(entry), R1AmLuongMediaNumber(entry), R1AmLuongTinNumber(entry)])
 
 
 def times(hass: HomeAssistant, entry: R1ConfigEntry) -> list:

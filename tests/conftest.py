@@ -140,3 +140,10 @@ def _khong_multicast_that():
     from custom_components.r1_speaker import dmr as dmr_mod
     with mock.patch.object(dmr_mod, "tim_mo_ta_multicast", new=mock.AsyncMock(return_value=None)):
         yield
+
+
+@pytest.fixture(autouse=True)
+def _khong_cho_doc_lai_vi_tri_sau_tua(monkeypatch):
+    """Khôi phục nhạc đọc lại vị trí sau khi tua (chờ 1 giây mỗi lần): test không chờ thật."""
+    from custom_components.r1_speaker import giu_nhac
+    monkeypatch.setattr(giu_nhac, "CHO_DOC_LAI_S", 0.02)

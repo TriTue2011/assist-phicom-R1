@@ -59,6 +59,9 @@
       },
       "am_luong_media": {
         "name": "Media volume (AirPlay)"
+      },
+      "am_luong_tin": {
+        "name": "Announcement / TTS volume (0 = unchanged)"
       }
     },
     "switch": {

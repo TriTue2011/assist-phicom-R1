@@ -47,6 +47,9 @@ from . import const
 _LOGGER = logging.getLogger(__name__)
 
 PLAYING = frozenset({"playing", "buffering"})
+SO_LAN_TUA = 3          # số lần tua tối đa sau khi phát lại nhạc
+CHO_DOC_LAI_S = 1.0     # chờ rồi đọc lại vị trí sau mỗi lệnh tua
+DUNG_SAI_TUA_S = 8.0    # vị trí đọc lại trong khoảng này so với đích là đã tua được
 POLL = 0.05
 
 
@@ -279,9 +282,30 @@ class MusicKeeper:
                 "entity_id": eid, "media_content_id": snap.content_id,
                 "media_content_type": snap.content_type}):
             return
-        if snap.position is not None and snap.position >= 1.0:
+        if snap.position is None:
+            _LOGGER.warning("%s: không biết vị trí cũ của nhạc nên phát lại TỪ ĐẦU (loa không báo media_position trước khi tin báo)", eid)
+        elif snap.position >= 1.0:
             await self._wait_playing(eid)
-            await self._call("media_seek", {"entity_id": eid, "seek_position": snap.position})
+            await self._tua_va_kiem(eid, snap.position)
+
+    async def _tua_va_kiem(self, eid: str, muc_tieu: float) -> None:
+        """Tua tới ``muc_tieu`` rồi ĐỌC LẠI vị trí: renderer vừa lên «playing» thường bỏ qua lệnh tua gửi quá sớm (bài phát lại từ đầu — người dùng
+        báo 10/11/2026). Chưa tới thì chờ rồi tua lại (tối đa ``SO_LAN_TUA``); hết lần mà vẫn không tới thì ghi cảnh báo nêu rõ."""
+        vi_tri = None
+        for lan in range(SO_LAN_TUA):
+            await self._call("media_seek", {"entity_id": eid, "seek_position": muc_tieu})
+            await asyncio.sleep(CHO_DOC_LAI_S)
+            st = self.hass.states.get(eid)
+            vi_tri = st.attributes.get("media_position") if st is not None else None
+            try:
+                if vi_tri is not None and float(vi_tri) >= muc_tieu - DUNG_SAI_TUA_S:
+                    return
+            except (TypeError, ValueError):
+                pass
+            await asyncio.sleep(CHO_DOC_LAI_S)
+        _LOGGER.warning("%s: tua về %.0f s không có tác dụng sau %d lần (vị trí đọc lại: %s) — bài có thể đang phát từ đầu; "
+                        "renderer có thể không cho tua luồng này (thử «Đường phát» = AirPlay: tua bằng cách phát lại từ vị trí đó)",
+                        eid, muc_tieu, SO_LAN_TUA, vi_tri)
 
     async def _call(self, service: str, data: dict[str, Any]) -> bool:
         try:
