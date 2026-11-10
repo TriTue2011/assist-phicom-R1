@@ -244,3 +244,25 @@ def test_chan_doan_khu_vong_noi_ro_bo_nao_dang_chay_va_so_do_fdaf():
     f = KhuVongFdaf()
     f.erle_db, f.delay, f.tin_cay = 9.26, int(0.25 * RATE), 31.04
     assert do(f) == {"dong_co": "fdaf", "erle_db": 9.3, "tre_ms": 250, "tin_cay": 31.0, "dinh_ms": 0, "lan_uoc": 0, "so_ref": 0, "ref_rms": 0, "mic_rms": 0}
+
+
+@pytest.mark.parametrize("jitter_ms", [0, 30])
+async def test_fdaf_khu_vong_khi_khuc_tham_chieu_toi_co_jitter(jitter_ms):
+    """Khúc xuống loa tới HA không đều (jitter mạng) nhưng loa phát LIÊN TỤC nên vọng liên tục: bộ khử vọng không được đặt tham chiếu theo giờ tới
+    từng khúc (đo trên loa thật: làm khử vọng chỉ còn ~0,5 dB)."""
+    far = _tieng_gia(16, 21)
+    mic = np.clip(_vang(far, 380) + np.random.default_rng(4).standard_normal(len(far)) * 40, -32768, 32767)
+    rng = np.random.default_rng(8)
+    gio = {"v": 0.0}
+    aec = KhuVongFdaf(clock=lambda: gio["v"])
+    out = []
+    tre = 0.0
+    for i in range(0, len(mic) - 319, 320):
+        tre = min(jitter_ms / 1000, max(0.0, tre + rng.uniform(-0.6, 0.6) * jitter_ms / 1000)) if jitter_ms else 0.0   # jitter trôi chậm, không đảo thứ tự
+        gio["v"] = i / RATE + tre
+        aec.day_ref(far[i:i + 320].astype("<i2").tobytes())
+        gio["v"] = i / RATE
+        out.append(np.frombuffer(aec.xu_ly(mic[i:i + 320].astype("<i2").tobytes()), dtype="<i2"))
+    out = np.concatenate(out)
+    assert abs(aec.delay * 1000 / RATE - 380) <= 25, aec.delay * 1000 / RATE
+    assert _erle(mic, out, 11, 15.5) >= 8, _erle(mic, out, 11, 15.5)

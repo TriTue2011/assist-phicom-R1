@@ -36,6 +36,10 @@ SAN_BUOC = 0.08           # sau đó bước không nhỏ hơn MU0 × ngần nà
 NGUONG_LOA = 20.0 ** 2   # công suất trung bình khối loa dưới mức này coi là im lặng (không thích nghi)
 DO_TIN_CAY = 8.0         # đỉnh GCC-PHAT / trung vị tối thiểu để tin độ trễ
 BUOC_DOI_TRE = RATE // 50  # độ trễ mới lệch hơn 20 ms mới đổi (và xoá bộ lọc)
+#: Khúc tham chiếu tới trễ không quá ngần này so với chỗ khúc trước kết thúc thì NỐI LIỀN (không chèn câm). Loa phát các khúc theo THỨ TỰ liên tục
+#: nên tiếng vọng liên tục; đặt khúc theo giờ tới (jitter mạng / hàng đợi vài chục ms) làm tham chiếu đứt đoạn so với vọng → bộ lọc không học được
+#: (đo trên máy thật 10/11/2026: tham chiếu theo giờ tới chỉ khử ~0,5 dB, tham chiếu liên tục khử 9–14 dB trên cùng dữ liệu).
+JITTER_NOI_LIEN = RATE * 3 // 10
 
 
 class KhuVongFdaf:
@@ -80,7 +84,11 @@ class KhuVongFdaf:
             return
         self.so_ref += 1
         self.ref_rms = float(np.sqrt(np.mean(x * x)))
-        pos = max(self._far_end, int(self._t() * RATE))
+        gio_toi = int(self._t() * RATE)
+        if self._far_end > 0 and gio_toi - self._far_end <= JITTER_NOI_LIEN:
+            pos = self._far_end                          # tới sớm hoặc trễ chút: nối liền khúc trước
+        else:
+            pos = max(self._far_end, gio_toi)            # nghỉ dài rồi nói lại: đặt theo giờ tới (khoảng câm ở giữa)
         pos = max(pos, self._n - H // 2)                 # không ghi lùi quá cũ
         idx = (pos + np.arange(x.size)) % H
         # Khoảng trống giữa khúc trước và khúc này phải là câm (ô cũ của vòng có thể còn tiếng 6 giây trước).
