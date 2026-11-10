@@ -127,9 +127,11 @@ async def test_mat_ket_noi_giua_chung_khong_sap_va_nhan_lai_duoc(dau_nhan):
     writer2.close()
 
 
-async def test_hai_luong_cung_luc_luong_hai_bi_tu_choi(dau_nhan):
+async def test_luong_moi_da_xac_thuc_thay_luong_cu_da_chet_va_tieng_di_theo_luong_moi(dau_nhan):
+    """Loa khởi động lại / mất WiFi: HA còn giữ kết nối cũ treo nửa chừng. Kết nối mới đúng khoá từ IP loa phải THAY nó (trước đây bị từ chối và
+    phát về loa lỗi «loa chưa nối vào đầu nhận mic»)."""
     mic, server, khuc = dau_nhan
-    _r1, w1 = await noi(server.port)
+    r1_, w1 = await noi(server.port)
     w1.write(hello())
     await w1.drain()
     await cho(lambda: server.receiving)
@@ -137,10 +139,32 @@ async def test_hai_luong_cung_luc_luong_hai_bi_tu_choi(dau_nhan):
     w2.write(hello())
     await w2.drain()
     try:
-        dong = await asyncio.wait_for(r2.read(), 3) == b""
-    except ConnectionResetError:              # đóng khi còn hello chưa đọc → RST, vẫn là bị từ chối
-        dong = True
-    assert dong                               # luồng hai bị đóng ngay
+        cu_dong = await asyncio.wait_for(r1_.read(), 3) == b""
+    except ConnectionResetError:
+        cu_dong = True
+    assert cu_dong                                            # luồng cũ bị đóng
+    await asyncio.sleep(0.1)
+    assert server.receiving                                   # luồng cũ kết thúc KHÔNG làm trạng thái «đang nhận» tắt
+    w2.write(khung(pcm(7)))
+    await w2.drain()
+    await cho(lambda: khuc == [pcm(7)])                       # tiếng đi theo luồng mới
+    assert server.receiving
+    w2.close()
+
+
+async def test_ket_noi_sai_khoa_khong_duoc_da_luong_dang_chay(dau_nhan):
+    mic, server, khuc = dau_nhan
+    _r1, w1 = await noi(server.port)
+    w1.write(hello())
+    await w1.drain()
+    await cho(lambda: server.receiving)
+    r2, w2 = await noi(server.port)
+    w2.write(hello("khoa-sai"))
+    await w2.drain()
+    try:
+        assert await asyncio.wait_for(r2.read(), 3) == b""
+    except ConnectionResetError:
+        pass
     w1.write(khung(pcm(3)))                                   # luồng một vẫn chạy
     await w1.drain()
     await cho(lambda: len(khuc) == 1)

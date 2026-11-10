@@ -14,8 +14,11 @@ Giao thức (khớp APK NV243 — MỌI khung đều đóng khung thống nhất
   để ``MicView`` và đàm thoại dùng chung;
 * khung cuối: payload JSON ``{"type": "end"}``.
 
-Một luồng nhận tại một thời điểm: luồng thứ hai bị đóng ngay kèm log cảnh báo. Mất kết
-nối giữa chừng chỉ đóng phiên đó, máy chủ vẫn nghe tiếp cho lần nối lại. Lỗi ở đây
+Một luồng nhận tại một thời điểm, và luồng MỚI ĐÃ XÁC THỰC (hello đúng khoá) từ IP loa THAY luồng cũ: loa chỉ có một APK nên hai kết nối cùng
+lúc thì cái cũ đã chết nửa chừng (loa khởi động lại / mất WiFi mà HA chưa nhận FIN; đọc khung không có hạn chờ nên nó treo tới khi TCP bỏ). Trước
+đây luồng mới bị từ chối trong lúc đó và HA không còn đầu nhận mic thật: phát về loa lỗi «loa chưa nối vào đầu nhận mic» (đo trên máy thật
+10/11/2026). Kết nối chưa xác thực (sai khoá/IP lạ) KHÔNG bao giờ đá được luồng đang chạy. Mất kết nối giữa chừng chỉ đóng phiên đó, máy chủ vẫn
+nghe tiếp cho lần nối lại. Lỗi ở đây
 KHÔNG bao giờ làm sập HA: ``start`` nuốt lỗi bind và chỉ log.
 """
 
@@ -318,14 +321,6 @@ class R1MicServer:
                 _LOGGER.warning("R1 mic server: từ chối kết nối từ IP lạ %s (chỉ nhận %s)",
                                 ip, self._speaker_ip)
                 return
-            if self._writer is not None:
-                # APK thử nối lại đều đặn khi còn luồng cũ: ghi cảnh báo tối đa 5 phút một lần.
-                bay_gio = time.monotonic()
-                if bay_gio - getattr(self, "_bao_luong_hai", 0.0) >= 300.0:
-                    self._bao_luong_hai = bay_gio
-                    _LOGGER.warning("R1 mic server: từ chối luồng thứ hai từ %s — đang có "
-                                    "một luồng mic đang nhận", ip)
-                return
             hello = await asyncio.wait_for(self._read_frame(reader), HELLO_TIMEOUT)
             data = _la_khung_json(hello) if hello is not None else None
             if (data is None or data.get("type") != "hello" or data.get("version") != 1
@@ -337,7 +332,10 @@ class R1MicServer:
                         and self.khi_sai_khoa is not None):
                     self.khi_sai_khoa()
                 return
-            self._writer = writer
+            cu, self._writer = self._writer, writer
+            if cu is not None:
+                _LOGGER.warning("R1 mic server: loa %s nối lại khi còn luồng cũ — thay luồng cũ (nó đã chết nửa chừng)", ip)
+                cu.close()                          # luồng cũ kết thúc ở vòng đọc của nó; không đụng trạng thái của luồng mới (xem finally)
             self.am_luong = None
             self.den_san_sang = None
             self.apk_ver, self.apk_kha_nang = None, frozenset()
@@ -390,15 +388,15 @@ class R1MicServer:
                     if chan:
                         self._mic.feed_inbound(payload[:chan])
             finally:
-                if self._writer is writer:
+                if self._writer is writer:              # luồng cũ bị thay thì KHÔNG xoá trạng thái của luồng mới
                     self._writer = None
                     self.am_luong = None
                     self.den_san_sang = None
                     self.apk_ver, self.apk_kha_nang = None, frozenset()
                     self.bluetooth = None
                     self.he_thong_txt = self.he_thong_luc = None
-                self._mic.note_inbound(False)
-                self._notify_state()
+                    self._mic.note_inbound(False)
+                    self._notify_state()
                 _LOGGER.debug("R1 mic server: phiên từ %s đã đóng", ip)
         except (TimeoutError, asyncio.IncompleteReadError):
             _LOGGER.debug("R1 mic server: kết nối từ %s đứt/chậm khung", ip)

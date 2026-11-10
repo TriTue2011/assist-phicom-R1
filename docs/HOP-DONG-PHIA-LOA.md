@@ -65,7 +65,7 @@ Phía HA (`mic.py`) là **máy khách TCP**: nối `mic_host:mic_port`, đọc l
      sai khoá/phiên bản thì đóng; chờ hello tối đa 10 giây.
   2. Khung giữa: PCM16 little-endian mono 16 kHz thô (cùng định dạng mục 2). Trần một khung 1 MiB.
   3. Khung cuối: JSON `{"type":"end"}`, APK rồi đóng kết nối.
-- Một luồng tại một thời điểm; luồng thứ hai bị đóng. Mất kết nối giữa chừng chỉ đóng phiên đó.
+- Một luồng tại một thời điểm; luồng MỚI đã xác thực (hello đúng khoá) từ IP loa THAY luồng cũ (cái cũ đã chết nửa chừng); kết nối chưa xác thực không đá được luồng đang chạy. Mất kết nối giữa chừng chỉ đóng phiên đó.
 - `switch.r1_tat_mic` bật: HA **giữ kết nối** của loa (nó còn mang âm lượng và đèn nhạc) nhưng đọc rồi **bỏ ngay** mọi khung tiếng mic: không khuếch
   đại, không DSP, không listener nào nhận (từ 0.6.5; trước đó đóng kết nối nên tắt mic là mất luôn chỉnh âm lượng). Lưu ý riêng tư: byte tiếng vẫn tới tiến
   trình HA trên mạng nội bộ rồi bị bỏ; muốn không có byte nào thì tắt mic trên loa/APK. Khung PCM rỗng bị bỏ; byte lẻ cuối khung được dồn sang khung sau
