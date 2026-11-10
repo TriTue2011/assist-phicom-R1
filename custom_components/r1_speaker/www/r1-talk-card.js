@@ -42,6 +42,8 @@
       huong_loa: "Đang nghe loa (quyền nói ở loa)", huong_dien_thoai: "Điện thoại đang nói — mic loa tạm bỏ",
       huong_song_song: "Song song — hai bên cùng nghe", dt_assist: "Assist tạm nghỉ chờ từ khoá trong lúc đàm thoại.",
       gain_nghe: "Âm lượng nghe trên điện thoại", dt_wait: "Đang nối…",
+      kv: "Khử vọng", kv_tat: "tắt", kv_nlms: "bộ cũ (không có số đo; đổi «Động cơ xử lý âm thanh mic» sang nang_cao)", kv_cu: "chưa có số đo (cần tích hợp R1 0.15.0 trở lên)",
+      kv_db: "giảm", kv_tre: "trễ", kv_tin: "tin cậy",
       vol_loa: "Âm lượng loa", vol_off: "Chưa chỉnh được: loa chưa nối hoặc APK cũ chưa báo âm lượng.",
       dt_on: "Mic điện thoại sẵn sàng — giữ nút để nói", dt_on_luon: "Mic điện thoại mở liên tục",
       dt_https: "Trình duyệt chỉ cho dùng mic khi mở Home Assistant bằng https (địa chỉ ngoài hoặc https trong nhà).",
@@ -74,6 +76,8 @@
       huong_loa: "Listening to the speaker (floor on the speaker)", huong_dien_thoai: "Phone is talking — speaker mic paused",
       huong_song_song: "Parallel — both sides hear each other", dt_assist: "Assist is paused (no wake word) during the intercom.",
       gain_nghe: "Listening volume on this phone", dt_wait: "Connecting…",
+      kv: "Echo cancel", kv_tat: "off", kv_nlms: "legacy (no readout; set «Mic audio engine» to nang_cao)", kv_cu: "no readout (needs R1 integration 0.15.0+)",
+      kv_db: "reduction", kv_tre: "delay", kv_tin: "confidence",
       vol_loa: "Speaker volume", vol_off: "Not adjustable: speaker offline or the old APK does not report volume.",
       dt_on: "Phone microphone ready — hold to talk", dt_on_luon: "Phone microphone open continuously",
       dt_https: "The browser only allows the microphone when Home Assistant is opened over https.",
@@ -150,7 +154,7 @@
       raw: st ? st.state : null, session: a.phien || null, mode: a.che_do_tu_danh_thuc || null,
       muted_audio: a.bo_tieng === true, speakerSide: a.phia_loa || null,
       refused: Number(a.so_lan_tu_choi || 0), lastRefusal: a.tu_choi_gan_nhat || null,
-      hoi: a.hoi_thoai || null,
+      hoi: a.hoi_thoai || null, khuVong: a.khu_vong || null,
     };
     var ist = stateOf(hass, ent.intercom);
     var inSession = !!mic.session;
@@ -567,13 +571,23 @@
         else {
           chu = (huong === "dien_thoai" ? t.huong_dien_thoai : huong === "song_song" ? t.huong_song_song : t.huong_loa);
           if (this._dtLuon) chu += " · " + t.dt_on_luon; else if (this._dtNoi) chu += " · " + t.holding;
-          chu += " — " + t.dt_assist;
+          chu += " — " + t.dt_assist + " " + this._kvChu(t);
         }
       }
       st.textContent = chu;
       er.style.display = this._dtLoi ? "" : "none";
       er.textContent = this._dtLoi || "";
       this._capNhatNutGiu();
+    }
+
+    /* Số đo khử vọng ngay trên thẻ (người dùng không phải vào Công cụ nhà phát triển): ERLE (dB giảm) ≥ 6 là có tác dụng, ~0 là không. */
+    _kvChu(t) {
+      var kv = this._khuVong;
+      if (kv === undefined) return "";
+      if (!kv) return "· " + t.kv + ": " + t.kv_cu;
+      if (!kv.dong_co) return "· " + t.kv + ": " + t.kv_tat;
+      if (kv.dong_co !== "fdaf") return "· " + t.kv + ": " + t.kv_nlms;
+      return "· " + t.kv + " FDAF: " + t.kv_db + " " + Number(kv.erle_db).toFixed(1) + " dB, " + t.kv_tre + " " + kv.tre_ms + " ms, " + t.kv_tin + " " + Number(kv.tin_cay).toFixed(0);
     }
 
     /* Gọi TRONG cử chỉ bấm: AudioContext tạo và resume ngay đây (iOS/Android chỉ cho phát khi bắt đầu từ cử chỉ). */
@@ -814,6 +828,8 @@
       var nt = q("[data-ss-note]");
       if (nt) nt.textContent = m.song.on ? t.ss_note_on : t.ss_note_off;
       this._huong = m.intercom.huong;
+      var kvTruoc = this._khuVong; this._khuVong = m.mic.khuVong;
+      if (this._dt && this._dtSan && JSON.stringify(kvTruoc) !== JSON.stringify(this._khuVong)) this._dtHienThi();
       var vs = q("[data-vol]"), vv = q("[data-vol-val]"), vrow = q("[data-vol-row]"), voff = q("[data-vol-off]");
       if (vrow) vrow.style.display = m.volume.present ? "" : "none";
       if (vs) {

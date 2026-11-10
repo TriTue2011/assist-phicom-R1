@@ -29,6 +29,7 @@
   var PLATFORM = "r1_speaker";
   var FUNCTIONS = ["cho", "nghe", "nghi", "phan_hoi", "dam_thoai", "phat_nhac", "loi", "tat_mic"];
   var TABS = ["audio", "light", "conn", "sys"];
+  var PHIM = ["don", "doi", "ba", "giu"];   // cử chỉ phím của loa: một lần, hai lần, ba lần, giữ
   var DAYS = ["t2", "t3", "t4", "t5", "t6", "t7", "cn"];
   var OPTIONS_PATH = "/config/integrations/integration/r1_speaker";
   var TEXT = {
@@ -80,6 +81,14 @@
       parallel_note: "Chưa đo trên loa thật: chỉ bật khi muốn thử. Nhạc AirPlay thì tin báo qua DLNA, nhạc DLNA thì tin báo qua AirPlay, nhạc không dừng; lỗi thì về đường thường.",
       duck_title: "Nâng cao: hạ nhạc nền", duck: "Hạ nhạc nền khi loa nói", duck_nac: "Số nấc hạ",
       duck_note: "Chưa đo trên loa thật. Chỉ có tác dụng khi tin báo song song bật; nhạc nhỏ đi rồi trả đúng mức cũ.",
+      dsp_title: "Xử lý âm thanh mic & âm lượng media", engine: "Động cơ xử lý âm thanh mic",
+      engines: { noi_bo: "Nội bộ (mặc định)", nang_cao: "Nâng cao (Speex + khử vọng miền tần số)" },
+      engine_note: "Nâng cao: khử tạp Speex + khử vọng miền tần số tự dò độ trễ loa → mic; chưa đo trên loa thật. Số đo ERLE hiện ngay trên thẻ đàm thoại.",
+      noise_on: "Khử ồn mic", aec_on: "Khử vọng trong đàm thoại song công",
+      aec_note: "Tắt «Mic loa song song» ở thẻ đàm thoại (nửa công) là cách chắc chắn nhất để hết vọng.",
+      media_vol: "Âm lượng nhạc (media)", media_note: "Chỉ hạ NHẠC bằng phần mềm (đường AirPlay); tin báo/TTS và âm lượng loa không đổi.",
+      phim_title: "Phím trên loa", phim_note: "Loa chỉ có một phím: mỗi cử chỉ một hành động. Cuối danh sách là «Chạy: script / tự động hoá / cảnh / nút».",
+      phim_cc: { don: "Nhấn một lần", doi: "Nhấn hai lần", ba: "Nhấn ba lần", giu: "Nhấn giữ" },
       rs_title: "Khởi động lại loa",
       resp: "Tình trạng loa", resp_state: { phan_hoi: "Loa đang phản hồi", treo: "Loa TREO: mạng còn thông nhưng ứng dụng trên loa im",
         mat_mang: "Loa MẤT MẠNG: không trả lời", dang_khoi_dong: "Loa đang khởi động lại", chua_biet: "Chưa biết (vừa khởi động HA)" },
@@ -142,6 +151,14 @@
       parallel_note: "Not measured on a real speaker: enable only to experiment. Music on AirPlay → announcement over DLNA, music on DLNA → announcement over AirPlay; the music keeps playing; on error it falls back to the normal path.",
       duck_title: "Advanced: duck background music", duck: "Duck music while speaking", duck_nac: "Ducking steps",
       duck_note: "Not measured on a real speaker. Only applies when parallel announcements are on; music drops, then returns to the exact previous level.",
+      dsp_title: "Mic audio processing & media volume", engine: "Mic audio engine",
+      engines: { noi_bo: "Built-in (default)", nang_cao: "Advanced (Speex + frequency-domain echo cancel)" },
+      engine_note: "Advanced: Speex noise suppression + frequency-domain echo cancel that finds the speaker→mic delay itself; not measured on a real speaker. The ERLE readout shows on the call card.",
+      noise_on: "Mic noise suppression", aec_on: "Echo cancel in duplex call",
+      aec_note: "Turning «Parallel mic» off on the call card (half duplex) is the surest way to remove echo.",
+      media_vol: "Music volume (media)", media_note: "Lowers MUSIC only, in software (AirPlay path); announcements/TTS and speaker volume are unchanged.",
+      phim_title: "Speaker button", phim_note: "The speaker has one button: one action per gesture. The list ends with «Run: script / automation / scene / button».",
+      phim_cc: { don: "Single press", doi: "Double press", ba: "Triple press", giu: "Long press" },
       rs_title: "Restart the speaker",
       resp: "Speaker status", resp_state: { phan_hoi: "Speaker is responding", treo: "Speaker is HUNG: network up but its app is silent",
         mat_mang: "Speaker OFFLINE: no answer", dang_khoi_dong: "Speaker is restarting", chua_biet: "Unknown (HA just started)" },
@@ -189,6 +206,9 @@
       duck: all("switch", "ha_nhac_xuong")[0], duck_nac: all("number", "ha_nhac_nac")[0], cong_airplay: all("number", "cong_airplay")[0],
       kdl_bat: all("switch", "kdl_bat")[0], kdl_gio: all("time", "kdl_gio")[0], kdl_khi_treo: all("switch", "kdl_khi_treo")[0],
       kdl_ngay: DAYS.map(function (d) { return all("switch", "kdl_ngay_" + d)[0]; }),
+      dsp_dong_co: all("select", "dsp_dong_co")[0], khu_on: all("switch", "khu_on")[0], khu_vong: all("switch", "khu_vong")[0],
+      am_luong_media: all("number", "am_luong_media")[0],
+      phim: PHIM.map(function (cc) { return all("select", "phim_" + cc)[0]; }),
       reboot: all("button", "reboot")[0], kdl_cuoi: all("sensor", "khoi_dong_lai_cuoi")[0], phan_hoi: all("binary_sensor", "phan_hoi")[0],
     };
   }
@@ -245,8 +265,24 @@
         resp: { present: !!ent.phan_hoi, reason: pa.ly_do || null },
       },
     };
+    var fmtOpt = function (st, o) {
+      try { if (typeof hass.formatEntityState === "function") { var r = hass.formatEntityState(st, o); if (r) return String(r); } } catch (e) { /* giao diện cũ: dùng khoá thô */ }
+      return o;
+    };
+    var eng = stateOf(hass, ent.dsp_dong_co);
+    sys.dsp = {
+      engine: { entity: ent.dsp_dong_co || null, present: !!ent.dsp_dong_co, available: isUp(eng), value: isUp(eng) ? eng.state : null,
+                options: (eng && eng.attributes && eng.attributes.options) || [] },
+      noise: sw(ent.khu_on), aec: sw(ent.khu_vong), media: level(ent.am_luong_media, 0, 100, 5),
+    };
+    sys.phim = PHIM.map(function (cc, i) {
+      var st = stateOf(hass, ent.phim[i]), ops = (st && st.attributes && st.attributes.options) || [];
+      return { code: cc, entity: ent.phim[i] || null, present: !!ent.phim[i], available: isUp(st), value: isUp(st) ? st.state : null,
+               options: ops, labels: ops.map(function (o) { return fmtOpt(st, o); }) };
+    });
     sys.entities = [sys.play.path, sys.play.parallel, sys.play.duck, sys.play.duckNac, sys.play.port, sys.restart.enabled, sys.restart.onHang,
-                    sys.restart.time, sys.restart.button].concat(sys.restart.days).map(function (x) { return x.entity; }).filter(Boolean);
+                    sys.restart.time, sys.restart.button, sys.dsp.engine, sys.dsp.noise, sys.dsp.aec, sys.dsp.media]
+      .concat(sys.restart.days, sys.phim).map(function (x) { return x.entity; }).filter(Boolean);
     return {
       found: !!(ent.settings || ent.volume || bands.length),
       sys: sys,
@@ -561,6 +597,24 @@
       '<div class="row"><label>' + esc(t.duck_nac) + "</label>" +
       slider('data-sys-nac="' + esc(P.duckNac.entity || "") + '"', P.duckNac.value, 1, 14, 1, !P.duckNac.available) +
       '<span class="val">' + esc(P.duckNac.value === null ? "—" : P.duckNac.value) + "</span></div></details></details>";
+    var D = S.dsp;
+    h += '<details class="grp" data-sec="dsp"><summary><b>' + esc(t.dsp_title) + "</b></summary>";
+    h += '<div class="row"><label>' + esc(t.engine) + '</label><select data-sys-sel="' + esc(D.engine.entity || "") + '"' + (D.engine.available ? "" : " disabled") + ">" +
+      (D.engine.options.length ? D.engine.options : Object.keys(t.engines)).map(function (o) {
+        return '<option value="' + esc(o) + '"' + (D.engine.value === o ? " selected" : "") + ">" + esc(t.engines[o] || o) + "</option>"; }).join("") +
+      '</select></div><div class="note">' + esc(t.engine_note) + "</div>";
+    h += swRow(t.noise_on, D.noise, "data-sys-sw", "") + swRow(t.aec_on, D.aec, "data-sys-sw", t.aec_note);
+    h += '<div class="row"><label>' + esc(t.media_vol) + "</label>" +
+      slider('data-sys-num="' + esc(D.media.entity || "") + '"', D.media.value, 0, 100, 5, !D.media.available) +
+      '<span class="val">' + esc(D.media.value === null ? "—" : D.media.value + " %") + '</span></div><div class="note">' + esc(t.media_note) + "</div></details>";
+    h += '<details class="grp" data-sec="phim"><summary><b>' + esc(t.phim_title) + '</b></summary><div class="note">' + esc(t.phim_note) + "</div>";
+    S.phim.forEach(function (p) {
+      h += '<div class="row"><label>' + esc(t.phim_cc[p.code] || p.code) + '</label><select data-sys-sel="' + esc(p.entity || "") + '"' + (p.available ? "" : " disabled") + ">" +
+        (p.value && p.options.indexOf(p.value) < 0 ? '<option value="' + esc(p.value) + '" selected>' + esc(p.value) + "</option>" : "") +
+        p.options.map(function (o, i) { return '<option value="' + esc(o) + '"' + (p.value === o ? " selected" : "") + ">" + esc(p.labels[i]) + "</option>"; }).join("") +
+        "</select></div>";
+    });
+    h += "</details>";
     h += '<details class="grp" open data-sec="restart"><summary><b>' + esc(t.rs_title) + "</b></summary>";
     if (R.resp.present) h += '<div class="status ' + (R.resp.reason === "phan_hoi" ? "ok" : (R.resp.reason === "treo" || R.resp.reason === "mat_mang" ? "warn" : "")) +
       '" data-resp="' + esc(R.resp.reason || "") + '">' + esc(t.resp + ": " + (t.resp_state[R.resp.reason] || "—")) + "</div>";

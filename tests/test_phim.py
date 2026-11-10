@@ -138,7 +138,7 @@ async def test_bon_o_chon_va_mot_thuc_the_su_kien_cho_phim(hass, r1):
         ent = reg.async_get_entity_id("select", "r1_speaker", f"{e.entry_id}_phim_{cc}")
         assert ent, cc
         assert hass.states.get(ent).state == P.MAC_DINH[cc]
-        assert set(hass.states.get(ent).attributes["options"]) == set(P.danh_sach())
+        assert set(P.danh_sach()) - {"chay_thuc_the"} <= set(hass.states.get(ent).attributes["options"])   # «chạy» nằm ở các mục «Chạy: …»
     ev = reg.async_get_entity_id("event", "r1_speaker", f"{e.entry_id}_phim")
     assert ev and set(hass.states.get(ev).attributes["event_types"]) == set(P.CU_CHI_SU_KIEN)
 
@@ -266,3 +266,29 @@ async def test_nguon_phim_apk_thi_apk_nhan_cau_hinh_phim_tu_ha(hass, r1):
     reader, writer = await _noi_apk(e, port)
     assert await _khung_cau_hinh_phim(reader) == {"type": "phim_cau_hinh", "ma": [195], "do": False}
     writer.close()
+
+
+async def test_chay_thuc_the_gop_vao_select_hanh_dong_mot_select_moi_cu_chi_va_go_select_cu_cua_0_14_0(hass, r1):
+    """Loa chỉ có MỘT phím nên mỗi cử chỉ chỉ có một select: mục «Chạy: tên · script.x» = hành động chay_thuc_the + đích."""
+    e, phim, _, _p = await _lien_ket(hass, r1)
+    reg = er.async_get(hass)
+    hass.states.async_set("script.goi_nhom", "off", {"friendly_name": "Gọi nhóm loa"})
+    hass.states.async_set("lock.cua", "locked")
+    sel = reg.async_get_entity_id("select", "r1_speaker", f"{e.entry_id}_phim_don")
+    hass.states.async_set("select.kich", "x")                                    # ép làm mới danh sách option
+    ops = hass.states.get(sel).attributes["options"]
+    assert "chay_thuc_the" not in ops and not any("lock.cua" in o for o in ops)  # cửa khoá không phải loại cho phép
+    muc = "Chạy: Gọi nhóm loa · script.goi_nhom"
+    await hass.services.async_call("select", "select_option", {"entity_id": sel, "option": muc}, blocking=True)
+    assert phim.cau_hinh["don"] == "chay_thuc_the" and phim.dich["don"] == "script.goi_nhom"
+    assert hass.states.get(sel).state == muc
+    chay = []
+    hass.services.async_register("script", "turn_on", lambda c: chay.append(c.data["entity_id"]))
+    phim._cu_chi_that(195, "don")
+    await hass.async_block_till_done()
+    assert chay == ["script.goi_nhom"]
+    await hass.services.async_call("select", "select_option", {"entity_id": sel, "option": "bai_ke"}, blocking=True)
+    assert phim.cau_hinh["don"] == "bai_ke" and "don" not in phim.dich          # đổi hành động thì đích cũ bỏ
+    with pytest.raises(Exception):
+        await hass.services.async_call("select", "select_option", {"entity_id": sel, "option": "Chạy: lock.cua"}, blocking=True)
+    assert reg.async_get_entity_id("select", "r1_speaker", f"{e.entry_id}_phim_chay_don") is None   # không còn select «…: chạy» riêng

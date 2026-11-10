@@ -121,6 +121,8 @@ Hai chế độ, **bạn chọn một** (ô «Chế độ đóng ADB» ở tuỳ
 
 ### Xử lý âm thanh nâng cao, âm lượng media, phím chạy script (NV304)
 
+**Chỉnh ngay ở thẻ «Cài đặt» (tab «Phát & khởi động lại»):** khối «Xử lý âm thanh mic & âm lượng media» (động cơ, khử ồn, khử vọng, âm lượng nhạc) và khối «Phím trên loa» (bốn cử chỉ); không phải vào trang thiết bị. Thẻ đàm thoại hiện số đo khử vọng (động cơ, dB giảm, độ trễ, tin cậy) ngay trên dòng trạng thái khi đang đàm thoại. Chưa kiểm trong trình duyệt thật ở 375 px (môi trường test không có Chrome); mô hình và HTML thẻ đã kiểm bằng Node.
+
 | Thực thể | Loại | Ý nghĩa |
 |---|---|---|
 | Động cơ xử lý âm thanh mic | select | `noi_bo` (mặc định, hành vi cũ: khử tạp Wiener + khử vọng NLMS, thuần Python) hoặc `nang_cao`: khử tạp **Speex** (`pyspeex_noise`, HA đã có sẵn cho Assist) + khử vọng **miền tần số** (`khu_vong_fdaf`, numpy) có tự dò độ trễ loa → mic. Không cần cài thêm gì; thiếu thư viện thì tự dùng bộ có sẵn (thuộc tính `khu_on_co_san`, `khu_vong_co_san`). **Không dùng `pywebrtc-audio` (AEC3) trong HA**: nó đăng ký cùng lớp `AudioProcessor` với `pyspeex_noise` nên nạp cái nọ làm cái kia lỗi. Đo mô phỏng (tiếng giả, trễ 120–400 ms, quãng im, méo loa, nền ồn): FDAF khử ~10 dB, bộ NLMS cũ ~0 dB khi tiếng loa có quãng im; **chưa đo trên loa thật** |
@@ -128,7 +130,7 @@ Hai chế độ, **bạn chọn một** (ô «Chế độ đóng ADB» ở tuỳ
 | Khử ồn mic | switch | Bật khử tạp cho luồng mic (cùng tuỳ chọn «Khử tạp âm» ở mục 4); dùng động cơ đã chọn ở trên |
 | Khử vọng trong đàm thoại song công | switch | Trừ tiếng HA đã phát xuống loa khỏi mic trong phiên song công (mặc định bật như trước); dùng động cơ đã chọn |
 | Âm lượng nhạc (media, AirPlay) | number | 0–100 %: hạ NHẠC bằng phần mềm (nhân PCM của phiên AirPlay phát nhạc), KHÔNG đổi âm lượng loa nên tin báo / TTS vẫn nghe như cũ. Chỉ có tác dụng khi nhạc đi đường AirPlay (DLNA do loa tự tải URL nên không can thiệp được: dùng «Đường phát» = AirPlay). Đổi có hiệu lực ngay, không cần phát lại |
-| Phím nhấn một lần / hai lần / ba lần / giữ: chạy | select (4) | Thực thể HA mà phím chạy khi cử chỉ đó được gán hành động `chay_thuc_the` («Chạy script / tự động hoá / cảnh / nút đã chọn»): chỉ script (`script.turn_on`), tự động hoá (`automation.trigger`, bỏ qua điều kiện), cảnh, nút. Danh sách đóng (khoá cửa, báo động… không chọn được; muốn thì viết một script rồi chọn script). Không chờ script xong. Dùng để gọi nhóm loa R1, chạy tự động hoá, gọi thoại Zalo… qua script |
+| Phím loa: nhấn đơn / nhấn đúp / nhấn ba lần / nhấn giữ | select (4) | Loa chỉ có MỘT phím nên mỗi cử chỉ chỉ có MỘT select. Cuối danh sách hành động là các mục **«Chạy: tên · entity_id»** lấy từ chính HA: script (`script.turn_on`), tự động hoá (`automation.trigger`, bỏ qua điều kiện), cảnh, nút. Danh sách đóng (khoá cửa, báo động… không có; muốn thì viết một script rồi chọn script). Không chờ script xong. Dùng để gọi nhóm loa R1, chạy tự động hoá, gọi thoại Zalo… qua script. (Bản 0.14.0 có thêm select «Phím …: chạy» riêng, trùng; 0.15.1 gỡ chúng, lựa chọn cũ phải chọn lại) |
 
 ## 3. Thẻ Lovelace
 

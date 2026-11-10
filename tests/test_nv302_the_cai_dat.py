@@ -151,7 +151,7 @@ async def test_mo_hinh_the_doc_dung_thuc_the_va_lenh_goi_la_dich_vu_chuan(hass, 
     assert [(d["code"], d["on"]) for d in R["days"]] == [(m_, m_ != "t3") for m_ in THU]
     assert R["button"]["entity"] == "button.r1_khoi_dong_lai" and R["resp"]["reason"] in ("phan_hoi", "chua_biet")
     ids = S["entities"]
-    assert len(ids) == len(set(ids)) == 9 + 7 and all(i.split(".")[0] in ("switch", "select", "number", "time", "button") for i in ids)
+    assert len(ids) == len(set(ids)) == 9 + 7 + 4 + 4 and all(i.split(".")[0] in ("switch", "select", "number", "time", "button") for i in ids)
 
     def goi(a):
         return _node("c.makeCall(i.m,i.a)", m=m, a=a)
@@ -186,6 +186,35 @@ async def test_html_the_co_muc_phat_va_khoi_dong_lai_voi_chu_thich_va_khong_chen
     en = _html(_mo_hinh(g), ui, "en")
     assert "Restart now" in en and "Playback path" in en
     assert 'data-tab="sys"' in h and '"sys"' in json.dumps(_node("c.TABS"))
+
+
+@need_node
+async def test_the_cai_dat_co_khoi_xu_ly_am_thanh_media_va_phim_dung_thuc_the_chuan(hass, r1):
+    """Người dùng không phải vào trang thiết bị: động cơ, khử ồn, khử vọng, âm lượng media và bốn phím đều chỉnh được ở thẻ, mỗi mục là
+    MỘT thực thể chuẩn; thẻ chỉ gọi dịch vụ của chính các thực thể đó (danh sách cho phép)."""
+    await _them(hass, r1)
+    g = _hass_gia(hass)
+    m = _mo_hinh(g)
+    d = m["sys"]["dsp"]
+    assert d["engine"]["entity"] == _eid(hass, "select", "dsp_dong_co") and d["engine"]["options"] == list(const.DSP_DONG_CO_GIA_TRI)
+    assert d["noise"]["entity"] == _eid(hass, "switch", "khu_on") and d["aec"]["entity"] == _eid(hass, "switch", "khu_vong")
+    assert d["media"]["entity"] == _eid(hass, "number", "am_luong_media")
+    assert [p["code"] for p in m["sys"]["phim"]] == ["don", "doi", "ba", "giu"]
+    assert [p["entity"] for p in m["sys"]["phim"]] == [_eid(hass, "select", f"phim_{c}") for c in ("don", "doi", "ba", "giu")]
+    assert all("khong_lam_gi" in p["options"] and "chay_thuc_the" not in p["options"] for p in m["sys"]["phim"])
+    for x in (d["engine"], d["noise"], d["aec"], d["media"], *m["sys"]["phim"]):
+        assert x["entity"] in m["sys"]["entities"]                             # thẻ chỉ được gọi thực thể trong danh sách
+    ui = _node("c.reduceUi({open:true,tab:'audio',thu:{zone:'day',effect:null,params:{},secs:8}},{type:'tab',tab:'sys'})")
+    h = _html(m, ui)
+    assert "Động cơ xử lý âm thanh mic" in h and "Âm lượng nhạc (media)" in h and "Phím trên loa" in h and "Nhấn giữ" in h
+    assert h.count('data-sys-sel="select.') >= 1 and "data-sys-num=" in h
+    en = _html(m, ui, "en")
+    assert "Mic audio engine" in en and "Long press" in en
+    # lệnh gọi: chọn động cơ nâng cao, chọn «Chạy: …» cho phím giữ
+    call = _node("c.makeCall(i.m,{type:'sel',entity:i.e,value:'nang_cao'})", m=m, e=d["engine"]["entity"])
+    assert call == ["select", "select_option", {"entity_id": d["engine"]["entity"], "option": "nang_cao"}]
+    lạ = _node("c.makeCall(i.m,{type:'sel',entity:'select.khong_co',value:'x'})", m=m)
+    assert lạ is None
 
 
 # ── Giao diện thật trong Chrome không đầu, 375 px ─────────────────────────────────
