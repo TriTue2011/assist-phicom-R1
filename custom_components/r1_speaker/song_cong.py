@@ -69,6 +69,10 @@ DUCK_GRACE_S = 0.5
 #: ``PHONE_HANG_S`` thì quyền nói trả về loa. Mức mặc định CHƯA ĐO trên mic điện thoại thật.
 PHONE_VOX_DB = -42.0
 PHONE_HANG_S = 0.8
+#: Tiếng điện thoại tới MIC LOA muộn bằng độ trễ vòng (HA → APK → loa → mic → HA), hàng trăm mili giây tới vài giây. Giữ quyền nói ngắn hơn độ trễ
+#: đó thì đuôi vọng lọt qua ngay cả khi đang nửa công. Khi bộ khử vọng FDAF đã dò được độ trễ: giữ = độ trễ + ``HANG_DU_S``, tối đa ``HANG_TOI_DA_S``.
+HANG_DU_S = 0.6
+HANG_TOI_DA_S = 4.0
 
 
 def _vad_that():
@@ -208,8 +212,15 @@ class R1Duplex:
             return
         self.ptt = dang_giu
         if not dang_giu:
-            self._phone_noi_den = time.monotonic() + PHONE_HANG_S   # thả nút: giữ quyền thêm một nhịp cho khỏi cụt đuôi
+            self._phone_noi_den = time.monotonic() + self._hang_s()   # thả nút: giữ quyền thêm một nhịp cho khỏi cụt đuôi
         self._cap_nhat_huong()
+
+    def _hang_s(self) -> float:
+        """Thời gian giữ quyền nói của điện thoại sau tiếng cuối (xem ``HANG_DU_S``)."""
+        a = self._aec
+        if isinstance(a, KhuVongFdaf) and a.delay > 0:
+            return min(HANG_TOI_DA_S, max(PHONE_HANG_S, a.delay / 16000 + HANG_DU_S))
+        return PHONE_HANG_S
 
     def _cap_nhat_huong(self) -> None:
         h = self.huong
@@ -405,15 +416,17 @@ class R1Duplex:
         if not self.active or self._gate is None:
             return
         self._cap_nhat_huong()
-        if self.half_duplex and self.phone_floor:
-            self.duck_dropped += len(chunk) // VAD_FRAME   # nửa công: điện thoại đang nói thì không gửi mic loa
-            return
         if self._aec is not None:
+            # LUÔN cho bộ khử vọng thấy MỌI khúc mic, kể cả khúc sắp bị bỏ ở nửa công: nó đếm thời gian theo số mẫu mic nên bỏ khúc là lệch trục
+            # thời gian với tiếng tham chiếu (đặt theo đồng hồ) và không dò được độ trễ vòng khi đang nửa công.
             chunk = self._aec.xu_ly(chunk)   # trừ tiếng HA đã phát xuống loa khỏi mic
             bay_gio = time.monotonic()
             if bay_gio - self._diag_luc >= 1.0:   # số đo khử vọng đổi liên tục: không làm mới thì thẻ chỉ thấy số lúc mở phiên
                 self._diag_luc = bay_gio
                 self._notify()
+        if self.half_duplex and self.phone_floor:
+            self.duck_dropped += len(chunk) // VAD_FRAME   # nửa công: điện thoại đang nói thì không gửi mic loa
+            return
         if self._duck_applies(chunk):
             self.duck_dropped += len(chunk) // VAD_FRAME
             return
@@ -449,7 +462,7 @@ class R1Duplex:
         if not vox:
             pass
         elif self.ptt or level_db(pcm) >= PHONE_VOX_DB:
-            self._phone_noi_den = bay_gio + PHONE_HANG_S
+            self._phone_noi_den = bay_gio + self._hang_s()
             self._cap_nhat_huong()
         elif bay_gio >= self._phone_noi_den:
             return

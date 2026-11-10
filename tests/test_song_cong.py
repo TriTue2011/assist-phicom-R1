@@ -504,3 +504,28 @@ async def test_assist_tam_nghi_khi_dam_thoai_bat(hass, r1):
     ent._khi_co_tieng(b"\x01\x00" * 160)
     assert not ent._hang.empty()                          # tắt đàm thoại: Assist nghe lại bình thường
     writer.close()
+
+
+async def test_nua_cong_giu_quyen_noi_theo_do_tre_vong_da_do_duoc_va_aec_van_thay_mic_bi_bo(hass, r1):
+    """Đuôi vọng tới mic loa muộn bằng độ trễ vòng: giữ 0,8 giây cố định thì lọt (đo trên máy thật 10/11/2026 người dùng vẫn nghe tiếng mình)."""
+    from custom_components.r1_speaker import song_cong
+    from custom_components.r1_speaker.khu_vong_fdaf import KhuVongFdaf
+    e, d, reader, writer = await _mo_phien(hass, r1, nua_cong=True)
+    d._aec = KhuVongFdaf()
+    assert d._hang_s() == song_cong.PHONE_HANG_S                       # chưa dò được độ trễ: như cũ
+    d._aec.delay = int(1.5 * 16000)
+    assert abs(d._hang_s() - (1.5 + song_cong.HANG_DU_S)) < 1e-6        # đã dò: độ trễ + dư
+    d._aec.delay = int(30 * 16000)
+    assert d._hang_s() == song_cong.HANG_TOI_DA_S                      # có trần
+    d._aec.delay = int(1.5 * 16000)
+    d.feed_playback(_tieng(3000))                                       # điện thoại nói
+    assert d.phone_floor
+    await asyncio.sleep(song_cong.PHONE_HANG_S + 0.3)
+    assert d.phone_floor and d.huong == "dien_thoai"                    # quá 0,8 giây vẫn giữ: vọng tới muộn bị bỏ
+    n0 = d._aec._n
+    for _ in range(20):
+        writer.write(khung(_tieng(2000)))                               # mic loa (vọng) trong lúc quyền nói ở điện thoại
+    await writer.drain()
+    await asyncio.sleep(0.3)
+    assert d._aec._n > n0                                               # khúc bị bỏ vẫn đi qua bộ khử vọng: trục thời gian không lệch
+    writer.close()
