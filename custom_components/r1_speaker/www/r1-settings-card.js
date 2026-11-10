@@ -24,7 +24,7 @@
  */
 (function () {
   "use strict";
-  var BUILD = "2026-11-03.31";
+  var BUILD = "2026-11-10.1";
 
   var PLATFORM = "r1_speaker";
   var FUNCTIONS = ["cho", "nghe", "nghi", "phan_hoi", "dam_thoai", "phat_nhac", "loi", "tat_mic"];

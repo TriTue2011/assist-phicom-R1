@@ -13,7 +13,7 @@
  */
 (function () {
   "use strict";
-  var BUILD = "2026-10-22.11";
+  var BUILD = "2026-11-10.1";
 
   var PLATFORM = "r1_speaker";
   var STATUS = { tat: "off", nghe: "listening", gui: "sending" };

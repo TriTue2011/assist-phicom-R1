@@ -5,7 +5,7 @@
  * dưới tên riêng (r1-*-card-n): trình duyệt/ứng dụng HA/proxy giữ bản cũ của URL cố định hàng giờ (có
  * lớp đệm còn bỏ qua cả tham số ?...), nên dùng thẳng ``<r1-talk-card>`` thì sửa xong vẫn thấy bản cũ.
  * Nếu vẫn nhận bản cũ thì dùng tạm thẻ cũ và ghi rõ ở cuối thẻ. */
-const BUILD = "2026-10-28.1";
+const BUILD = "2026-11-10.1";
 
 const TABS = [
   { id: "talk", tag: "r1-talk-card-n", ten: "Đàm thoại", cfg: { show_eq: false } },
@@ -55,15 +55,31 @@ class R1Card extends HTMLElement {
       ".tab{flex:0 0 auto;border:0;border-radius:16px;padding:6px 12px;font-size:.85rem;cursor:pointer;background:var(--secondary-background-color,#2a2a2a);color:var(--primary-text-color,#fff)}",
       ".tab.sel{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff)}",
       ".ver{font-size:.7rem;opacity:.5;padding:2px 4px}",
-      ".tieude{font-size:1.1rem;font-weight:600;padding:4px 4px 2px}",
+      ".tieude{font-size:1.1rem;font-weight:600;padding:4px 4px 2px;display:flex;align-items:center;justify-content:space-between;gap:8px}",
+      ".kd{flex:0 0 auto;border:0;border-radius:16px;padding:6px 12px;font-size:.8rem;cursor:pointer;background:var(--error-color,#db4437);color:#fff}",
+      ".kd[disabled]{opacity:.5;cursor:default}",
+      ".kdtt{font-size:.8rem;padding:0 4px 6px;opacity:.85;white-space:pre-wrap}",
     ].join("");
     this._root.appendChild(style);
     // Tên loa và hàng tab LUÔN hiện; chỉ NỘI DUNG (Đàm thoại / EQ / Cài đặt-âm thanh) đóng sẵn tới khi bấm tab.
     const head = document.createElement("div");
     head.className = "tieude";
-    head.textContent = "Loa R1";
+    const ten = document.createElement("span");
+    ten.textContent = "Loa R1";
+    head.appendChild(ten);
+    // Nút khởi động lại LUÔN hiện (không phải mở tab Cài đặt → Phát & khởi động lại): bấm là gọi nút «Khởi động lại» của loa, có xác nhận.
+    this._kd = document.createElement("button");
+    this._kd.className = "kd";
+    this._kd.textContent = "↻ Khởi động lại";
+    this._kd.disabled = true;
+    this._kd.addEventListener("click", () => this._khoiDong());
+    head.appendChild(this._kd);
     this._root.appendChild(head);
     this._head = head;
+    this._kdtt = document.createElement("div");
+    this._kdtt.className = "kdtt";
+    this._kdtt.style.display = "none";
+    this._root.appendChild(this._kdtt);
     this._body = document.createElement("div");
     this._root.appendChild(this._body);
     this._parts = {};
@@ -157,7 +173,41 @@ class R1Card extends HTMLElement {
     });
     if (doi) TABS.filter((t) => t.id !== "talk").forEach((t) => this._parts[t.id].setConfig(this._cfgCon(t)));
   }
-  _gan(hass) { Object.values(this._parts).forEach((p) => (p.hass = hass)); this._capNhatLoa(hass); }
+  /** Nút «Khởi động lại» (button, translation_key reboot) của loa đang chọn: ghim ``device_id`` > loa đang chọn ở hàng chọn loa > loa đầu. */
+  _nutKhoiDong(hass) {
+    const reg = (hass && hass.entities) || {};
+    const ds = this._loa(hass).map((d) => d.id);
+    const dev = this._config.device_id || this._dev || ds[0] || null;
+    return Object.keys(reg).filter((id) => {
+      const e = reg[id];
+      return e && e.platform === "r1_speaker" && id.split(".")[0] === "button" && e.translation_key === "reboot" && (!dev || e.device_id === dev);
+    }).sort()[0] || null;
+  }
+  async _khoiDong() {
+    const eid = this._nutKhoiDong(this._hass);
+    if (!eid || this._dangKd) return;
+    if (typeof window.confirm === "function" && !window.confirm("Khởi động lại loa ngay bây giờ? Loa sẽ im khoảng nửa phút.")) return;
+    this._dangKd = true;
+    this._kd.disabled = true;
+    this._kdtt.style.display = "";
+    this._kdtt.textContent = "Đang gửi lệnh khởi động lại… (chờ tới ~1 phút để biết loa có thật sự tắt)";
+    try {
+      await this._hass.callService("button", "press", { entity_id: eid });
+      this._kdtt.textContent = "Loa đã tắt: đang khởi động lại (lên lại sau khoảng nửa phút).";
+    } catch (loi) {
+      // Dịch vụ chỉ báo xong khi cổng 8080 của loa thật sự ngừng nhận kết nối; không thì nêu từng cách đã thử.
+      const msg = String((loi && (loi.message || loi.error)) || loi);
+      this._kdtt.textContent = msg.indexOf("Không khởi động lại được") === 0 ? msg : "Không khởi động lại được loa: " + msg;
+    } finally {
+      this._dangKd = false;
+      this._gan(this._hass);
+    }
+  }
+  _gan(hass) {
+    Object.values(this._parts).forEach((p) => (p.hass = hass));
+    this._capNhatLoa(hass);
+    if (this._kd) this._kd.disabled = !!this._dangKd || !this._nutKhoiDong(hass);
+  }
   set hass(hass) { this._hass = hass; this._gan(hass); }
   getCardSize() { return 10; }
 }

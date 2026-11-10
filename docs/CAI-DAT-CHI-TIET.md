@@ -121,6 +121,8 @@ Hai chế độ, **bạn chọn một** (ô «Chế độ đóng ADB» ở tuỳ
 
 ### Xử lý âm thanh nâng cao, âm lượng media, phím chạy script (NV304)
 
+Thẻ gộp `r1-card` có nút **«↻ Khởi động lại»** luôn hiện cạnh tiêu đề (có xác nhận; gọi nút «Khởi động lại» của loa đang chọn). Nút chờ tới khoảng 1 phút rồi báo «Loa đã tắt» hoặc nêu lỗi từng cách đã thử. Đã kiểm trong Chrome không đầu với hass giả (đúng loa, thành công, lỗi); chưa bấm trên loa thật.
+
 **Chỉnh ngay ở thẻ «Cài đặt» (tab «Phát & khởi động lại»):** khối «Xử lý âm thanh mic & âm lượng media» (động cơ, khử ồn, khử vọng, âm lượng nhạc) và khối «Phím trên loa» (bốn cử chỉ); không phải vào trang thiết bị. Thẻ đàm thoại hiện số đo khử vọng (động cơ, dB giảm, độ trễ, tin cậy) ngay trên dòng trạng thái khi đang đàm thoại. Chưa kiểm trong trình duyệt thật ở 375 px (môi trường test không có Chrome); mô hình và HTML thẻ đã kiểm bằng Node.
 
 | Thực thể | Loại | Ý nghĩa |
