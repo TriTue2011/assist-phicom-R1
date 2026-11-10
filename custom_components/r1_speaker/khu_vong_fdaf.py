@@ -25,7 +25,8 @@ RATE = 16000
 N = 256                  # mẫu mỗi khối (16 ms)
 P = 8                    # số khối của bộ lọc → 128 ms phủ vang phòng
 H = RATE * 6             # trục thời gian giữ lại (mẫu)
-TRE_TOI_DA = RATE * 1    # độ trễ loa → mic tối đa dò được (1 s)
+TRE_TOI_DA = RATE * 3    # độ trễ loa → mic tối đa dò được (3 s: đường phát về R1 qua APK đệm nhiều; 1 s cũ có thể không đủ — chưa đo trên loa thật)
+DEC = 4                  # dò độ trễ ở 4 kHz (trung bình 4 mẫu): rẻ hơn ~8 lần, vẫn đủ chính xác (bộ lọc phủ 128 ms)
 CHU_KY_UOC_LUONG = RATE // 2
 CUA_SO_UOC_LUONG = RATE * 3
 MU0 = 0.6
@@ -58,6 +59,12 @@ class KhuVongFdaf:
         self.tin_cay = 0.0
         self._da_hoc = 0                                 # số khối đã thích nghi
         self.erle_db = 0.0                               # trung bình trượt (dB) mức giảm trên khối có tiếng loa — chẩn đoán
+        # Số đo chẩn đoán (thuộc tính ``khu_vong``): không có chúng thì «erle 0, trễ 0» không phân biệt được «chưa chạy» với «chạy mà không khử được».
+        self.so_ref = 0                                  # số khúc tham chiếu (tiếng xuống loa) đã nhận
+        self.ref_rms = 0.0                               # RMS khúc tham chiếu gần nhất
+        self.mic_rms = 0.0                               # RMS khúc mic gần nhất
+        self.lan_uoc = 0                                 # số lần dò độ trễ đã chạy tới cùng (đủ cửa sổ + đủ tiếng cả hai phía)
+        self.dinh_ms = 0                                 # độ trễ ở đỉnh GCC-PHAT gần nhất, kể cả khi chưa đủ tin cậy
 
     # -- tham chiếu (tiếng đã gửi xuống loa) ---------------------------------------------------------
     def _t(self) -> float:
@@ -71,6 +78,8 @@ class KhuVongFdaf:
         x = np.frombuffer(pcm[:len(pcm) - (len(pcm) % 2)], dtype="<i2").astype(np.float32)
         if x.size == 0:
             return
+        self.so_ref += 1
+        self.ref_rms = float(np.sqrt(np.mean(x * x)))
         pos = max(self._far_end, int(self._t() * RATE))
         pos = max(pos, self._n - H // 2)                 # không ghi lùi quá cũ
         idx = (pos + np.arange(x.size)) % H
@@ -96,6 +105,8 @@ class KhuVongFdaf:
             return pcm
         n_vao = len(pcm) - (len(pcm) % 2)
         d = np.frombuffer(pcm[:n_vao], dtype="<i2").astype(np.float32)
+        if d.size:
+            self.mic_rms = float(np.sqrt(np.mean(d * d)))
         buf = np.concatenate([self._du, d])
         k = buf.size // N * N
         for i in range(0, k, N):
@@ -149,6 +160,11 @@ class KhuVongFdaf:
         return e
 
     # -- ước lượng độ trễ loa → mic (GCC-PHAT) --------------------------------------------------------------
+    @staticmethod
+    def _ha(v: np.ndarray) -> np.ndarray:
+        """Hạ tần số ×``DEC`` bằng trung bình (đủ cho GCC-PHAT; giảm kích thước FFT ~8 lần)."""
+        return v[:v.size // DEC * DEC].reshape(-1, DEC).mean(axis=1)
+
     def _uoc_luong_tre(self) -> None:
         if self._n < self._ke or self._n < CUA_SO_UOC_LUONG:
             return
@@ -158,18 +174,22 @@ class KhuVongFdaf:
         x = self._far_block(a - TRE_TOI_DA, CUA_SO_UOC_LUONG + TRE_TOI_DA)
         if float(np.mean(x * x)) < NGUONG_LOA or float(np.mean(d * d)) < 1.0:
             return
+        self.lan_uoc += 1
+        d, x = self._ha(d), self._ha(x)
+        td = TRE_TOI_DA // DEC
         m = 1 << int(np.ceil(np.log2(x.size + d.size)))
         Xf, Df = np.fft.rfft(x, m), np.fft.rfft(d, m)
-        # r[k] = Σ_n d[n]·x[n+k] (FT = conj(D)·X): d[i] ≈ x[i + TRE_TOI_DA - tre] nên đỉnh ở k = TRE_TOI_DA - tre ∈ [0, TRE_TOI_DA].
+        # r[k] = Σ_n d[n]·x[n+k] (FT = conj(D)·X): d[i] ≈ x[i + td - tre] nên đỉnh ở k = td - tre ∈ [0, td].
         cross = np.conj(Df) * Xf
         r = np.fft.irfft(cross / (np.abs(cross) + 1e-9), m)
-        seg = r[:TRE_TOI_DA + 1]
+        seg = r[:td + 1]
         k = int(np.argmax(seg))
         tin_cay = float(seg[k] / (np.median(np.abs(seg)) + 1e-9))
         self.tin_cay = tin_cay
+        tre = (td - k) * DEC
+        self.dinh_ms = round(tre * 1000 / RATE)
         if tin_cay < DO_TIN_CAY:
             return
-        tre = TRE_TOI_DA - k
         if abs(tre - self.delay) <= BUOC_DOI_TRE:
             self._ung_vien = None
             return

@@ -109,9 +109,9 @@ def _erle(mic, out, a, b):
     return 10 * math.log10((np.mean(m ** 2) + 1e-9) / (np.mean(o ** 2) + 1e-9))
 
 
-@pytest.mark.parametrize("tre_ms", [120, 300])
+@pytest.mark.parametrize("tre_ms", [120, 300, 1200, 2200])
 async def test_fdaf_khu_vong_that_va_tu_do_tre(tre_ms):
-    far = _tieng_gia(14, 1)
+    far = _tieng_gia(22 if tre_ms > 1000 else 14, 1)       # độ trễ dài cần thêm thời gian để dò + hội tụ
     far[int(6 * RATE):int(7.5 * RATE)] = 0                 # quãng im của bên kia (R1 thật không bơm lúc này)
     mic = np.clip(_vang(far, tre_ms) + np.random.default_rng(2).standard_normal(len(far)) * 60, -32768, 32767)
     gio = {"v": 0.0}
@@ -119,7 +119,9 @@ async def test_fdaf_khu_vong_that_va_tu_do_tre(tre_ms):
     out = _chay(aec, mic, far, gio)
     assert len(out) == len(mic)
     assert abs(aec.delay * 1000 / RATE - tre_ms) <= 25, aec.delay * 1000 / RATE    # tự dò đúng độ trễ loa → mic
-    assert _erle(mic, out, 9, 13.5) >= 8, _erle(mic, out, 9, 13.5)               # khử ≥ 8 dB sau khi hội tụ
+    a, b = (17, 21.5) if tre_ms > 1000 else (9, 13.5)
+    assert _erle(mic, out, a, b) >= 8, _erle(mic, out, a, b)                       # khử ≥ 8 dB sau khi hội tụ
+    assert aec.so_ref > 0 and aec.lan_uoc > 0 and abs(aec.dinh_ms - tre_ms) <= 25 and aec.erle_db > 3      # số đo chẩn đoán có thật
 
 
 async def test_fdaf_giu_tieng_nguoi_noi_chen_va_khong_te_hon_mic():
@@ -241,4 +243,4 @@ def test_chan_doan_khu_vong_noi_ro_bo_nao_dang_chay_va_so_do_fdaf():
     assert do(KhuVong(do_tre_mau=0)) == {"dong_co": "nlms"}
     f = KhuVongFdaf()
     f.erle_db, f.delay, f.tin_cay = 9.26, int(0.25 * RATE), 31.04
-    assert do(f) == {"dong_co": "fdaf", "erle_db": 9.3, "tre_ms": 250, "tin_cay": 31.0}
+    assert do(f) == {"dong_co": "fdaf", "erle_db": 9.3, "tre_ms": 250, "tin_cay": 31.0, "dinh_ms": 0, "lan_uoc": 0, "so_ref": 0, "ref_rms": 0, "mic_rms": 0}

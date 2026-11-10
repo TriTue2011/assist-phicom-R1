@@ -155,6 +155,7 @@ class R1Duplex:
         self.last_end: str | None = None
         self.play_seconds = 0.0
         self.duck_dropped = 0                # số khung bị cắt vọng (chỉ khi tuỳ chọn bật)
+        self._diag_luc = 0.0                 # lần cuối báo thực thể làm mới số đo khử vọng (mỗi giây một lần khi phiên mở)
         self._gate: VadGate | None = None
         self._release: Callable[[], None] | None = None
         self._unsub_mic: Callable[[], None] | None = None
@@ -267,7 +268,8 @@ class R1Duplex:
             return {"dong_co": None}
         if isinstance(a, KhuVongFdaf):
             return {"dong_co": "fdaf", "erle_db": round(float(a.erle_db), 1), "tre_ms": round(a.delay * 1000 / 16000),
-                    "tin_cay": round(float(a.tin_cay), 1)}
+                    "tin_cay": round(float(a.tin_cay), 1), "dinh_ms": a.dinh_ms, "lan_uoc": a.lan_uoc, "so_ref": a.so_ref,
+                    "ref_rms": round(a.ref_rms), "mic_rms": round(a.mic_rms)}
         return {"dong_co": "nlms"}
 
     def chu_hien_tai(self) -> str:
@@ -408,6 +410,10 @@ class R1Duplex:
             return
         if self._aec is not None:
             chunk = self._aec.xu_ly(chunk)   # trừ tiếng HA đã phát xuống loa khỏi mic
+            bay_gio = time.monotonic()
+            if bay_gio - self._diag_luc >= 1.0:   # số đo khử vọng đổi liên tục: không làm mới thì thẻ chỉ thấy số lúc mở phiên
+                self._diag_luc = bay_gio
+                self._notify()
         if self._duck_applies(chunk):
             self.duck_dropped += len(chunk) // VAD_FRAME
             return
