@@ -277,3 +277,37 @@ async def test_loa_khai_assumed_state_de_hop_media_cua_ha_ve_rieng_ca_phat_tam_d
     at = hass.states.get(LOA).attributes
     assert at["assumed_state"] is True
     assert all(at["supported_features"] & f for f in (F.PLAY, F.PAUSE, F.STOP))
+
+
+# ── Chọn mục trong media browser «không phát được» (người dùng báo 10/11/2026): URL phải là địa chỉ loa tải được ──────────────────────────────
+
+async def test_muc_cua_ha_phat_bang_dia_chi_noi_bo_khong_phai_dia_chi_ngoai_https(hass, r1, dmr):
+    """HA có URL ngoài https: ``get_url`` mặc định của HA ưu tiên nó (loa R1 không tải được https/tên miền). Phải dùng địa chỉ NỘI BỘ."""
+    from homeassistant.components.http import ApiConfig
+    from homeassistant.helpers.network import get_url
+    r1.state["dlna_open"] = False                           # để loa giả nhận Set_DLNA_Open rồi renderer giả mới «lên»
+    await _them(hass, r1)
+    await hass.config.async_update(internal_url="http://192.168.1.10:8123", external_url="https://ha.example.com")
+    hass.config.api = ApiConfig("192.168.1.10", "192.168.1.10", 8123, True)
+    assert get_url(hass).startswith("https://ha.example.com")      # hành vi cũ của HA (mặc định): địa chỉ NGOÀI — đúng điều làm loa không phát được
+    for mc in ("/media/local/nhac/a.mp3", "https://ha.example.com/media/local/nhac/a.mp3"):
+        dmr.actions.clear()
+        await hass.services.async_call("media_player", "play_media", {
+            "entity_id": LOA, "media_content_id": mc, "media_content_type": "music"}, blocking=True)
+        (muc,) = [a["CurrentURI"] for a in dmr.called("SetAVTransportURI")]
+        assert muc.startswith("http://192.168.1.10:8123/media/local/nhac/a.mp3?authSig="), muc     # ký + địa chỉ nội bộ
+        assert "ha.example.com" not in muc
+
+
+async def test_ha_url_da_dat_duoc_dung_lam_goc_va_url_ngoai_ha_giu_nguyen(hass, r1, dmr):
+    r1.state["dlna_open"] = False
+    e = await _them(hass, r1)
+    hass.config_entries.async_update_entry(e, options={**e.options, "ha_url": "http://172.16.10.200:8123/"})
+    await hass.async_block_till_done()
+    await hass.config.async_update(internal_url="http://192.168.1.10:8123")
+    await hass.services.async_call("media_player", "play_media", {
+        "entity_id": LOA, "media_content_id": "/api/tts_proxy/x.mp3", "media_content_type": "music"}, blocking=True)
+    assert dmr.called("SetAVTransportURI")[-1]["CurrentURI"] == "http://172.16.10.200:8123/api/tts_proxy/x.mp3"   # ha_url thắng; đường không cần ký
+    await hass.services.async_call("media_player", "play_media", {
+        "entity_id": LOA, "media_content_id": "http://vov.example/live.mp3", "media_content_type": "music"}, blocking=True)
+    assert dmr.called("SetAVTransportURI")[-1]["CurrentURI"] == "http://vov.example/live.mp3"                    # URL ngoài HA giữ nguyên

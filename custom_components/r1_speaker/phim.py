@@ -141,6 +141,37 @@ async def _loa(ctx: PhimCtx) -> str:
     return ent
 
 
+#: Loại thực thể mà phím được phép kích hoạt → (miền dịch vụ, tên dịch vụ, dữ liệu thêm). Cố ý là danh sách đóng: phím trên loa
+#: không được gọi tuỳ ý dịch vụ nào của HA (khoá cửa, báo động…) — muốn làm việc đó thì viết một script rồi chọn script.
+KICH_HOAT = {
+    "script": ("script", "turn_on", {}),
+    "automation": ("automation", "trigger", {"skip_condition": True}),
+    "scene": ("scene", "turn_on", {}),
+    "button": ("button", "press", {}),
+    "input_button": ("input_button", "press", {}),
+}
+
+
+def kich_hoat(entity_id: str) -> tuple[str, str, dict[str, Any]] | None:
+    """(miền, dịch vụ, dữ liệu) để kích hoạt thực thể ``entity_id``, hoặc None nếu loại này không được phép."""
+    return KICH_HOAT.get(entity_id.split(".", 1)[0]) if "." in entity_id else None
+
+
+@hanh_dong("chay_thuc_the", vi="Chạy script / tự động hoá / cảnh / nút đã chọn", en="Run the chosen script / automation / scene / button")
+async def _chay_thuc_the(ctx: PhimCtx) -> None:
+    dich = ctx.coordinator.phim.dich.get(ctx.cu_chi, "")
+    if not dich:
+        raise RuntimeError(f"chưa chọn thực thể cho cử chỉ «{ctx.cu_chi}»")
+    cach = kich_hoat(dich)
+    if cach is None:
+        raise RuntimeError(f"{dich}: loại này không được phím kích hoạt")
+    domain, dich_vu, them = cach
+    if ctx.hass.states.get(dich) is None:
+        raise RuntimeError(f"{dich} không còn trong HA")
+    # Không chờ (blocking=False): script dài (gọi nhóm loa, gọi thoại) không được giữ bộ nhận diện phím.
+    await ctx.hass.services.async_call(domain, dich_vu, {"entity_id": dich, **them}, blocking=False)
+
+
 @hanh_dong("phat_tam_dung", vi="Phát / tạm dừng nhạc", en="Play / pause")
 async def _phat_tam_dung(ctx: PhimCtx) -> None:
     await ctx.goi("media_player", "media_play_pause", entity_id=await _loa(ctx))
@@ -287,6 +318,7 @@ class Phim:
         self.hass, self.entry, self.coordinator = hass, entry, coordinator
         self._ma = ma_hanh_dong
         self.cau_hinh: dict[str, str] = dict(MAC_DINH)     # cử chỉ → tên hành động (ô chọn cập nhật)
+        self.dich: dict[str, str] = {}                     # cử chỉ → entity_id cho hành động ``chay_thuc_the``
         self.tren_su_kien: list[Callable[[str, int], None]] = []      # (cử chỉ, mã phím): thực thể sự kiện nghe
         self.nhat_ky: list[tuple[int, str]] = []
         self._nd = NhanDien(self._cu_chi_that, self._hen)

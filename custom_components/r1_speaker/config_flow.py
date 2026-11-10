@@ -18,7 +18,9 @@ from .adb_client import AdbDevice, AdbError
 from .client import R1Client, R1Error
 from .const import ADB_PORT, CONF_MIC_CHUA_GHEP
 from .cong_vao import kiem_tra_ha_url, xoa_canh_bao_khoa
-from .const import (CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, CONF_AGC_TARGET_DB,
+from .const import (
+    CONF_AM_LUONG_MEDIA, DEFAULT_AM_LUONG_MEDIA,
+    CONF_DSP_DONG_CO, CONF_DUPLEX_AEC, DEFAULT_DSP_DONG_CO, DEFAULT_DUPLEX_AEC,CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, CONF_AGC_TARGET_DB,
                     CONF_DUPLEX_DUCK, CONF_DUPLEX_DUCK_DB, CONF_DUPLEX_HANGOVER,
                     CONF_DUPLEX_MAX_S, CONF_DUPLEX_PREROLL, CONF_DUPLEX_VAD_THRESHOLD,
                     DEFAULT_DUPLEX_DUCK, DEFAULT_DUPLEX_DUCK_DB, DEFAULT_DUPLEX_HANGOVER,
@@ -133,6 +135,8 @@ _GOC = {
     CONF_HA_NHAC_NAC: DEFAULT_HA_NHAC_NAC,
     CONF_KDL_BAT: DEFAULT_KDL_BAT, CONF_KDL_GIO: DEFAULT_KDL_GIO, CONF_KDL_NGAY: list(DEFAULT_KDL_NGAY),
     CONF_KDL_TU_PHUC_HOI: DEFAULT_KDL_TU_PHUC_HOI,
+    CONF_DSP_DONG_CO: DEFAULT_DSP_DONG_CO, CONF_DUPLEX_AEC: DEFAULT_DUPLEX_AEC,
+    CONF_AM_LUONG_MEDIA: DEFAULT_AM_LUONG_MEDIA,
     # NV292: kênh đàm thoại loa–loa (mặc định: không vào kênh nào).
     CONF_KENH: "", CONF_KENH_KIEU: DEFAULT_KENH_KIEU,
 }
@@ -147,7 +151,8 @@ _DSP_GOC = {k: _GOC[k] for k in (
 #: Khoá tuỳ chọn KHÔNG còn hiện ở form nào (tự cấp hoặc chưa có dịch vụ phía loa) nhưng vẫn phải giữ nguyên
 #: nếu đã có sẵn trong options — lưu form không được làm rơi khoá đầu nhận mic người dùng đã đặt từ trước.
 _AN = (CONF_MIC_HOST, CONF_MIC_PORT, CONF_MIC_LISTEN_PORT, CONF_MIC_LISTEN_KEY, CONF_PLAY_HOST,
-       CONF_PLAY_PORT, CONF_WAKE_MODE, CONF_WAKE_ENABLE, CONF_WAKE_WORD, CONF_WAKE_SENSITIVITY)
+       CONF_PLAY_PORT, CONF_WAKE_MODE, CONF_WAKE_ENABLE, CONF_WAKE_WORD, CONF_WAKE_SENSITIVITY,
+       CONF_DSP_DONG_CO, CONF_DUPLEX_AEC, CONF_AM_LUONG_MEDIA)      # đổi ở thực thể (NV302), không có ô trong form này nhưng phải giữ khi lưu form
 
 
 def _gio_hhmm(v: Any) -> str:

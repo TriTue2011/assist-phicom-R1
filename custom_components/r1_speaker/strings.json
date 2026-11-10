@@ -56,6 +56,9 @@
       },
       "cong_airplay": {
         "name": "AirPlay port"
+      },
+      "am_luong_media": {
+        "name": "Media volume (AirPlay)"
       }
     },
     "switch": {
@@ -127,6 +130,12 @@
       },
       "kenh": {
         "name": "Intercom channel"
+      },
+      "khu_on": {
+        "name": "Mic noise suppression"
+      },
+      "khu_vong": {
+        "name": "Echo cancellation in duplex call"
       }
     },
     "sensor": {
@@ -267,6 +276,13 @@
           "dlna_truoc": "DLNA first, AirPlay if it fails",
           "airplay_truoc": "AirPlay first, DLNA if it fails",
           "airplay": "AirPlay only"
+        }
+      },
+      "dsp_dong_co": {
+        "name": "Mic audio engine",
+        "state": {
+          "noi_bo": "Built-in (light)",
+          "nang_cao": "Advanced (Speex noise suppression + frequency-domain echo cancellation)"
         }
       }
     },

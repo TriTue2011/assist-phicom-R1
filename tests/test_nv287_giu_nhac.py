@@ -322,10 +322,13 @@ async def test_tin_bao_khong_phat_sinh_het_bai_va_nhac_phat_lai_dung_bai(hass, r
     await cho(hass, lambda: [a["CurrentURI"] for a in dmr.called("SetAVTransportURI")] == [MUSIC, TTS, MUSIC])
     await hass.async_block_till_done()
     assert bai_ke == []                                   # không có lệnh bài kế nào
-    assert "dang_giu" in ly_do_idle and set(ly_do_idle) <= {None, "dang_giu"}, ly_do_idle
+    # Khoảng giữ nhạc báo ``paused`` (không còn ``idle``): bộ phát nhạc không đọc idle_reason không hiểu nhầm là hết bài. Lỗi người dùng báo
+    # 10/11/2026 «phát TTS xong nhạc không phát tiếp mà next bài/end bài». ``idle_reason`` vẫn là dang_giu (xem thuộc tính khi paused).
+    assert "idle" not in chuoi_trang_thai and ly_do_idle == [], (chuoi_trang_thai, ly_do_idle)
+    assert chuoi_trang_thai[-1] == "playing" and chuoi_trang_thai.count("paused") >= 1, chuoi_trang_thai
     # Bộ điều khiển (tritue_youtube_player 0.28.6) chỉ không nhảy bài / không gỡ loa nhờ thấy «paused» giữa nhạc và tin (nó đóng băng vị
     # trí ở đó): ghim rằng R1 THẬT SỰ phát ra trạng thái này, không chỉ mô phỏng bằng tay.
-    assert "paused" in chuoi_trang_thai and chuoi_trang_thai.index("paused") < chuoi_trang_thai.index("idle"), chuoi_trang_thai
+    assert "paused" in chuoi_trang_thai, chuoi_trang_thai
     assert thuoc_tinh(hass)["media_content_id"] == MUSIC
     assert "Seek" in [n for n, _ in dmr.actions]          # tua về vị trí đã chụp
 

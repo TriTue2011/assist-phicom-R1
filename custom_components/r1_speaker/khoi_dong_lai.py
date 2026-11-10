@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
@@ -34,7 +35,7 @@ from homeassistant.util import dt as dt_util
 
 from . import const
 from .adb_client import AdbError
-from .client import R1Error
+from .client import REBOOT_SHELLS, R1Error
 from .const import DOMAIN, KDL_LY_DO_BAM, KDL_LY_DO_LICH, KDL_LY_DO_TREO
 from .phan_hoi import TREO
 from .settings import adb_tu_dong_dong, khoi_dong_lai_bat, khoi_dong_lai_gio, khoi_dong_lai_khi_treo, khoi_dong_lai_ngay
@@ -58,6 +59,8 @@ class KhoiDongLai:
         #: Lần khởi động lại gần nhất: ``{"luc": iso, "ly_do": lich|treo|bam, "chi_tiet": str, "ket_qua": "ok"|"loi: ..."}``.
         self.lan_cuoi: dict[str, Any] | None = None
         self.tu_phuc_hoi_cuoi: datetime | None = None
+        #: Cách khởi động lại đã THẬT SỰ làm loa tắt lần gần nhất (``cong_8080/<cách>`` hoặc ``adb``): lần sau thử nó trước. Lưu qua khởi động lại HA.
+        self.duong_tot: str | None = None
         #: Chữ ký lịch (bật, giờ, ngày) lần cuối thấy và mốc nó bắt đầu có hiệu lực; chỉ lượt lịch SAU mốc này mới tính.
         self._chu_ky: list | None = None
         self._co_hieu_luc_tu: datetime | None = None
@@ -89,12 +92,14 @@ class KhoiDongLai:
         self.ngay_da_chay = du.get("ngay_da_chay") if isinstance(du.get("ngay_da_chay"), str) else None
         self.lan_cuoi = du.get("lan_cuoi") if isinstance(du.get("lan_cuoi"), dict) else None
         self.tu_phuc_hoi_cuoi = _doc_gio(du.get("tu_phuc_hoi_cuoi"))
+        self.duong_tot = du.get("duong_tot") if isinstance(du.get("duong_tot"), str) else None
         self._chu_ky = du.get("chu_ky") if isinstance(du.get("chu_ky"), list) else None
         self._co_hieu_luc_tu = _doc_gio(du.get("co_hieu_luc_tu"))
 
     def _du_lieu(self) -> dict[str, Any]:
         return {"ngay_da_chay": self.ngay_da_chay, "lan_cuoi": self.lan_cuoi, "chu_ky": self._chu_ky,
                 "tu_phuc_hoi_cuoi": self.tu_phuc_hoi_cuoi.isoformat() if self.tu_phuc_hoi_cuoi else None,
+                "duong_tot": self.duong_tot,
                 "co_hieu_luc_tu": self._co_hieu_luc_tu.isoformat() if self._co_hieu_luc_tu else None}
 
     async def _luu_ngay(self) -> None:
@@ -110,31 +115,58 @@ class KhoiDongLai:
         muc = logging.INFO if ly_do == KDL_LY_DO_BAM else logging.WARNING
         _LOGGER.log(muc, "Khởi động lại loa R1 %s — lý do: %s%s", host, MO_TA_LY_DO[ly_do], f" ({chi_tiet})" if chi_tiet else "")
         try:
-            await self._gui_lenh(chi_adb)
+            duong = await self._gui_lenh(chi_adb)
         except HomeAssistantError as exc:
             self._ghi(ly_do, chi_tiet, f"loi: {exc}")
             raise
-        self._ghi(ly_do, chi_tiet, "ok")
+        self._ghi(ly_do, chi_tiet, "ok", duong)
         phan_hoi = getattr(self._coordinator, "phan_hoi", None)
         if phan_hoi is not None:
             phan_hoi.vua_khoi_dong_lai()
 
-    async def _gui_lenh(self, chi_adb: bool) -> None:
-        c = self._coordinator
-        try:
-            await c.apps.dev.reboot()
-            return
-        except (AdbError, OSError, TimeoutError) as exc:
-            loi_adb = exc or type(exc).__name__
-        if chi_adb:
-            raise HomeAssistantError(f"Không khởi động lại được loa (ADB: {loi_adb})")
-        try:                                                        # ADB mạng đóng/hỏng: đi đường cổng 8080
-            await c.client.reboot_shell()
-        except R1Error as exc:
-            raise HomeAssistantError(f"Không khởi động lại được loa (ADB: {loi_adb}; cổng 8080: {exc})") from exc
+    async def _cho_loa_tat(self) -> bool:
+        """BẰNG CHỨNG loa thật sự khởi động lại: cổng 8080 ngừng nhận kết nối trong ``KDL_XAC_NHAN_GIAY`` giây. Kênh 8080 là «gửi rồi quên»
+        (không có phản hồi) nên chỉ gửi xong KHÔNG có nghĩa loa đã khởi động lại — trước đây trạng thái báo «ok» dù loa phớt lờ lệnh."""
+        gioi_han = const.KDL_XAC_NHAN_GIAY
+        if gioi_han <= 0:
+            return True
+        client = self._coordinator.client
+        han = time.monotonic() + gioi_han
+        while time.monotonic() < han:
+            try:
+                _, w = await asyncio.wait_for(asyncio.open_connection(client.host, client.port), timeout=2)
+            except (OSError, TimeoutError):
+                return True                               # không nối được nữa: loa đang tắt
+            w.close()
+            await asyncio.sleep(const.KDL_XAC_NHAN_NHIP)
+        return False
 
-    def _ghi(self, ly_do: str, chi_tiet: str, ket_qua: str) -> None:
-        self.lan_cuoi = {"luc": dt_util.utcnow().isoformat(), "ly_do": ly_do, "chi_tiet": chi_tiet, "ket_qua": ket_qua}
+    async def _gui_lenh(self, chi_adb: bool) -> str:
+        """Gửi lệnh khởi động lại; trả TÊN ĐƯỜNG đã làm loa tắt: ``cong_8080/<cách>`` (xem ``client.REBOOT_SHELLS``) hoặc ``adb``. Thử lần lượt các cách
+        qua cổng 8080 (không cần ADB mạng) rồi ADB; một cách chỉ tính là xong khi loa thật sự tắt (``_cho_loa_tat``) — kênh 8080 là «gửi rồi quên»,
+        gửi xong KHÔNG có nghĩa loa đã nhận. Cách đã từng có tác dụng (``duong_tot``) được thử đầu tiên. ``chi_adb`` (loa treo, cổng 8080 không nghe): chỉ ADB."""
+        c = self._coordinator
+        buoc: list[tuple[str, str]] = [] if chi_adb else [(f"cong_8080/{ma}", f"cổng 8080 ({ma})") for ma, _ in REBOOT_SHELLS]
+        buoc.append(("adb", "ADB"))
+        if self.duong_tot and self.duong_tot.startswith("cong_8080/") and self.duong_tot in dict(buoc):
+            buoc.sort(key=lambda b: b[0] != self.duong_tot)               # cách 8080 đã có tác dụng: thử trước; ADB luôn đứng CUỐI (chủ máy: chủ yếu qua APK)
+        loi: list[str] = []
+        for ma, ten in buoc:
+            try:
+                await (c.apps.dev.reboot() if ma == "adb" else c.client.reboot_shell(ma.split("/", 1)[1]))
+            except (R1Error, AdbError, OSError, TimeoutError) as exc:
+                loi.append(f"{ten}: {exc or type(exc).__name__}")
+                continue
+            if chi_adb or await self._cho_loa_tat():
+                if not chi_adb and self.duong_tot != ma:
+                    self.duong_tot = ma
+                    await self._luu_ngay()
+                return ma
+            loi.append(f"{ten}: đã gửi lệnh nhưng loa không tắt sau {const.KDL_XAC_NHAN_GIAY} giây")
+        raise HomeAssistantError(f"Không khởi động lại được loa ({'; '.join(loi)})")
+
+    def _ghi(self, ly_do: str, chi_tiet: str, ket_qua: str, duong: str = "") -> None:
+        self.lan_cuoi = {"luc": dt_util.utcnow().isoformat(), "ly_do": ly_do, "chi_tiet": chi_tiet, "ket_qua": ket_qua, "duong": duong}
         self._store.async_delay_save(self._du_lieu, 1.0)
         self._bao()
 
@@ -173,6 +205,9 @@ class KhoiDongLai:
         chu_ky = [khoi_dong_lai_bat(self.entry), khoi_dong_lai_gio(self.entry).strftime("%H:%M"), [m for m in const.KDL_NGAY_MA if m in khoi_dong_lai_ngay(self.entry)]]
         if chu_ky != self._chu_ky:
             self._chu_ky, self._co_hieu_luc_tu = chu_ky, bay_gio
+            # Lịch MỚI (đổi giờ / ngày / bật lại) là một lịch khác: lượt của nó hôm nay chưa chạy. Cờ «hôm nay đã chạy» của lịch cũ không được chặn nó
+            # (trước đây đặt 11:52 rồi thử lại 12:05 cùng ngày thì không bao giờ chạy). Lượt đã qua trước lúc đổi vẫn bị chặn bởi ``_co_hieu_luc_tu``.
+            self.ngay_da_chay = None
             await self._luu_ngay()
             self._bao()
 

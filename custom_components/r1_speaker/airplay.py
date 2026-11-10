@@ -62,10 +62,21 @@ class LoiKhongNoi(LoiAirPlay):
 
 # ── Đóng gói (hàm thuần, test trực tiếp) ─────────────────────────────────────
 
-def goi_am_thanh(seq: int, ts: int, ssrc: int, pcm_le: bytes, dau: bool) -> bytes:
-    """Gói RTP: 12 byte tiêu đề + PCM big-endian. ``dau``: gói đầu sau RECORD/FLUSH (bit marker)."""
+def ap_he_so(pcm_le: bytes, he_so: float) -> bytes:
+    """Nhân PCM16 LE với ``he_so`` (0..1 giảm; >1 tăng, bị cắt ở ±32767). 1.0 trả đúng đối tượng vào: không tốn gì."""
+    if he_so == 1.0:
+        return pcm_le
     a = array.array("h")
     a.frombytes(pcm_le)
+    toi, toi_thieu = 32767, -32768
+    return array.array("h", [toi_thieu if v < toi_thieu else toi if v > toi else v for v in (int(x * he_so) for x in a)]).tobytes()
+
+
+def goi_am_thanh(seq: int, ts: int, ssrc: int, pcm_le: bytes, dau: bool, he_so: float = 1.0) -> bytes:
+    """Gói RTP: 12 byte tiêu đề + PCM big-endian. ``dau``: gói đầu sau RECORD/FLUSH (bit marker). ``he_so``: âm lượng MEDIA phần mềm
+    (độc lập với âm lượng loa và với tin báo — xem ``settings.am_luong_media``)."""
+    a = array.array("h")
+    a.frombytes(ap_he_so(pcm_le, he_so))
     if sys.byteorder == "little":
         a.byteswap()
     return struct.pack(">BBHII", 0x80, 0x60 | (0x80 if dau else 0), seq & 0xFFFF, ts & 0xFFFFFFFF, ssrc & 0xFFFFFFFF) + a.tobytes()
@@ -171,8 +182,10 @@ class PhienAirPlay:
 
     ``da_bat_dau`` được đặt khi gói âm thanh đầu tiên đã gửi đi (sau bắt tay RTSP và khi bộ giải mã đã ra byte đầu); ném ``LoiAirPlay`` trước lúc đó là «không bắt đầu được»."""
 
-    def __init__(self, host: str, port: int, tai_pcm: Callable[[], AsyncIterator[bytes]], *, tren_doi: Callable[[str], None] | None = None) -> None:
+    def __init__(self, host: str, port: int, tai_pcm: Callable[[], AsyncIterator[bytes]], *, tren_doi: Callable[[str], None] | None = None,
+                 he_so: Callable[[], float] | None = None) -> None:
         self.host, self.port = host, int(port)
+        self._he_so = he_so            # đọc MỖI gói: đổi âm lượng media có hiệu lực ngay, không cần mở lại phiên
         self._tai_pcm, self._tren_doi = tai_pcm, tren_doi
         self.trang_thai = "ket_noi"
         self.da_bat_dau = asyncio.Event()
@@ -370,7 +383,7 @@ class PhienAirPlay:
         if dau:
             self._gui_dong_bo(True)
         seq, ts = (self._seq0 + self._n) & 0xFFFF, (self._ts0 + self._n * KHUNG_MOI_GOI) & 0xFFFFFFFF
-        goi = goi_am_thanh(seq, ts, self._ssrc, pcm, dau)
+        goi = goi_am_thanh(seq, ts, self._ssrc, pcm, dau, self._he_so() if self._he_so else 1.0)
         self._dau = False
         self._data.tp.sendto(goi, self._dich_data)
         self._dem[seq] = goi

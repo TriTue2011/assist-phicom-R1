@@ -66,7 +66,7 @@ class R1KhoiDongLaiCuoi(SensorEntity):
     def extra_state_attributes(self) -> dict:
         lc = self._kdl.lan_cuoi or {}
         ke_tiep = self._kdl.ke_tiep()
-        return {"ly_do": lc.get("ly_do"), "chi_tiet": lc.get("chi_tiet"), "ket_qua": lc.get("ket_qua"),
+        return {"ly_do": lc.get("ly_do"), "chi_tiet": lc.get("chi_tiet"), "ket_qua": lc.get("ket_qua"), "duong": lc.get("duong"),
                 "ke_tiep": ke_tiep.isoformat() if ke_tiep else None, "dang_hoan": self._kdl.dang_hoan}
 
     async def async_added_to_hass(self) -> None:

@@ -49,6 +49,8 @@ from .dam_thoai import NHAN_KHONG_RO, R1SessionBusy, R1Talk, lam_sach_nhan
 from .intercom import level_db
 from .mic import R1Mic
 from .playback import R1PlayError, R1Playback
+from . import xu_ly_nang_cao
+from .khu_vong_fdaf import KhuVongFdaf
 from .khu_vong import KhuVong
 
 #: Khử vọng cho đàm thoại song công (mặc định BẬT). Trễ loa→mic CHƯA ĐO trên R1.
@@ -285,7 +287,7 @@ class R1Duplex:
         try:
             vad = self._vad_factory() if self._vad_factory is not None else None
             self._gate = VadGate(self.settings, vad)
-            self._aec = KhuVong(do_tre_mau=int(AEC_DO_TRE_MS * 16)) if AEC_BAT else None
+            self._aec = self._tao_khu_vong()
         except BaseException:
             self._release()
             self._release = None
@@ -406,6 +408,14 @@ class R1Duplex:
                     _LOGGER.exception("R1 duplex: audio listener failed")
 
     # ── HA / điện thoại → loa ─────────────────────────────────────────────────
+
+    def _tao_khu_vong(self):
+        """Bộ khử vọng của phiên: tắt (tuỳ chọn ``duplex_aec``), miền tần số FDAF (``nang_cao``, cần numpy) hoặc NLMS có sẵn."""
+        if not (AEC_BAT and self.settings.aec):
+            return None
+        if self.settings.engine == "nang_cao" and xu_ly_nang_cao.co_san_khu_vong():
+            return KhuVongFdaf()
+        return KhuVong(do_tre_mau=int(AEC_DO_TRE_MS * 16))
 
     def feed_playback(self, pcm: bytes, *, vox: bool = True) -> None:
         """Bơm một khúc PCM16 16 kHz mono xuống loa. Phát LIÊN TỤC: khúc vào hàng là bơm

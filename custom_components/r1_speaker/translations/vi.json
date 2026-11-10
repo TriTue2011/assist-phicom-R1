@@ -56,6 +56,9 @@
       },
       "cong_airplay": {
         "name": "Cổng AirPlay"
+      },
+      "am_luong_media": {
+        "name": "Âm lượng nhạc (media, AirPlay)"
       }
     },
     "switch": {
@@ -127,6 +130,12 @@
       },
       "kenh": {
         "name": "Kênh đàm thoại"
+      },
+      "khu_on": {
+        "name": "Khử ồn mic"
+      },
+      "khu_vong": {
+        "name": "Khử vọng trong đàm thoại song công"
       }
     },
     "sensor": {
@@ -267,6 +276,13 @@
           "dlna_truoc": "DLNA trước, hỏng thì AirPlay",
           "airplay_truoc": "AirPlay trước, hỏng thì DLNA",
           "airplay": "Chỉ AirPlay"
+        }
+      },
+      "dsp_dong_co": {
+        "name": "Động cơ xử lý âm thanh mic",
+        "state": {
+          "noi_bo": "Có sẵn (nhẹ)",
+          "nang_cao": "Nâng cao (khử ồn Speex + khử vọng miền tần số)"
         }
       }
     },

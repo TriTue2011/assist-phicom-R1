@@ -73,6 +73,8 @@ class NoiseSettings:
     strength_db: float = DEFAULT_NOISE_STRENGTH_DB
     #: Khung có tiếng người khi mức vượt nền (trung bình công suất/nền theo ô, dB) lớn hơn ngần này.
     voice_db: float = DEFAULT_NOISE_VOICE_DB
+    #: ``noi_bo`` (Wiener thuần Python) hoặc ``nang_cao`` (Speex NS có sẵn trong HA; chỉ dùng khi thư viện có).
+    engine: str = "noi_bo"
 
 
 # ── FFT thực thuần Python ─────────────────────────────────────────────────────────────

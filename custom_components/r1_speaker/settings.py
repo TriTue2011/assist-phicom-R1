@@ -26,6 +26,8 @@ from .const import (CONF_WAKE_ENABLE, CONF_WAKE_SENSITIVITY, CONF_WAKE_WORD,
 from .const import (CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, CONF_AGC_TARGET_DB,
                     CONF_DUPLEX_DUCK, CONF_DUPLEX_DUCK_DB, CONF_DUPLEX_HANGOVER,
                     CONF_DUPLEX_MAX_S, CONF_DUPLEX_PREROLL, CONF_DUPLEX_VAD_THRESHOLD,
+                    CONF_AM_LUONG_MEDIA, DEFAULT_AM_LUONG_MEDIA,
+                    CONF_DSP_DONG_CO, CONF_DUPLEX_AEC, DEFAULT_DSP_DONG_CO, DEFAULT_DUPLEX_AEC, DSP_DONG_CO_GIA_TRI,
                     DEFAULT_DUPLEX_DUCK, DEFAULT_DUPLEX_DUCK_DB, DEFAULT_DUPLEX_HANGOVER,
                     DEFAULT_DUPLEX_MAX_S, DEFAULT_DUPLEX_PREROLL, DEFAULT_DUPLEX_VAD_THRESHOLD,
                     CONF_LIMITER_CEILING, CONF_LIMITER_ENABLE, CONF_NOISE_ENABLE,
@@ -132,8 +134,23 @@ class TalkSettings:
             tail_s=float(conf(entry, CONF_TALK_TAIL, DEFAULT_TALK_TAIL)))
 
 
+def am_luong_media(entry: ConfigEntry) -> float:
+    """Hệ số âm lượng media 0.0–1.0 (tuỳ chọn là phần trăm 0–100; giá trị hỏng → 1.0)."""
+    try:
+        return min(max(float(conf(entry, CONF_AM_LUONG_MEDIA, DEFAULT_AM_LUONG_MEDIA)), 0.0), 100.0) / 100.0
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def dsp_dong_co(entry: ConfigEntry) -> str:
+    """``noi_bo`` hoặc ``nang_cao`` (giá trị lạ → ``noi_bo``)."""
+    v = str(conf(entry, CONF_DSP_DONG_CO, DEFAULT_DSP_DONG_CO))
+    return v if v in DSP_DONG_CO_GIA_TRI else DEFAULT_DSP_DONG_CO
+
+
 def noise_settings(entry: ConfigEntry) -> NoiseSettings:
     return NoiseSettings(
+        engine=dsp_dong_co(entry),
         enabled=bool(conf(entry, CONF_NOISE_ENABLE, DEFAULT_NOISE_ENABLE)),
         strength_db=float(conf(entry, CONF_NOISE_STRENGTH_DB, DEFAULT_NOISE_STRENGTH_DB)),
         voice_db=float(conf(entry, CONF_NOISE_VOICE_DB, DEFAULT_NOISE_VOICE_DB)))
@@ -164,6 +181,8 @@ class DuplexSettings:
     max_s: float = DEFAULT_DUPLEX_MAX_S
     duck: bool = DEFAULT_DUPLEX_DUCK
     duck_db: float = DEFAULT_DUPLEX_DUCK_DB
+    aec: bool = DEFAULT_DUPLEX_AEC
+    engine: str = DEFAULT_DSP_DONG_CO
 
     @classmethod
     def from_entry(cls, entry: ConfigEntry) -> "DuplexSettings":
@@ -174,7 +193,9 @@ class DuplexSettings:
             hangover_s=float(conf(entry, CONF_DUPLEX_HANGOVER, DEFAULT_DUPLEX_HANGOVER)),
             max_s=float(conf(entry, CONF_DUPLEX_MAX_S, DEFAULT_DUPLEX_MAX_S)),
             duck=bool(conf(entry, CONF_DUPLEX_DUCK, DEFAULT_DUPLEX_DUCK)),
-            duck_db=float(conf(entry, CONF_DUPLEX_DUCK_DB, DEFAULT_DUPLEX_DUCK_DB)))
+            duck_db=float(conf(entry, CONF_DUPLEX_DUCK_DB, DEFAULT_DUPLEX_DUCK_DB)),
+            aec=bool(conf(entry, CONF_DUPLEX_AEC, DEFAULT_DUPLEX_AEC)),
+            engine=dsp_dong_co(entry))
 
 
 def duplex_settings(entry: ConfigEntry) -> DuplexSettings:

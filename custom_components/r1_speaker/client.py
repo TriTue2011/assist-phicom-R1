@@ -57,6 +57,16 @@ class R1State:
 
 #: Lệnh khởi động lại loa của app AI box (``cj.java:39``): khởi động lại adbd cục bộ rồi ``adb reboot`` ngay trên loa.
 REBOOT_SHELL = "stop adbd&&start adbd&&adb reboot"
+#: Các cách khởi động lại qua tin ``shell`` của cổng 8080, theo thứ tự thử. Lệnh chạy dưới uid ``system``. ``adb_cuc_bo`` (của app AI box) cần ADB MẠNG đang
+#: mở: ``adb`` chạy ngay trong loa nối adbd qua mạng cục bộ, nên khi ADB mạng đã đóng (``usb:``) nó không có thiết bị nào để nối và bị bỏ qua lặng lẽ.
+#: ``shutdown_activity`` gọi chính màn hình tắt/khởi động lại của hệ thống (cần quyền REBOOT mà uid system có), không qua adb và không qua ``setprop
+#: sys.powerctl`` (cái đó đã đo là bị bỏ qua). ``mo_adb_roi_reboot`` mở lại ADB mạng bằng chính shell rồi reboot. CHƯA ĐO hai cách sau trên loa thật:
+#: ``KhoiDongLai`` chỉ coi một cách là xong khi loa THẬT SỰ tắt, và nhớ cách nào có tác dụng.
+REBOOT_SHELLS: tuple[tuple[str, str], ...] = (
+    ("adb_cuc_bo", REBOOT_SHELL),
+    ("shutdown_activity", "am start -a android.intent.action.REBOOT"),
+    ("mo_adb_roi_reboot", "setprop service.adb.tcp.port 5555;stop adbd;start adbd;sleep 3;adb connect 127.0.0.1:5555;adb -s 127.0.0.1:5555 reboot"),
+)
 
 
 def build_message(msg_type: str, params: dict[str, Any] | None = None) -> str:
@@ -252,12 +262,15 @@ class R1Client:
         except (aiohttp.ClientError, OSError, TimeoutError, ValueError) as exc:
             raise R1Error(f"{self.url}: {exc!r}") from exc
 
-    async def reboot_shell(self) -> None:
+    async def reboot_shell(self, cach: str = "adb_cuc_bo") -> None:
         """Khởi động lại loa qua tin ``shell`` của cổng 8080 (không cần ADB mạng). ĐÃ KIỂM trên loa thật 28/10/2026: loa tắt sau
         khoảng 10 giây, lên lại sau khoảng nửa phút, thời gian bật máy về 32 giây. Lệnh chạy dưới uid ``system`` (không phải root),
         nên ``reboot`` và ``setprop sys.powerctl reboot`` bị bỏ qua lặng lẽ; chỉ lệnh dưới đây (do app AI box dùng) có hiệu lực.
-        Khung gửi phẳng, đúng như đã thử (không kèm ``data``)."""
-        await self._send_raw(json.dumps({"type": "shell", "type_id": "ha", "shell": REBOOT_SHELL}))
+        Khung gửi phẳng, đúng như đã thử (không kèm ``data``). ``cach``: khoá trong ``REBOOT_SHELLS`` (mặc định cách đã kiểm 28/10)."""
+        lenh = dict(REBOOT_SHELLS).get(cach)
+        if lenh is None:
+            raise R1Error(f"không có cách khởi động lại «{cach}»")
+        await self._send_raw(json.dumps({"type": "shell", "type_id": "ha", "shell": lenh}))
 
     # ── lệnh đã chứng minh bằng mã ──────────────────────────────────────────
     # Đã XÁC NHẬN bằng ghi thật trên loa (21/10/2026, đọc lại bằng get_eq_config, đã trả về

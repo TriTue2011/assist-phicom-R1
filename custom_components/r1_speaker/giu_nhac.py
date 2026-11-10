@@ -265,7 +265,10 @@ class MusicKeeper:
         if st.state in PLAYING:
             return                         # đã có gì đó phát (người dùng tự bật): không đụng
         cur_id = st.attributes.get("media_content_id")
-        if st.state == "paused" and (snap.content_id is None or cur_id in (None, snap.content_id)):
+        # ``paused`` mà ``idle_reason`` = dang_giu là TRẠNG THÁI GIẢ của loa (renderer thật đã idle sau tin báo, URI nhạc đã bị tin thay): không phải
+        # «đang tạm dừng đúng bài cũ». Phải đặt lại URI, không chỉ ``media_play`` (xem ``R1Player.state``).
+        gia_tam_dung = st.attributes.get("idle_reason") == "dang_giu"
+        if st.state == "paused" and not gia_tam_dung and (snap.content_id is None or cur_id in (None, snap.content_id)):
             await self._call("media_play", {"entity_id": eid})
             return
         if not snap.content_id:

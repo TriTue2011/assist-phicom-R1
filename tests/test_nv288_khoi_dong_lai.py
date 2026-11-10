@@ -14,6 +14,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry, async_
 
 from custom_components.r1_speaker import const
 from custom_components.r1_speaker.adb_client import AdbError
+from custom_components.r1_speaker.client import REBOOT_SHELL, REBOOT_SHELLS, R1Error
 from custom_components.r1_speaker.const import DOMAIN
 from custom_components.r1_speaker.dam_thoai import Session
 
@@ -36,6 +37,7 @@ class DevGia:
 
     def __init__(self):
         self.reboot_goi = 0
+        self.qua_8080 = 0
         self.loi: str | None = None
         self.nghe = True
 
@@ -74,6 +76,17 @@ async def dung(hass, r1, freezer, luc, *, entry_id="nv288", **tuy_chon):
     await hass.async_block_till_done()
     dev = DevGia()
     e.runtime_data.apps.dev = dev
+    # Đường CHÍNH là cổng 8080 (không cần ADB), ADB dự phòng: đếm cả hai vào ``reboot_goi`` để các ca cũ vẫn đo «đã gửi bao nhiêu lệnh khởi động lại»;
+    # ``dev.qua_8080`` đếm riêng đường 8080.
+    # (Giờ giả đóng băng làm kết nối websocket thật tới loa giả hết hạn ngay, nên đây là BẢN GIẢ của lệnh 8080 theo trạng thái máy chủ giả: tắt máy
+    # chủ (``r1.stop()``) = cổng 8080 hỏng. Việc gửi đúng khung ``shell`` thật có test riêng ở test_cai_ung_dung.)
+    async def dem_8080(cach="adb_cuc_bo"):
+        dev.reboot_goi += 1
+        dev.qua_8080 += 1
+        if r1._runner is None:
+            raise R1Error("cổng 8080 đã tắt")
+        r1.received.append({"type": "shell", "type_id": "ha", "shell": dict(REBOOT_SHELLS)[cach]})
+    e.runtime_data.client.reboot_shell = dem_8080
     # Vòng hỏi get_info tự chạy bằng hẹn giờ riêng của HA; khi cho giờ giả nhảy cả phút, kết nối đang dở của nó hết hạn giả. Tắt hẹn giờ
     # đó, mỗi bước thời gian ``toi`` tự gọi đúng một lần đọc get_info (cùng hàm coordinator, cùng cách ghi thành công / thất bại).
     e.runtime_data.update_interval = None
@@ -270,7 +283,7 @@ async def test_lenh_hong_theo_lich_ghi_loi_roi_khong_thu_lai_trong_luot_do(hass,
     dev.loi = "adbd không trả lời"
     await r1.stop()                                                      # cổng 8080 cũng hỏng: cả hai đường đều lỗi
     await tien(hass, freezer, gio("2026-11-04", 3, 50), gio("2026-11-04", 5, 0))
-    assert dev.reboot_goi == 1                                           # đúng MỘT lần, không vòng lặp thử lại
+    assert dev.qua_8080 == len(REBOOT_SHELLS) and dev.reboot_goi == len(REBOOT_SHELLS) + 1     # mỗi cách đúng MỘT lần (các cách 8080 rồi ADB), không vòng lặp
     assert hass.states.get(LAN_CUOI).attributes["ket_qua"].startswith("loi: ")
     assert caplog.text.count("Khởi động lại theo lịch không thành") == 1
 
@@ -279,7 +292,7 @@ async def test_nut_bam_ca_hai_duong_hong_van_bao_loi_nhu_cu(hass, r1, freezer):
     e, dev = await dung(hass, r1, freezer, gio("2026-11-04", 10, 0))
     dev.loi = "adbd không trả lời"
     await r1.stop()
-    with pytest.raises(HomeAssistantError, match=r"ADB: adbd không trả lời; cổng 8080: "):
+    with pytest.raises(HomeAssistantError, match=r"cổng 8080 \(adb_cuc_bo\): .*; ADB: adbd không trả lời"):
         await hass.services.async_call("button", "press", {"entity_id": NUT}, blocking=True)
 
 
@@ -496,3 +509,80 @@ async def test_apk_dang_noi_vao_ha_thi_khong_ket_luan_treo_du_cong_8080_tat(hass
     await hass.async_block_till_done()
     await tien(hass, freezer, t, t + timedelta(minutes=5), buoc=60)       # APK đứt, 8080 vẫn tắt: lúc đó mới là treo
     assert hass.states.get(CAM_BIEN).attributes["ly_do"] == "treo"
+
+
+# ── Sửa lỗi chủ máy báo 10/11/2026: hẹn giờ «chỉ cập nhật trạng thái chứ loa không khởi động lại»; đặt lại giờ cùng ngày thì không nhận ───────────
+
+async def test_doi_gio_lich_trong_ngay_thi_luot_moi_van_chay(hass, r1, freezer):
+    """Đặt 11:52 lúc 11:50, loa khởi động; rồi đặt lại 12:05 lúc 11:56: lượt 12:05 PHẢI chạy dù hôm nay lịch cũ đã chạy (trước đây cờ «hôm nay đã chạy» chặn)."""
+    e, dev = await dung(hass, r1, freezer, gio("2026-11-04", 11, 50), khoi_dong_lai_bat=True, khoi_dong_lai_gio="11:52")
+    t = await tien(hass, freezer, gio("2026-11-04", 11, 50), gio("2026-11-04", 11, 54))
+    assert dev.reboot_goi == 1
+    hass.config_entries.async_update_entry(e, options={**e.options, "khoi_dong_lai_gio": "12:05"})
+    t = await tien(hass, freezer, t, gio("2026-11-04", 12, 4))
+    assert dev.reboot_goi == 1                                           # chưa tới 12:05
+    await tien(hass, freezer, t, gio("2026-11-04", 12, 7))
+    assert dev.reboot_goi == 2                                           # lượt mới chạy
+    hass.config_entries.async_update_entry(e, options={**e.options, "khoi_dong_lai_gio": "12:15"})
+    await tien(hass, freezer, gio("2026-11-04", 12, 7), gio("2026-11-04", 12, 17))
+    assert dev.reboot_goi == 3                                           # và lần thứ ba nữa
+
+
+async def test_lenh_gui_ma_loa_khong_tat_thi_thu_cach_khac_ghi_ten_duong_va_nho_cach_tot(hass, r1, freezer, monkeypatch):
+    """Kênh 8080 «gửi rồi quên»: loa phớt lờ lệnh (ví dụ ADB mạng đã đóng nên ``adb reboot`` không có thiết bị) thì trước đây vẫn báo ok. Giờ không thấy
+    loa tắt thì thử cách kế tiếp rồi ADB, trạng thái ghi cách thật sự có tác dụng, và lần sau thử cách đó trước."""
+    e, dev = await dung(hass, r1, freezer, gio("2026-11-04", 10, 0))
+    from custom_components.r1_speaker.khoi_dong_lai import KhoiDongLai
+    khong = lambda self: _sai()
+    monkeypatch.setattr(KhoiDongLai, "_cho_loa_tat", khong)
+    with pytest.raises(HomeAssistantError, match=r"cổng 8080 \(adb_cuc_bo\): đã gửi lệnh nhưng loa không tắt.*; ADB: đã gửi lệnh nhưng loa không tắt"):
+        await hass.services.async_call("button", "press", {"entity_id": NUT}, blocking=True)
+    assert dev.qua_8080 == len(REBOOT_SHELLS) and dev.reboot_goi == len(REBOOT_SHELLS) + 1     # đã thử mọi cách
+    assert hass.states.get(LAN_CUOI).attributes["ket_qua"].startswith("loi: ")
+    assert [m["shell"] for m in r1.commands("shell")] == [c for _, c in REBOOT_SHELLS]          # đúng từng lệnh, đúng thứ tự
+
+    chuoi = iter([False, True])                                          # cách 1 không tắt, cách 2 (ShutdownActivity) thì loa tắt
+    monkeypatch.setattr(KhoiDongLai, "_cho_loa_tat", lambda self: _theo(chuoi))
+    await hass.services.async_call("button", "press", {"entity_id": NUT}, blocking=True)
+    a = hass.states.get(LAN_CUOI).attributes
+    assert a["ket_qua"] == "ok" and a["duong"] == "cong_8080/shutdown_activity"
+    assert e.runtime_data.khoi_dong_lai.duong_tot == "cong_8080/shutdown_activity"
+    truoc = len(r1.commands("shell"))
+    monkeypatch.setattr(KhoiDongLai, "_cho_loa_tat", lambda self: _dung())
+    await hass.services.async_call("button", "press", {"entity_id": NUT}, blocking=True)
+    (moi,) = r1.commands("shell")[truoc:]
+    assert moi["shell"] == dict(REBOOT_SHELLS)["shutdown_activity"]       # lần sau thử cách đã có tác dụng ĐẦU TIÊN (không phí 25 giây cho cách hỏng)
+    # ADB có tác dụng thì ghi ``adb`` và nhớ.
+    e.runtime_data.khoi_dong_lai.duong_tot = None
+    chuoi = iter([False] * len(REBOOT_SHELLS) + [True])
+    monkeypatch.setattr(KhoiDongLai, "_cho_loa_tat", lambda self: _theo(chuoi))
+    await hass.services.async_call("button", "press", {"entity_id": NUT}, blocking=True)
+    assert hass.states.get(LAN_CUOI).attributes["duong"] == "adb" and e.runtime_data.khoi_dong_lai.duong_tot == "adb"
+
+
+async def _sai():
+    return False
+
+
+async def _theo(chuoi):
+    return next(chuoi)
+
+
+async def _dung():
+    return True
+
+
+async def test_cho_loa_tat_that_phat_hien_cong_8080_ngung_nhan_ket_noi(r1, monkeypatch):
+    """Thử hàm chờ trên MÁY CHỦ THẬT (không giờ giả): còn nhận kết nối thì hết hạn là False; tắt máy chủ trong lúc chờ thì True."""
+    import asyncio
+    from types import SimpleNamespace
+    from custom_components.r1_speaker.khoi_dong_lai import KhoiDongLai
+    monkeypatch.setattr(const, "KDL_XAC_NHAN_GIAY", 1)
+    monkeypatch.setattr(const, "KDL_XAC_NHAN_NHIP", 0.1)
+    fake = SimpleNamespace(_coordinator=SimpleNamespace(client=SimpleNamespace(host="127.0.0.1", port=r1.port)))
+    assert await KhoiDongLai._cho_loa_tat(fake) is False                  # loa vẫn nghe sau 1 giây: lệnh bị phớt lờ
+    monkeypatch.setattr(const, "KDL_XAC_NHAN_GIAY", 5)
+    cho = asyncio.ensure_future(KhoiDongLai._cho_loa_tat(fake))
+    await asyncio.sleep(0.4)
+    await r1.stop()                                                      # loa «tắt»
+    assert await asyncio.wait_for(cho, 4) is True

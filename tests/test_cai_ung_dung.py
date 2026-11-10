@@ -354,7 +354,9 @@ async def test_dich_vu_install_apps_tra_ket_qua_tung_ung_dung(hass, ha_cai):
         await hass.services.async_call("r1_speaker", "install_apps", {"entity_id": "sensor.khong_phai"}, blocking=True)
 
 
-async def test_nut_khoi_dong_lai_loa_goi_adb_reboot_adb_hong_thi_qua_cong_8080_ca_hai_hong_thi_bao_ca_hai_loi(hass, ha_cai, r1):
+async def test_nut_khoi_dong_lai_loa_di_cong_8080_truoc_cong_8080_hong_thi_adb_ca_hai_hong_thi_bao_ca_hai_loi(hass, ha_cai, r1):
+    """Đường CHÍNH là tin ``shell`` của cổng 8080 (không cần ADB mạng); ADB chỉ là dự phòng. Gửi qua websocket THẬT tới loa giả (không giờ giả)."""
+    from custom_components.r1_speaker.client import REBOOT_SHELL
     e, bo, dev = ha_cai
     goi = []
 
@@ -367,14 +369,15 @@ async def test_nut_khoi_dong_lai_loa_goi_adb_reboot_adb_hong_thi_qua_cong_8080_c
     nut = [s.entity_id for s in hass.states.async_all("button") if "khoi_dong_lai" in s.entity_id]
     assert nut == ["button.r1_khoi_dong_lai"] and hass.states.get(nut[0]).attributes["device_class"] == "restart"
     await hass.services.async_call("button", "press", {"entity_id": nut[0]}, blocking=True)
-    assert goi == [1] and r1.commands("shell") == []                    # ADB chạy được: không đụng cổng 8080
-    dev.fail = "adbd của loa không trả lời"
-    await hass.services.async_call("button", "press", {"entity_id": nut[0]}, blocking=True)
-    assert goi == [1, 1]
     (shell,) = r1.commands("shell")                                      # đúng khung đã thử trên loa thật, không kèm "data"
-    assert shell == {"type": "shell", "type_id": "ha", "shell": "stop adbd&&start adbd&&adb reboot"}
-    await r1.stop()
-    with pytest.raises(HomeAssistantError, match=r"ADB: adbd của loa không trả lời; cổng 8080: "):
+    assert shell == {"type": "shell", "type_id": "ha", "shell": REBOOT_SHELL} and goi == []     # cổng 8080 chạy được: không đụng ADB
+    assert hass.states.get("sensor.r1_khoi_dong_lai_cuoi").attributes["duong"] == "cong_8080/adb_cuc_bo"
+    await r1.stop()                                                      # cổng 8080 hỏng: ADB dự phòng
+    await hass.services.async_call("button", "press", {"entity_id": nut[0]}, blocking=True)
+    assert goi == [1] and hass.states.get("sensor.r1_khoi_dong_lai_cuoi").attributes["duong"] == "adb"
+    dev.fail = "adbd của loa không trả lời"
+    # ADB luôn đứng cuối dù vừa có tác dụng (chủ máy: chủ yếu qua APK); thông báo nêu đủ cả hai đường.
+    with pytest.raises(HomeAssistantError, match=r"(?s)cổng 8080 \(adb_cuc_bo\).*ADB: adbd của loa không trả lời"):
         await hass.services.async_call("button", "press", {"entity_id": nut[0]}, blocking=True)
 
 

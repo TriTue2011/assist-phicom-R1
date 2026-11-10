@@ -37,6 +37,8 @@ from homeassistant.components.media_player import (
 )
 from homeassistant.components import media_source
 from homeassistant.components.media_player.browse_media import async_process_play_media_url
+from homeassistant.helpers.network import NoURLAvailableError, get_url, is_hass_url
+import yarl
 from homeassistant.core import HomeAssistant, ServiceResponse, SupportsResponse, callback
 from homeassistant.exceptions import HomeAssistantError
 import voluptuous as vol
@@ -50,7 +52,7 @@ from homeassistant.util import dt as dt_util
 
 from . import const
 from .const import AIRPLAY_BAT_DAU_TOI_DA, DLNA_READY_TIMEOUT, DOMAIN
-from .settings import airplay_port, duong_phat, tts_song_song_airplay, ha_nhac_xuong, ha_nhac_nac
+from .settings import am_luong_media, airplay_port, ha_url, duong_phat, tts_song_song_airplay, ha_nhac_xuong, ha_nhac_nac
 from .dmr import R1Dmr, R1DmrError, TrangThaiDmr, UocViTri
 from .coordinator import R1ConfigEntry, R1Coordinator
 from .client import R1Error
@@ -278,6 +280,12 @@ class R1Player(R1Entity, MediaPlayerEntity):
 
     @property
     def state(self) -> MediaPlayerState:
+        # Đang GIỮ nhạc (tin báo / phiên đàm thoại) và renderer về idle: idle này là của tin, nhạc sẽ phát lại. Báo ``paused`` chứ KHÔNG báo ``idle``:
+        # bộ phát nhạc nào không đọc ``idle_reason`` (Music Assistant, nhóm loa, danh sách phát tự viết…) thấy playing→idle là «hết bài» rồi nhảy bài
+        # kế hoặc kết thúc (lỗi chủ máy/người dùng báo 10/11/2026: «phát TTS xong nhạc không phát tiếp mà next bài/end bài»). ``idle_reason`` vẫn
+        # là ``dang_giu`` nên bộ điều khiển đã vá chạy như cũ.
+        if self._tt.state == "idle" and self._ly_do == IDLE_DANG_GIU:
+            return MediaPlayerState.PAUSED
         return _STATES.get(self._tt.state, MediaPlayerState.IDLE)
 
     @property
@@ -591,7 +599,7 @@ class R1Player(R1Entity, MediaPlayerEntity):
         url = media_id
         if media_source.is_media_source_id(media_id):
             url = (await media_source.async_resolve_media(self.hass, media_id, self.entity_id)).url
-        url = async_process_play_media_url(self.hass, url)
+        url = self._url_cho_loa(url)
         await self._dung_tin_song_song()                    # tin mới thay tin cũ: không bao giờ hai phiên RAOP cùng nói với loa
         data = self.coordinator.data
         vua_bat = data is None or not data.airplay_open
@@ -718,7 +726,7 @@ class R1Player(R1Entity, MediaPlayerEntity):
         url = media_id
         if media_source.is_media_source_id(media_id):
             url = (await media_source.async_resolve_media(self.hass, media_id, self.entity_id)).url
-        url = async_process_play_media_url(self.hass, url)
+        url = self._url_cho_loa(url)
         await self._dung_tin_song_song()                    # tin mới thay tin cũ
         self._tin_dlna_dang = True
         try:
@@ -788,12 +796,39 @@ class R1Player(R1Entity, MediaPlayerEntity):
     _THU_TU = {"dlna": ("dlna",), "dlna_truoc": ("dlna", "airplay"), "airplay_truoc": ("airplay", "dlna"), "airplay": ("airplay",)}
     _TEN_DUONG = {"dlna": "DLNA", "airplay": "AirPlay"}
 
+    def _url_cho_loa(self, url: str) -> str:
+        """URL mà LOA tải được. Mục của HA (đường dẫn tương đối hoặc địa chỉ HA tuyệt đối) được KÝ rồi gắn địa chỉ gốc là ``ha_url`` đã đặt, không thì
+        địa chỉ NỘI BỘ của HA (http). KHÔNG dùng ``get_url(hass)`` mặc định của ``async_process_play_media_url``: nó ưu tiên địa chỉ NGOÀI (https, tên miền,
+        Nabu Casa) khi HA bật SSL hoặc theo địa chỉ trình duyệt của người bấm — loa R1 không tải được những địa chỉ đó nên chọn mục trong media browser
+        «không phát được» còn tự động hoá thì phát (người dùng báo 10/11/2026). URL ngoài HA (đài, YouTube…) giữ nguyên."""
+        p = yarl.URL(url)
+        if p.scheme and p.scheme not in ("http", "https"):
+            return url
+        if p.is_absolute():
+            if not is_hass_url(self.hass, url):
+                return url
+            tuong_doi = p.raw_path_qs
+        elif url.startswith("/"):
+            tuong_doi = url
+        else:
+            return url
+        da_ky = async_process_play_media_url(self.hass, tuong_doi, allow_relative_url=True)
+        goc = ha_url(self.coordinator.config_entry)
+        if not goc:
+            try:
+                goc = get_url(self.hass, allow_external=False, allow_cloud=False, prefer_external=False, allow_ip=True)   # allow_ip: HA bật SSL thì mặc định KHÔNG cấp địa chỉ IP
+            except NoURLAvailableError as exc:
+                raise HomeAssistantError(
+                    "Chưa biết địa chỉ NỘI BỘ của HA để loa tải nhạc: đặt «Địa chỉ HA mà loa nối tới» trong tuỳ chọn tích hợp R1 "
+                    "(hoặc Cài đặt → Hệ thống → Mạng → URL nội bộ).") from exc
+        return goc.rstrip("/") + da_ky
+
     async def _phat(self, media_type: MediaType | str, media_id: str, **kwargs: Any) -> None:
         """Giải địa chỉ rồi thử lần lượt các đường theo ``duong_phat``. Đường hỏng được DỪNG trước khi thử đường kế (loa không phát hai nơi)."""
         url = media_id
         if media_source.is_media_source_id(media_id):
             url = (await media_source.async_resolve_media(self.hass, media_id, self.entity_id)).url
-        url = async_process_play_media_url(self.hass, url)
+        url = self._url_cho_loa(url)
         tieu_de = str((kwargs.get("extra") or {}).get("title") or "Home Assistant")
         thu_tu = self._THU_TU[duong_phat(self.coordinator.config_entry)]
         loi: list[str] = []
@@ -864,7 +899,7 @@ class R1Player(R1Entity, MediaPlayerEntity):
         """Mở một phiên và chờ gói tiếng đầu. Trả ``None`` nếu đã phát; còn lại trả lỗi (phiên đã được dọn)."""
         entry = self.coordinator.config_entry
         ap = PhienAirPlay(self._host, airplay_port(entry), tao_nguon(url, bat_dau),
-                          tren_doi=lambda tt: self._ap_doi(ap, tt))
+                          tren_doi=lambda tt: self._ap_doi(ap, tt), he_so=lambda: am_luong_media(entry))   # NHẠC: có âm lượng media; tin báo thì không
         tac = entry.async_create_background_task(self.hass, self._chay_ap(ap), f"{self.entity_id} airplay")
         self._ap, self._ap_tac, self._ap_goc, self._ap_url = ap, tac, bat_dau, url
         bd = asyncio.ensure_future(ap.da_bat_dau.wait())

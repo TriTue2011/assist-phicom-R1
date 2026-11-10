@@ -94,6 +94,19 @@ DEFAULT_DUPLEX_MAX_S = 1800.0
 #: Cả hai số CHƯA ĐO trên loa R1.
 DEFAULT_DUPLEX_DUCK = False
 DEFAULT_DUPLEX_DUCK_DB = -45.0
+# Động cơ xử lý âm thanh mic: ``noi_bo`` = bộ có sẵn (khử tạp Wiener, khử vọng NLMS, thuần Python) hoặc ``nang_cao`` = khử tạp Speex (``pyspeex_noise``,
+# HA đã có) + khử vọng miền tần số có ước lượng độ trễ (``khu_vong_fdaf``, numpy). KHÔNG cần cài thêm gì; thiếu thư viện thì tự dùng bộ có sẵn.
+# Mặc định ``noi_bo`` = hành vi cũ.
+CONF_DSP_DONG_CO = "dsp_dong_co"
+DSP_DONG_CO_GIA_TRI = ("noi_bo", "nang_cao")
+DEFAULT_DSP_DONG_CO = "noi_bo"
+# Âm lượng MEDIA riêng (%), áp bằng phần mềm lên PCM của phiên AirPlay phát NHẠC: độc lập với âm lượng loa và với tin báo/TTS (không bị giảm).
+# Chỉ có tác dụng khi nhạc đi đường AirPlay (DLNA do loa tự tải URL nên không can thiệp được). 100 = nguyên vẹn.
+CONF_AM_LUONG_MEDIA = "am_luong_media"
+DEFAULT_AM_LUONG_MEDIA = 100
+# Khử vọng trong phiên song công (trừ tiếng HA đã phát xuống loa khỏi mic). Mặc định BẬT như trước (hằng ``AEC_BAT`` cũ).
+CONF_DUPLEX_AEC = "duplex_aec"
+DEFAULT_DUPLEX_AEC = True
 
 #: Sự kiện phiên song công mở/đóng (kèm lý do đóng).
 EVENT_DUPLEX = f"{DOMAIN}_duplex"
@@ -337,6 +350,10 @@ DEFAULT_KDL_TU_PHUC_HOI = False
 
 #: Nhịp kiểm lịch + đánh giá «Loa phản hồi» (giây).
 KDL_NHIP_GIAY = 30
+#: Sau khi gửi lệnh khởi động lại, chờ tối đa ngần này giây cho tới khi cổng 8080 của loa NGỪNG nhận kết nối (loa tắt sau ~10 giây). Không thấy loa
+#: tắt nghĩa là lệnh bị phớt lờ (kênh 8080 là «gửi rồi quên» nên không có xác nhận nào khác) → thử đường còn lại. 0 = không chờ (dùng trong test).
+KDL_XAC_NHAN_GIAY = 25
+KDL_XAC_NHAN_NHIP = 2.0
 #: Tới giờ mà loa đang có phiên (Assist, đàm thoại, báo thức) hoặc đang phát nhạc thì HOÃN, tối đa ngần này phút, rồi mới khởi động.
 #: ĐỀ XUẤT, CHƯA ĐO.
 KDL_HOAN_TOI_DA_PHUT = 45

@@ -87,6 +87,14 @@ async def _homeassistant(hass):
 
 
 @pytest.fixture(autouse=True)
+def _khong_cho_xac_nhan_khoi_dong_lai(monkeypatch):
+    """Sau lệnh khởi động lại, mã thật chờ tới 45 giây cho tới khi loa NGỪNG nhận kết nối (bằng chứng loa đã tắt). Loa giả trong test không bao giờ
+    tắt và đồng hồ hay bị đóng băng, nên mặc định KHÔNG chờ; ca nào kiểm việc chờ tự đặt lại hằng này."""
+    from custom_components.r1_speaker import const
+    monkeypatch.setattr(const, "KDL_XAC_NHAN_GIAY", 0)
+
+
+@pytest.fixture(autouse=True)
 def _gain_don_vi(request):
     """Các ca cũ khẳng định tiếng đi qua NGUYÊN VẸN (khuếch đại 0 dB). Mặc định thật của
     ``number.r1_tang_mic`` là +12 dB (``DEFAULT_MIC_GAIN_DB``); ca nào muốn đo mặc định thật

@@ -109,6 +109,30 @@ class R1DuongPhatSelect(_TuyChon, SelectEntity):
         self._ghi(option)
 
 
+class R1DspSelect(_TuyChon, SelectEntity):
+    """Động cơ xử lý âm thanh mic: bộ có sẵn hay «nâng cao» (khử tạp Speex + khử vọng miền tần số; không cài thêm gì)."""
+
+    _attr_options = list(const.DSP_DONG_CO_GIA_TRI)
+
+    def __init__(self, entry: R1ConfigEntry) -> None:
+        super().__init__(entry, "dsp_dong_co", const.CONF_DSP_DONG_CO, const.DEFAULT_DSP_DONG_CO, settings.dsp_dong_co)
+
+    @property
+    def current_option(self) -> str:
+        return self._doc(self._entry)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Thư viện có sẵn không: ``khu_on_co_san`` (pyspeex_noise), ``khu_vong_co_san`` (numpy). False nghĩa là phần đó dùng bộ có sẵn."""
+        from . import xu_ly_nang_cao
+        return {"khu_on_co_san": xu_ly_nang_cao.co_san_khu_on(), "khu_vong_co_san": xu_ly_nang_cao.co_san_khu_vong()}
+
+    async def async_select_option(self, option: str) -> None:
+        if option not in const.DSP_DONG_CO_GIA_TRI:
+            raise HomeAssistantError(f"Động cơ «{option}» không có")
+        self._ghi(option)
+
+
 class R1NacHaNhacNumber(_TuyChon, NumberEntity):
     _attr_native_min_value, _attr_native_max_value, _attr_native_step = 1, 14, 1
     _attr_mode = NumberMode.SLIDER
@@ -122,6 +146,29 @@ class R1NacHaNhacNumber(_TuyChon, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         self._ghi(int(round(value)))
+
+
+class R1AmLuongMediaNumber(_TuyChon, NumberEntity):
+    """Âm lượng MEDIA (phần mềm, %) cho nhạc phát qua AirPlay: giảm nhạc mà không đổi âm lượng loa nên tin báo/TTS vẫn nghe như cũ."""
+
+    _attr_native_min_value, _attr_native_max_value, _attr_native_step = 0, 100, 1
+    _attr_native_unit_of_measurement = "%"
+    _attr_mode = NumberMode.SLIDER
+
+    def __init__(self, entry: R1ConfigEntry) -> None:
+        super().__init__(entry, "am_luong_media", const.CONF_AM_LUONG_MEDIA, const.DEFAULT_AM_LUONG_MEDIA,
+                         lambda e: round(settings.am_luong_media(e) * 100))
+
+    @property
+    def native_value(self) -> float:
+        return self._doc(self._entry)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"ap_dung": "airplay"}          # chỉ nhạc đi đường AirPlay; DLNA do loa tự tải URL nên không áp được
+
+    async def async_set_native_value(self, value: float) -> None:
+        self._ghi(int(round(min(max(value, 0), 100))))
 
 
 class R1CongAirplayNumber(_TuyChon, NumberEntity):
@@ -154,7 +201,8 @@ class R1GioKhoiDongLaiTime(_TuyChon, TimeEntity):
 
 
 #: Tên thực thể gợi ý (``<domain>.<tên>``) theo khoá dịch; khoá nào không có ở đây thì dùng ``r1_<khoá>``.
-_TEN_GOI_Y = {"tin_nguoc_nhac": "r1_tin_bao_nguoc_nhac", "kdl_bat": "r1_khoi_dong_lai_lich", "kdl_khi_treo": "r1_khoi_dong_lai_khi_treo",
+_TEN_GOI_Y = {"am_luong_media": "r1_am_luong_media", "khu_on": "r1_khu_on_mic", "khu_vong": "r1_khu_vong_song_cong", "dsp_dong_co": "r1_dong_co_xu_ly_am_thanh",
+              "tin_nguoc_nhac": "r1_tin_bao_nguoc_nhac", "kdl_bat": "r1_khoi_dong_lai_lich", "kdl_khi_treo": "r1_khoi_dong_lai_khi_treo",
               "kdl_gio": "r1_gio_khoi_dong_lai", **{f"kdl_ngay_{m}": f"r1_khoi_dong_lai_{m}" for m in const.KDL_NGAY_MA}}
 
 
@@ -169,17 +217,19 @@ def switches(hass: HomeAssistant, entry: R1ConfigEntry) -> list:
     return _dang_ky(hass, entry, "switch", [
         R1TuyChonSwitch(entry, "tin_nguoc_nhac", const.CONF_TTS_SONG_SONG, const.DEFAULT_TTS_SONG_SONG, settings.tts_song_song_airplay),
         R1TuyChonSwitch(entry, "ha_nhac_xuong", const.CONF_HA_NHAC_XUONG, const.DEFAULT_HA_NHAC_XUONG, settings.ha_nhac_xuong),
+        R1TuyChonSwitch(entry, "khu_on", const.CONF_NOISE_ENABLE, const.DEFAULT_NOISE_ENABLE, lambda e: settings.noise_settings(e).enabled),
+        R1TuyChonSwitch(entry, "khu_vong", const.CONF_DUPLEX_AEC, const.DEFAULT_DUPLEX_AEC, lambda e: settings.DuplexSettings.from_entry(e).aec),
         R1TuyChonSwitch(entry, "kdl_bat", const.CONF_KDL_BAT, const.DEFAULT_KDL_BAT, settings.khoi_dong_lai_bat),
         R1TuyChonSwitch(entry, "kdl_khi_treo", const.CONF_KDL_TU_PHUC_HOI, const.DEFAULT_KDL_TU_PHUC_HOI, settings.khoi_dong_lai_khi_treo),
         *(R1NgaySwitch(entry, ma) for ma in const.KDL_NGAY_MA)])
 
 
 def selects(hass: HomeAssistant, entry: R1ConfigEntry) -> list:
-    return _dang_ky(hass, entry, "select", [R1DuongPhatSelect(entry)])
+    return _dang_ky(hass, entry, "select", [R1DuongPhatSelect(entry), R1DspSelect(entry)])
 
 
 def numbers(hass: HomeAssistant, entry: R1ConfigEntry) -> list:
-    return _dang_ky(hass, entry, "number", [R1NacHaNhacNumber(entry), R1CongAirplayNumber(entry)])
+    return _dang_ky(hass, entry, "number", [R1NacHaNhacNumber(entry), R1CongAirplayNumber(entry), R1AmLuongMediaNumber(entry)])
 
 
 def times(hass: HomeAssistant, entry: R1ConfigEntry) -> list:
