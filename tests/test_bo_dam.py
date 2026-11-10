@@ -306,6 +306,22 @@ async def test_post_thu_hai_dong_thoi_bi_tu_choi(hass, r1, loa_phat, hass_client
     assert r.status == 409
 
 
+async def test_post_bo_dam_don_dep_hong_van_nha_co_ban_va_phien(hass, r1, loa_phat,
+                                                                  hass_client_no_auth):
+    """async_close ném lỗi thì cờ «bận» và claim phiên vẫn phải được nhả: nếu không, bộ đàm kẹt
+    409 và mic bị giữ mãi (đo 10/11/2026)."""
+    e = await _them(hass, r1, play_port=loa_phat.port, **_tat_ca(None))
+    cl = await hass_client_no_auth()
+    url = f"/api/r1_speaker/intercom/{e.entry_id}?k={e.data[CONF_INTERCOM_KEY]}"
+    with mock.patch.object(ic.R1Intercom, "async_close",
+                           side_effect=RuntimeError("hỏng khi đóng")):
+        r = await cl.post(url, data=b"\xd5" * 800)
+    assert r.status == 500
+    assert e.runtime_data.intercom.busy is False
+    r2 = await cl.post(url, data=b"\xd5" * 800)        # phiên sau không bị 409
+    assert r2.status == 200
+
+
 async def test_get_mic_phat_pcm_va_bi_chan_khi_tat(hass, r1, pcm_server, hass_client_no_auth):
     e = await _them(hass, r1, mic_host="127.0.0.1", mic_port=pcm_server.port)
     cl = await hass_client_no_auth()

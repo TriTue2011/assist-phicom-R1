@@ -234,10 +234,15 @@ class IntercomView(HomeAssistantView):
             while khuc := await request.content.readany():
                 phien.feed(alaw_to_pcm(khuc))
         finally:
-            await phien.async_close()
-            phien.busy = False
-            nha_cho()
-            _LOGGER.debug("intercom %s: closed, %.1f s played", entry.title, phien.seconds)
+            # Ba bước dọn phải chạy HẾT dù bước đầu hỏng hay bị huỷ: nếu async_close ném lỗi mà
+            # busy/claim không được nhả thì bộ đàm kẹt «đang dùng» (409) và mic bị giữ cho tới khi
+            # tải lại tích hợp (đo 10/11/2026 trên loa thật).
+            try:
+                await phien.async_close()
+            finally:
+                phien.busy = False
+                nha_cho()
+                _LOGGER.debug("intercom %s: closed, %.1f s played", entry.title, phien.seconds)
         return web.json_response({"seconds": round(phien.seconds, 1)})
 
 
