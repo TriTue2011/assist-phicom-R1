@@ -440,6 +440,10 @@ class R1Duplex:
 
     # ── HA / điện thoại → loa ─────────────────────────────────────────────────
 
+    def set_settings(self, settings: DuplexSettings) -> None:
+        """Áp cài đặt mới tại chỗ. Phiên đang mở giữ bộ khử vọng đã dựng; phiên mở SAU dùng cài đặt mới."""
+        self.settings = settings
+
     def _tao_khu_vong(self):
         """Bộ khử vọng của phiên: tắt (tuỳ chọn ``duplex_aec``), miền tần số FDAF (``nang_cao``, cần numpy) hoặc NLMS có sẵn."""
         if not (AEC_BAT and self.settings.aec):

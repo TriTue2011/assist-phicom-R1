@@ -5,7 +5,7 @@
  * dưới tên riêng (r1-*-card-n): trình duyệt/ứng dụng HA/proxy giữ bản cũ của URL cố định hàng giờ (có
  * lớp đệm còn bỏ qua cả tham số ?...), nên dùng thẳng ``<r1-talk-card>`` thì sửa xong vẫn thấy bản cũ.
  * Nếu vẫn nhận bản cũ thì dùng tạm thẻ cũ và ghi rõ ở cuối thẻ. */
-const BUILD = "2026-11-10.2";
+const BUILD = "2026-11-10.3";
 
 const TABS = [
   { id: "talk", tag: "r1-talk-card-n", ten: "Đàm thoại", cfg: { show_eq: false } },
@@ -56,9 +56,9 @@ class R1Card extends HTMLElement {
       ".tab.sel{background:var(--primary-color,#03a9f4);color:var(--text-primary-color,#fff)}",
       ".ver{font-size:.7rem;opacity:.5;padding:2px 4px}",
       ".tieude{font-size:1.1rem;font-weight:600;padding:4px 4px 2px}",
-      ".hang{display:flex;align-items:flex-start;gap:8px}",
-      ".hang .tabs{flex:1 1 auto;min-width:0}",
-      ".kd{flex:0 0 auto;border:0;border-radius:16px;padding:6px 12px;margin:4px 2px 8px 0;font-size:.85rem;line-height:normal;cursor:pointer;background:var(--error-color,#db4437);color:#fff}",
+      ".hang{display:flex;flex-wrap:wrap;align-items:flex-start;gap:0 8px}",
+      ".hang .tabs{flex:1 1 300px;min-width:0}",
+      ".kd{flex:0 0 auto;border:0;border-radius:16px;padding:6px 12px;margin:4px 2px 8px auto;font-size:.85rem;line-height:normal;cursor:pointer;background:var(--error-color,#db4437);color:#fff}",
       ".kd[disabled]{opacity:.5;cursor:default}",
       ".kdtt{font-size:.8rem;padding:0 4px 6px;opacity:.85;white-space:pre-wrap}",
     ].join("");

@@ -145,6 +145,11 @@ class R1Intercom:
         self._hang: asyncio.Queue[bytes | None] | None = None
         self._viec: set[asyncio.Task] = set()
 
+    def set_settings(self, settings: TalkSettings) -> None:
+        """Áp cài đặt mới tại chỗ (cổng thoại giữ tham chiếu tới cài đặt nên phải đổi cả hai)."""
+        self.settings = settings
+        self._gate.s = settings
+
     @property
     def talking(self) -> bool:
         return self._hang is not None

@@ -35,6 +35,22 @@ def luu_tuy_chon(hass: HomeAssistant, entry: R1ConfigEntry, khoa: str, gia_tri: 
         tuy_chon[khoa] = gia_tri
     if tuy_chon != dict(entry.options):
         hass.config_entries.async_update_entry(entry, options=tuy_chon)
+        ap_dung_tuy_chon(entry)
+
+
+def ap_dung_tuy_chon(entry: R1ConfigEntry) -> None:
+    """Áp lại TẠI CHỖ cài đặt mic (khử tạp/AGC/hạn đỉnh), bộ đàm và song công sau khi thực thể đổi tuỳ chọn.
+
+    Thực thể chỉ ghi entry.options, còn ba đối tượng đang chạy giữ BẢN CHỤP cài đặt lúc khởi động: trước đây đặt
+    «Động cơ xử lý âm thanh» = nang_cao mà phiên song công vẫn chạy «nlms» cho tới khi tải lại tích hợp (đo 10/11/2026).
+    Không dùng update listener: hộp tuỳ chọn (bánh răng) là OptionsFlowWithReload nên HA cấm listener, và nó tự tải lại.
+    Phiên song công đang mở giữ bộ khử vọng đã dựng; phiên mở SAU dùng cài đặt mới."""
+    c = getattr(entry, "runtime_data", None)
+    if c is None or getattr(c, "duplex", None) is None:
+        return
+    c.mic.set_dsp(settings.noise_settings(entry), settings.agc_settings(entry), settings.limiter_settings(entry))
+    c.intercom.set_settings(settings.TalkSettings.from_entry(entry))
+    c.duplex.set_settings(settings.DuplexSettings.from_entry(entry))
 
 
 class _TuyChon:
