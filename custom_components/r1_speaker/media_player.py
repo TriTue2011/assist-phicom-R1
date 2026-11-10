@@ -39,8 +39,8 @@ from homeassistant.components import media_source
 from homeassistant.components.media_player.browse_media import async_process_play_media_url
 from homeassistant.helpers.network import NoURLAvailableError, get_url, is_hass_url
 import yarl
-from homeassistant.core import HomeAssistant, ServiceResponse, SupportsResponse, callback
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse, callback
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_platform
@@ -56,7 +56,7 @@ from .settings import am_luong_media, airplay_port, ha_url, duong_phat, tts_song
 from .dmr import R1Dmr, R1DmrError, TrangThaiDmr, UocViTri
 from .coordinator import R1ConfigEntry, R1Coordinator
 from .client import R1Error
-from .airplay import LoiAirPlay, LoiKhongNoi, PhienAirPlay, tao_nguon
+from .airplay import LoiAirPlay, LoiKhongNoi, NguonChung, PhienAirPlay, tao_nguon
 from .entity import R1Entity
 from .music import CONTROL_COMMANDS, PLAYLIST_COMMANDS, SEARCH_SOURCES, R1Music
 
@@ -85,8 +85,34 @@ LOI_DOC_TOI_DA = 3
 MUSIC_SERVICES = False
 
 
+#: Khoá trong ``hass.data[DOMAIN]``: các ``R1Player`` đang có mặt, theo entity_id.
+HOA_LOA = "media_players"
+SERVICE_PLAY_GROUP = "play_group"
+
+
+def _dang_ky_phat_nhom(hass: HomeAssistant) -> None:
+    if hass.services.has_service(DOMAIN, SERVICE_PLAY_GROUP):
+        return
+
+    async def _phat_nhom(call: ServiceCall) -> None:
+        loa = hass.data.get(DOMAIN, {}).get(HOA_LOA, {})
+        ids = list(dict.fromkeys(call.data["entity_id"]))
+        thieu = [e for e in ids if e not in loa]
+        if thieu:
+            raise ServiceValidationError(f"Không phải loa R1 đang chạy: {', '.join(thieu)}")
+        mid = call.data["media_content_id"]
+        await loa[ids[0]].async_phat_nhom([loa[e] for e in ids], mid, str(call.data.get("title") or "Home Assistant"))
+
+    hass.services.async_register(DOMAIN, SERVICE_PLAY_GROUP, _phat_nhom, schema=vol.Schema({
+        vol.Required("entity_id"): cv.entity_ids,
+        vol.Required("media_content_id"): cv.string,
+        vol.Optional("title"): cv.string,
+    }))
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
                             async_add_entities: AddConfigEntryEntitiesCallback) -> None:
+    _dang_ky_phat_nhom(hass)
     coordinator = entry.runtime_data
     unique_id = f"{entry.entry_id}_speaker"
     registry = er.async_get(hass)
@@ -194,6 +220,9 @@ class R1Player(R1Entity, MediaPlayerEntity):
         self.coordinator.lam_moi_loa = functools.partial(self.async_lam_moi, chi_khi_da_noi=True)
         self.async_on_remove(self._huy_cham)
         self.async_on_remove(self._huy_airplay)
+        loa = self.hass.data.setdefault(DOMAIN, {}).setdefault(HOA_LOA, {})        # để dịch vụ ``play_group`` tìm thực thể theo entity_id
+        loa[self.entity_id] = self
+        self.async_on_remove(lambda: loa.pop(self.entity_id, None))
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -796,6 +825,24 @@ class R1Player(R1Entity, MediaPlayerEntity):
     _THU_TU = {"dlna": ("dlna",), "dlna_truoc": ("dlna", "airplay"), "airplay_truoc": ("airplay", "dlna"), "airplay": ("airplay",)}
     _TEN_DUONG = {"dlna": "DLNA", "airplay": "AirPlay"}
 
+    async def async_phat_nhom(self, nhom_loa: list[R1Player], media_id: str, tieu_de: str) -> None:
+        """Phát NHÓM chỉ qua AirPlay (đường đồng bộ): một bộ giải mã, mọi loa neo cùng một mốc (``NguonChung``). Loa nào hỏng thì nhóm vẫn phát,
+        nhưng cuối cùng báo lỗi nêu tên loa hỏng (không im lặng)."""
+        url = media_id
+        if media_source.is_media_source_id(media_id):
+            url = (await media_source.async_resolve_media(self.hass, media_id, self.entity_id)).url
+        url = self._url_cho_loa(url)
+        nhom = NguonChung(url, [p.entity_id for p in nhom_loa])
+        nhom.bat_dau()
+        kq = await asyncio.gather(*(p._phat_airplay(url, media_id, tieu_de, nhom=nhom) for p in nhom_loa), return_exceptions=True)
+        loi = [f"{p.entity_id}: {r}" for p, r in zip(nhom_loa, kq) if isinstance(r, BaseException)]
+        for p, r in zip(nhom_loa, kq):
+            if isinstance(r, BaseException) and not isinstance(r, HomeAssistantError):
+                raise r
+        if loi:
+            raise HomeAssistantError(("Cả nhóm không phát được: " if len(loi) == len(nhom_loa) else "Một số loa trong nhóm không phát được (các loa còn lại vẫn phát): ")
+                                     + "; ".join(loi))
+
     def _url_cho_loa(self, url: str) -> str:
         """URL mà LOA tải được. Mục của HA (đường dẫn tương đối hoặc địa chỉ HA tuyệt đối) được KÝ rồi gắn địa chỉ gốc là ``ha_url`` đã đặt, không thì
         địa chỉ NỘI BỘ của HA (http). KHÔNG dùng ``get_url(hass)`` mặc định của ``async_process_play_media_url``: nó ưu tiên địa chỉ NGOÀI (https, tên miền,
@@ -873,7 +920,7 @@ class R1Player(R1Entity, MediaPlayerEntity):
 
     # ── AirPlay ───────────────────────────────────────────────────────────────
 
-    async def _phat_airplay(self, url: str, media_id: str, tieu_de: str, bat_dau: float = 0.0) -> None:
+    async def _phat_airplay(self, url: str, media_id: str, tieu_de: str, bat_dau: float = 0.0, nhom: NguonChung | None = None) -> None:
         await self._dung_airplay()
         if self._duong == "dlna" or self._tt.state in ("playing", "buffering", "paused"):
             await self._don_duong("dlna")                   # DLNA còn phát thì dừng trước: không để hai nơi cùng ra tiếng
@@ -887,19 +934,23 @@ class R1Player(R1Entity, MediaPlayerEntity):
         for lan in range(6 if vua_bat else 1):              # loa vừa bật AirPlay: cổng RAOP lên chậm, thử lại tới ~2,5 giây
             if lan:
                 await asyncio.sleep(0.5)
-            loi = await self._mo_airplay(url, bat_dau)
+            loi = await self._mo_airplay(url, bat_dau, nhom)
             if loi is None:
                 return
             if not isinstance(loi, LoiKhongNoi):
                 break
         self._ly_do = "error"
+        if nhom is not None:
+            nhom.bo(self.entity_id)                         # loa hỏng không giữ cả nhóm chờ
         raise HomeAssistantError(str(loi))
 
-    async def _mo_airplay(self, url: str, bat_dau: float) -> LoiAirPlay | None:
+    async def _mo_airplay(self, url: str, bat_dau: float, nhom: NguonChung | None = None) -> LoiAirPlay | None:
         """Mở một phiên và chờ gói tiếng đầu. Trả ``None`` nếu đã phát; còn lại trả lỗi (phiên đã được dọn)."""
         entry = self.coordinator.config_entry
-        ap = PhienAirPlay(self._host, airplay_port(entry), tao_nguon(url, bat_dau),
-                          tren_doi=lambda tt: self._ap_doi(ap, tt), he_so=lambda: am_luong_media(entry))   # NHẠC: có âm lượng media; tin báo thì không
+        ap = PhienAirPlay(self._host, airplay_port(entry),
+                          tao_nguon(url, bat_dau) if nhom is None else nhom.nguon(self.entity_id),
+                          tren_doi=lambda tt: self._ap_doi(ap, tt), he_so=lambda: am_luong_media(entry),   # NHẠC: có âm lượng media; tin báo thì không
+                          cho_dong_bo=None if nhom is None else (lambda: nhom.san_sang(self.entity_id)))
         tac = entry.async_create_background_task(self.hass, self._chay_ap(ap), f"{self.entity_id} airplay")
         self._ap, self._ap_tac, self._ap_goc, self._ap_url = ap, tac, bat_dau, url
         bd = asyncio.ensure_future(ap.da_bat_dau.wait())

@@ -803,6 +803,24 @@
           "description": "Optional: only stops if this speaker is the one speaking."
         }
       }
+    },
+    "play_group": {
+      "name": "Play on a speaker group (synced AirPlay)",
+      "description": "Play the same media on several R1 speakers over AirPlay only: one decoder, every speaker starts at the same instant. If one speaker fails the others keep playing and the service reports the failed speaker.",
+      "fields": {
+        "entity_id": {
+          "name": "R1 speakers",
+          "description": "The R1 media players in the group."
+        },
+        "media_content_id": {
+          "name": "Media",
+          "description": "http(s) URL or media-source://."
+        },
+        "title": {
+          "name": "Title",
+          "description": "Display title (optional)."
+        }
+      }
     }
   },
   "selector": {

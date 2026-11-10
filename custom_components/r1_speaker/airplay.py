@@ -30,7 +30,7 @@ import struct
 import sys
 import time
 from collections import deque
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -183,8 +183,10 @@ class PhienAirPlay:
     ``da_bat_dau`` được đặt khi gói âm thanh đầu tiên đã gửi đi (sau bắt tay RTSP và khi bộ giải mã đã ra byte đầu); ném ``LoiAirPlay`` trước lúc đó là «không bắt đầu được»."""
 
     def __init__(self, host: str, port: int, tai_pcm: Callable[[], AsyncIterator[bytes]], *, tren_doi: Callable[[str], None] | None = None,
-                 he_so: Callable[[], float] | None = None) -> None:
+                 he_so: Callable[[], float] | None = None,
+                 cho_dong_bo: Callable[[], Awaitable[None]] | None = None) -> None:
         self.host, self.port = host, int(port)
+        self._cho_dong_bo = cho_dong_bo  # phát NHÓM: chờ mọi loa bắt tay xong rồi cùng bắt đầu gửi (xem ``NguonChung``)
         self._he_so = he_so            # đọc MỖI gói: đổi âm lượng media có hiệu lực ngay, không cần mở lại phiên
         self._tai_pcm, self._tren_doi = tai_pcm, tren_doi
         self.trang_thai = "ket_noi"
@@ -320,6 +322,8 @@ class PhienAirPlay:
 
     async def _phat(self) -> None:
         loop = asyncio.get_running_loop()
+        if self._cho_dong_bo is not None:
+            await self._cho_dong_bo()           # neo thời gian SAU điểm hẹn chung, không trước: các loa cùng một mốc
         self._neo(loop.time())
         buf = bytearray()
         nguon = self._tai_pcm()
@@ -551,3 +555,94 @@ def tao_nguon(url: str, bat_dau: float = 0.0, ffmpeg: str | None = None) -> Call
                 await tien_trinh.wait()
 
     return doc
+
+
+# ── Phát NHÓM: một ffmpeg, nhiều loa, cùng một mốc bắt đầu ────────────────────────────────────
+
+#: Chờ loa chậm bắt tay tối đa ngần này giây rồi các loa còn lại cứ bắt đầu (một loa lỗi không giữ cả nhóm).
+CHO_DONG_BO_S = 15.0
+HANG_DOI_NHOM = 16
+#: Một loa không lấy tiếng trong ngần này giây thì bị bỏ khỏi nhóm (không để nó chặn các loa khác).
+CHO_LOA_CHAM_S = 10.0
+
+
+class NguonChung:
+    """Giải mã MỘT lần, chia cho nhiều phiên ``PhienAirPlay``. Đồng bộ nhóm dựa vào hai điều: (1) mọi loa nhận CÙNG khúc PCM từ cùng một bộ
+    giải mã (nhiều ffmpeg riêng thì mỗi cái khởi động lệch nhau hàng trăm mili giây), (2) điểm hẹn ``san_sang``: mọi loa bắt tay RTSP xong rồi mới
+    cùng neo thời gian và gửi gói đầu. Loa đệm như nhau (``Audio-Latency``) nên cùng mốc gửi là cùng mốc nghe. Còn lệch: độ giật của WiFi
+    từng loa (vài chục mili giây trong trường hợp xấu) — không có hiệu chỉnh theo từng loa."""
+
+    def __init__(self, url: str, khoa: list[str], nguon: Callable[[], AsyncIterator[bytes]] | None = None) -> None:
+        self._nguon = nguon or tao_nguon(url)
+        self._q: dict[str, asyncio.Queue] = {k: asyncio.Queue(HANG_DOI_NHOM) for k in khoa}
+        self._cho: set[str] = set(khoa)          # loa còn trong nhóm
+        self._san: set[str] = set()              # loa đã bắt tay xong
+        self._mo = asyncio.Event()
+        self._tac: asyncio.Task | None = None
+
+    def bat_dau(self) -> None:
+        """Chạy bộ giải mã NGAY (khởi động ffmpeg trùng với thời gian bắt tay RTSP; khúc đầu đã sẵn khi điểm hẹn mở)."""
+        self._tac = asyncio.get_running_loop().create_task(self._bom(), name="r1 airplay nhom")
+
+    async def _day(self, khoa: str, x: object) -> None:
+        q = self._q.get(khoa)
+        if q is None:
+            return
+        try:
+            await asyncio.wait_for(q.put(x), CHO_LOA_CHAM_S)
+        except TimeoutError:
+            _LOGGER.warning("airplay nhóm: %s không lấy tiếng trong %.0f giây, bỏ khỏi nhóm", khoa, CHO_LOA_CHAM_S)
+            self.bo(khoa)
+
+    async def _bom(self) -> None:
+        ket: object = None
+        gen = self._nguon()
+        try:
+            async for chunk in gen:
+                if not self._q:
+                    return
+                await asyncio.gather(*(self._day(k, chunk) for k in list(self._q)))
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — nguồn hỏng: mọi loa còn lại nhận lỗi này thay vì chờ mãi
+            ket = exc if isinstance(exc, LoiAirPlay) else LoiAirPlay(f"nguồn tiếng lỗi: {type(exc).__name__}: {exc}")
+        finally:
+            aclose = getattr(gen, "aclose", None)
+            if aclose is not None:
+                with contextlib.suppress(Exception):
+                    await aclose()
+        await asyncio.gather(*(self._day(k, ket) for k in list(self._q)))
+
+    def nguon(self, khoa: str) -> Callable[[], AsyncIterator[bytes]]:
+        async def doc() -> AsyncIterator[bytes]:
+            q = self._q.get(khoa)
+            if q is None:
+                raise LoiAirPlay("loa đã bị bỏ khỏi nhóm")
+            try:
+                while (x := await q.get()) is not None:
+                    if isinstance(x, Exception):
+                        raise x
+                    yield x
+            finally:
+                self.bo(khoa)
+        return doc
+
+    async def san_sang(self, khoa: str) -> None:
+        """Điểm hẹn: gọi sau khi loa ``khoa`` bắt tay xong; trả khi MỌI loa còn trong nhóm đã sẵn sàng (hoặc hết ``CHO_DONG_BO_S``)."""
+        self._san.add(khoa)
+        self._kiem()
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(self._mo.wait(), CHO_DONG_BO_S)
+
+    def bo(self, khoa: str) -> None:
+        """Loa ``khoa`` rời nhóm (lỗi / xong / bị huỷ): các loa khác không chờ nó nữa. Gọi nhiều lần cũng được."""
+        self._cho.discard(khoa)
+        self._san.discard(khoa)
+        self._q.pop(khoa, None)
+        self._kiem()
+        if not self._q and self._tac is not None and not self._tac.done() and self._tac is not asyncio.current_task():
+            self._tac.cancel()
+
+    def _kiem(self) -> None:
+        if self._cho <= self._san:
+            self._mo.set()

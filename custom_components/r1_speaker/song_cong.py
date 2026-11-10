@@ -253,10 +253,22 @@ class R1Duplex:
             "song_cong_khung_chuyen": chuyen,
             "song_cong_khung_bo": max(0, vao - chuyen) + self.duck_dropped,
             "song_cong_ket_thuc_gan_nhat": self.last_end,
+            "khu_vong": self._do_khu_vong(),
             "hoi_thoai": self.phong.mo_ta() if self.phong is not None else None,
         }
 
     # ── Mở / đóng phiên ───────────────────────────────────────────────────────
+
+    def _do_khu_vong(self) -> dict:
+        """Chẩn đoán khử vọng: bộ nào đang chạy và (bộ FDAF) mức giảm vọng ``erle_db`` (dB, trung bình trượt; ≥ 6 là có tác dụng, ~0 là không),
+        độ trễ loa → mic dò được và độ tin cậy. Báo lỗi vọng thì đính kèm số này: không có nó thì chỉ đoán."""
+        a = self._aec
+        if a is None:
+            return {"dong_co": None}
+        if isinstance(a, KhuVongFdaf):
+            return {"dong_co": "fdaf", "erle_db": round(float(a.erle_db), 1), "tre_ms": round(a.delay * 1000 / 16000),
+                    "tin_cay": round(float(a.tin_cay), 1)}
+        return {"dong_co": "nlms"}
 
     def chu_hien_tai(self) -> str:
         """Ai đang giữ kênh phát / phiên song công: nhãn bên giữ kênh, không thì nhãn của phiên, không thì «không xác định»."""

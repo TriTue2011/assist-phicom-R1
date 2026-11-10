@@ -803,6 +803,24 @@
           "description": "Tuỳ chọn: chỉ dừng khi loa này là người đang nói."
         }
       }
+    },
+    "play_group": {
+      "name": "Phát nhóm loa (AirPlay đồng bộ)",
+      "description": "Phát cùng một nhạc/tin ra nhiều loa R1 CHỈ qua AirPlay: một bộ giải mã, mọi loa bắt đầu cùng một mốc. Một loa hỏng thì các loa còn lại vẫn phát và dịch vụ báo lỗi nêu tên loa hỏng.",
+      "fields": {
+        "entity_id": {
+          "name": "Các loa R1",
+          "description": "Các media_player của loa R1 trong nhóm."
+        },
+        "media_content_id": {
+          "name": "Nội dung phát",
+          "description": "Địa chỉ http(s) hoặc media-source://."
+        },
+        "title": {
+          "name": "Tiêu đề",
+          "description": "Tên hiện trên loa (tuỳ chọn)."
+        }
+      }
     }
   },
   "selector": {

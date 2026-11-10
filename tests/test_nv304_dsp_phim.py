@@ -228,3 +228,17 @@ async def test_am_luong_media_tu_tuy_chon_va_gia_tri_hong():
     assert am_luong_media(mk({})) == 1.0 and am_luong_media(mk({"am_luong_media": 30})) == 0.3
     assert am_luong_media(mk({"am_luong_media": 500})) == 1.0 and am_luong_media(mk({"am_luong_media": -5})) == 0.0
     assert am_luong_media(mk({"am_luong_media": "abc"})) == 1.0
+
+
+def test_chan_doan_khu_vong_noi_ro_bo_nao_dang_chay_va_so_do_fdaf():
+    """Người dùng báo «vẫn vọng»: thuộc tính ``khu_vong`` phải nói bộ nào chạy và ERLE thật, không để đoán."""
+    from types import SimpleNamespace
+    from custom_components.r1_speaker.khu_vong import KhuVong
+    from custom_components.r1_speaker.song_cong import R1Duplex
+    gia = SimpleNamespace(_aec=None)
+    do = lambda aec: R1Duplex._do_khu_vong(SimpleNamespace(_aec=aec))  # noqa: E731
+    assert do(None) == {"dong_co": None}
+    assert do(KhuVong(do_tre_mau=0)) == {"dong_co": "nlms"}
+    f = KhuVongFdaf()
+    f.erle_db, f.delay, f.tin_cay = 9.26, int(0.25 * RATE), 31.04
+    assert do(f) == {"dong_co": "fdaf", "erle_db": 9.3, "tre_ms": 250, "tin_cay": 31.0}

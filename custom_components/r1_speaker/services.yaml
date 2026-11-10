@@ -392,3 +392,20 @@ phim_do:
         number:
           min: 5
           max: 300
+play_group:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: r1_speaker
+          domain: media_player
+          multiple: true
+    media_content_id:
+      required: true
+      example: "media-source://media_source/local/nhac.mp3"
+      selector:
+        text:
+    title:
+      selector:
+        text:
