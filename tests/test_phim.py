@@ -114,13 +114,11 @@ def test_them_hanh_dong_moi_chi_can_dang_ky_mot_ham_va_trung_ten_bi_chan():
         P._DANG_KY.pop(ten, None)
 
 
-def test_hanh_dong_tich_hop_day_du_va_mac_dinh_giu_hanh_vi_cu():
+def test_danh_muc_hanh_dong_con_du_de_lam_dich_vu_sau_nay():
     for ten in ("khong_lam_gi", "bat_tat_mic", "bat_tat_bluetooth", "phat_tam_dung", "dung_nhac", "bai_ke", "bai_truoc", "tang_am_luong",
                 "giam_am_luong", "tat_tieng_loa", "bao_thuc_dung", "bao_thuc_hoan", "hen_gio_tat_nhac_30", "bat_tat_dam_thoai",
                 "bat_tat_assist", "bat_tat_den_nhac", "bao_thuc_hoac_dam_thoai"):
         assert ten in P.danh_sach(), ten
-    assert P.MAC_DINH == {"don": "bao_thuc_hoac_dam_thoai", "doi": "bat_tat_assist", "ba": "bat_tat_bluetooth", "giu": "bat_tat_den_nhac"}  # như AI box
-    assert set(P.MAC_DINH.values()) <= set(P.danh_sach())
 
 
 # ── Tích hợp HA ──────────────────────────────────────────────────
@@ -129,60 +127,6 @@ async def _lien_ket(hass, r1):
     e, port = await _them_co_dau_nhan(hass, r1)
     await hass.async_block_till_done()
     return e, e.runtime_data.phim, e.runtime_data.mic_server, port
-
-
-async def test_bon_o_chon_va_mot_thuc_the_su_kien_cho_phim(hass, r1):
-    e, phim, _, _p = await _lien_ket(hass, r1)
-    reg = er.async_get(hass)
-    for cc in P.CU_CHI:
-        ent = reg.async_get_entity_id("select", "r1_speaker", f"{e.entry_id}_phim_{cc}")
-        assert ent, cc
-        assert hass.states.get(ent).state == P.MAC_DINH[cc]
-        assert set(P.danh_sach()) - {"chay_thuc_the"} <= set(hass.states.get(ent).attributes["options"])   # «chạy» nằm ở các mục «Chạy: …»
-    ev = reg.async_get_entity_id("event", "r1_speaker", f"{e.entry_id}_phim")
-    assert ev and set(hass.states.get(ev).attributes["event_types"]) == set(P.CU_CHI_SU_KIEN)
-
-
-async def test_chon_hanh_dong_cho_cu_chi_roi_bam_phim_chay_dung_hanh_dong_va_phat_su_kien(hass, r1):
-    e, phim, _, _p = await _lien_ket(hass, r1)
-    reg = er.async_get(hass)
-    sel = reg.async_get_entity_id("select", "r1_speaker", f"{e.entry_id}_phim_ba")
-    await hass.services.async_call("select", "select_option", {"entity_id": sel, "option": "tang_am_luong"}, blocking=True)
-    assert phim.cau_hinh["ba"] == "tang_am_luong"
-    goi = []
-    hass.services.async_register("media_player", "volume_up", lambda c: goi.append(c.data["entity_id"]))
-    phim._cu_chi_that(195, "ba")
-    await hass.async_block_till_done()
-    assert goi and goi[0].startswith("media_player.")
-    ev = reg.async_get_entity_id("event", "r1_speaker", f"{e.entry_id}_phim")
-    st = hass.states.get(ev)
-    assert st.attributes["event_type"] == "ba" and st.attributes["phim"] == 195
-
-
-async def test_mac_dinh_bon_cu_chi_chay_dung_thuc_the_nhu_ai_box_va_nhan_mot_lan_uu_tien_tat_bao_thuc(hass, r1):
-    """1 lần = tắt báo thức đang kêu, không thì đàm thoại; 2 lần = Assist; 3 lần = Bluetooth; giữ = đèn theo nhạc."""
-    e, phim, _, _p = await _lien_ket(hass, r1)
-    reg = er.async_get(hass)
-    toggle = []
-    hass.services.async_register("switch", "toggle", lambda c: toggle.append(c.data["entity_id"]))
-    ent = lambda khoa: reg.async_get_entity_id("switch", "r1_speaker", f"{e.entry_id}_{khoa}")   # noqa: E731
-
-    for cu_chi, khoa in (("doi", "assist"), ("ba", "bluetooth"), ("giu", "music_light"), ("don", "intercom_open")):
-        toggle.clear()
-        phim._cu_chi_that(195, cu_chi)
-        await hass.async_block_till_done()
-        assert toggle == [ent(khoa)] and toggle[0], (cu_chi, khoa)
-
-    bt, tat = e.runtime_data.bao_thuc, []
-
-    async def tat_gia():
-        tat.append(1)
-
-    bt.tat, bt.dang_keu = tat_gia, "bt1"                    # báo thức đang kêu: nhấn 1 lần chỉ tắt báo thức
-    toggle.clear()
-    phim._cu_chi_that(195, "don")
-    await hass.async_block_till_done()
-    assert tat == [1] and toggle == []
 
 
 async def test_phim_khac_ma_hanh_dong_chi_phat_su_kien_khong_chay_hanh_dong(hass, r1):
@@ -195,25 +139,6 @@ async def test_phim_khac_ma_hanh_dong_chi_phat_su_kien_khong_chay_hanh_dong(hass
     reg = er.async_get(hass)
     ev = reg.async_get_entity_id("event", "r1_speaker", f"{e.entry_id}_phim")
     assert hass.states.get(ev).attributes["event_type"] == "don" and hass.states.get(ev).attributes["phim"] == 24
-
-
-async def test_hanh_dong_hong_khong_lam_hong_vong_nghe_phim(hass, r1, caplog):
-    e, phim, _, _p = await _lien_ket(hass, r1)
-    ten = "thu_nghiem_hanh_dong_hong"
-
-    @P.hanh_dong(ten, vi="Hỏng", en="Broken")
-    async def _hong(ctx):
-        raise RuntimeError("cố ý hỏng")
-    try:
-        phim.cau_hinh["don"] = ten
-        phim._cu_chi_that(195, "don")                    # hành động hỏng: chỉ ghi cảnh báo, không ném lỗi ra ngoài
-        await hass.async_block_till_done()
-        assert any("phím don" in r.getMessage() and "cố ý hỏng" in r.getMessage() and r.levelname == "WARNING" for r in caplog.records)
-        phim.cau_hinh["don"] = "khong_lam_gi"
-        phim._cu_chi_that(195, "don")                    # và vòng nghe vẫn chạy bình thường sau đó
-        await hass.async_block_till_done()
-    finally:
-        P._DANG_KY.pop(ten, None)
 
 
 async def test_phim_tho_tu_apk_qua_ket_noi_mic_that_thanh_cu_chi_doi_va_khung_sai_bi_bo(hass, r1):
@@ -268,27 +193,39 @@ async def test_nguon_phim_apk_thi_apk_nhan_cau_hinh_phim_tu_ha(hass, r1):
     writer.close()
 
 
-async def test_chay_thuc_the_gop_vao_select_hanh_dong_mot_select_moi_cu_chi_va_go_select_cu_cua_0_14_0(hass, r1):
-    """Loa chỉ có MỘT phím nên mỗi cử chỉ chỉ có một select: mục «Chạy: tên · script.x» = hành động chay_thuc_the + đích."""
+async def test_phim_khong_con_o_chon_hanh_dong_chi_con_thuc_the_su_kien(hass, r1):
     e, phim, _, _p = await _lien_ket(hass, r1)
     reg = er.async_get(hass)
-    hass.states.async_set("script.goi_nhom", "off", {"friendly_name": "Gọi nhóm loa"})
-    hass.states.async_set("lock.cua", "locked")
-    sel = reg.async_get_entity_id("select", "r1_speaker", f"{e.entry_id}_phim_don")
-    hass.states.async_set("select.kich", "x")                                    # ép làm mới danh sách option
-    ops = hass.states.get(sel).attributes["options"]
-    assert "chay_thuc_the" not in ops and not any("lock.cua" in o for o in ops)  # cửa khoá không phải loại cho phép
-    muc = "Chạy: Gọi nhóm loa · script.goi_nhom"
-    await hass.services.async_call("select", "select_option", {"entity_id": sel, "option": muc}, blocking=True)
-    assert phim.cau_hinh["don"] == "chay_thuc_the" and phim.dich["don"] == "script.goi_nhom"
-    assert hass.states.get(sel).state == muc
-    chay = []
-    hass.services.async_register("script", "turn_on", lambda c: chay.append(c.data["entity_id"]))
-    phim._cu_chi_that(195, "don")
+    for cc in P.CU_CHI:
+        assert reg.async_get_entity_id("select", "r1_speaker", f"{e.entry_id}_phim_{cc}") is None, cc
+    ev = reg.async_get_entity_id("event", "r1_speaker", f"{e.entry_id}_phim")
+    assert ev and set(hass.states.get(ev).attributes["event_types"]) == set(P.CU_CHI_SU_KIEN)
+    assert not hasattr(phim, "cau_hinh") and not hasattr(P, "MAC_DINH")
+
+
+async def test_cu_chi_chi_phat_su_kien_khong_chay_hanh_dong_nao_ke_ca_khi_la_mat_dinh_cu(hass, r1):
+    """Không còn hành động gắn sẵn: bốn cử chỉ (kể cả đơn/đúp/ba/giữ của mặc định cũ) chỉ bắn sự kiện, việc làm gì do tự động hoá."""
+    e, phim, _, _p = await _lien_ket(hass, r1)
+    reg = er.async_get(hass)
+    goi = []
+    for dom, dv in (("switch", "toggle"), ("script", "turn_on"), ("media_player", "volume_up"), ("media_player", "media_play_pause")):
+        hass.services.async_register(dom, dv, lambda c: goi.append(c.service))
+    for cu_chi in P.CU_CHI:
+        phim._cu_chi_that(195, cu_chi)
     await hass.async_block_till_done()
-    assert chay == ["script.goi_nhom"]
-    await hass.services.async_call("select", "select_option", {"entity_id": sel, "option": "bai_ke"}, blocking=True)
-    assert phim.cau_hinh["don"] == "bai_ke" and "don" not in phim.dich          # đổi hành động thì đích cũ bỏ
-    with pytest.raises(Exception):
-        await hass.services.async_call("select", "select_option", {"entity_id": sel, "option": "Chạy: lock.cua"}, blocking=True)
-    assert reg.async_get_entity_id("select", "r1_speaker", f"{e.entry_id}_phim_chay_don") is None   # không còn select «…: chạy» riêng
+    assert goi == [], goi
+    ev = reg.async_get_entity_id("event", "r1_speaker", f"{e.entry_id}_phim")
+    st = hass.states.get(ev)
+    assert st.attributes["event_type"] == "giu" and st.attributes["phim"] == 195
+
+
+async def test_select_phim_cu_cua_ban_truoc_bi_go_khoi_so_thuc_the_khi_nap_lai(hass, r1):
+    e, phim, _, _p = await _lien_ket(hass, r1)
+    reg = er.async_get(hass)
+    cu = [reg.async_get_or_create("select", "r1_speaker", f"{e.entry_id}{hau}", config_entry=e).entity_id
+          for hau in ("_phim_don", "_phim_chay_don", "_phim_giu")]
+    assert all(reg.async_get(x) for x in cu)
+    assert await hass.config_entries.async_reload(e.entry_id)
+    await hass.async_block_till_done()
+    assert not any(reg.async_get(x) for x in cu), cu
+

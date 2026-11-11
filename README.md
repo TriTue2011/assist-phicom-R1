@@ -9,6 +9,8 @@ Kho này biến loa **Phicomm R1** thành một thiết bị đầy đủ của 
    cảm biến CPU/RAM/bộ nhớ/WiFi của loa; thẻ Lovelace `r1-card` (đàm thoại, EQ, chức năng, cài đặt); icon riêng (`brand/`; HA có hỗ trợ thư mục này tự nạp, đã thấy trong 2026.10.3, bản cũ hơn chưa kiểm).
 2. **APK `vn.r1.bodam`** (`apk/`): ứng dụng Android nhỏ trên loa, lấy tiếng mic gửi về HA **chỉ khi người dùng bật**; nút giữa bật/tắt mic.
 
+> **0.17.0 - nút giữa không còn hành động gắn sẵn: chỉ phát trigger và sự kiện, việc làm gì do tự động hoá của bạn quyết định** (bốn ô chọn «Phím loa» đã gỡ).
+>
 > **Mới ở 0.16.0 - nút giữa dùng được trong tự động hoá bằng giao diện.** Mỗi cử chỉ (nhấn đơn / đúp / ba lần / giữ / ngắn) là một **trigger thiết bị**; có 4 **nút ảo** `button.r1_nut_giua_*` để thử hoặc đặt lên bảng điều khiển; kèm **mẫu tự động hoá** «nhấn đơn = nghe máy khi có cuộc gọi đến, không thì gọi đi» (Zalo Call). Xem [mục 8](#8-nút-giữa) (phần «Gán nút giữa vào tự động hoá»).
 
 > **Đọc trước khi làm theo.** Đây là dự án thử nghiệm. Phần lớn mã được kiểm bằng loa giả trên máy phát triển; các điểm đã kiểm trên **loa thật** và điểm **chưa kiểm** được ghi rõ ở từng mục và ở
@@ -209,9 +211,9 @@ Mỗi cử chỉ của nút giữa là **một trigger thiết bị** chọn b�
 2. Chọn một trong: **Nhấn đơn / Nhấn đúp / Nhấn ba lần / Nhấn giữ / Nhấn ngắn nút giữa**.
 3. Thêm hành động bất kỳ. Trong hành động có thể dùng `{{ trigger.event.data.phim }}` (mã phím).
 
-**Chống chạy đôi:** mỗi cử chỉ vẫn có **hành động tích hợp** (bốn ô chọn «Phím loa»: ví dụ nhấn đơn = tắt báo thức/bật đàm thoại). Muốn cử chỉ chỉ dành cho tự động hoá của bạn thì đặt ô đó là **«Không làm gì (chỉ phát sự kiện)»**.
+**Không còn hành động gắn sẵn (từ 0.17.0):** nút giữa chỉ bắn trigger thiết bị và cập nhật `event.r1_phim`. Trước đây nhấn đơn tự tắt báo thức/bật đàm thoại, đúp bật/tắt Assist, ba lần bật/tắt Bluetooth, giữ bật/tắt đèn theo nhạc; nay không cái nào tự chạy, nên không còn chạy đôi với tự động hoá của bạn. Cần việc nào thì tạo tự động hoá cho cử chỉ đó.
 
-**Nút ảo để thử và để đặt lên bảng điều khiển:** loa có thêm 4 nút **«Nút giữa - nhấn đơn / đúp / ba lần / giữ»** (`button.r1_nut_giua_don`, `..._doi`, `..._ba`, `..._giu`). Bấm nút ảo = mô phỏng đúng cử chỉ thật (bắn trigger, cập nhật `event.r1_phim`, chạy hành động đang chọn), nên thử tự động hoá được mà không cần chạy ra chỗ loa.
+**Nút ảo để thử và để đặt lên bảng điều khiển:** loa có thêm 4 nút **«Nút giữa - nhấn đơn / đúp / ba lần / giữ»** (`button.r1_nut_giua_don`, `..._doi`, `..._ba`, `..._giu`). Bấm nút ảo = mô phỏng đúng cử chỉ thật (bắn trigger, cập nhật `event.r1_phim`), nên thử tự động hoá được mà không cần chạy ra chỗ loa.
 
 **Cùng một cử chỉ, việc khác nhau tuỳ lúc** (ví dụ nhấn đơn = nghe máy khi có cuộc gọi đến, không thì gọi đi): dùng mẫu tự động hoá có sẵn
 [`blueprints/automation/r1_speaker/nut_giua_nghe_hoac_goi_zalo.yaml`](blueprints/automation/r1_speaker/nut_giua_nghe_hoac_goi_zalo.yaml)

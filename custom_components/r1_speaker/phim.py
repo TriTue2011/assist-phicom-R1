@@ -28,10 +28,6 @@ _LOGGER = logging.getLogger(__name__)
 #: Bốn cử chỉ gán được hành động; ``nhan_ngan`` (firmware báo thêm) chỉ phát sự kiện.
 CU_CHI = ("don", "doi", "ba", "giu")
 CU_CHI_SU_KIEN = CU_CHI + ("nhan_ngan",)
-#: Mặc định theo nút giữa của app AI box (``ChatActivity.onKeyUp``, mã dịch ngược): 1 lần = tắt báo thức đang kêu, không thì bật/tắt phiên
-#: trò chuyện; 2 lần = bật/tắt từ đánh thức (ở đây: công tắc Assist); 3 lần = bật/tắt Bluetooth; giữ = bật/tắt đèn (AI box đòi giữ 3 giây,
-#: ở đây ngưỡng giữ là ``NGUONG_GIU_MS``). Muốn hành vi APK cũ (đơn = tắt mic, đúp = Bluetooth) thì đổi ở bốn ô chọn.
-MAC_DINH = {"don": "bao_thuc_hoac_dam_thoai", "doi": "bat_tat_assist", "ba": "bat_tat_bluetooth", "giu": "bat_tat_den_nhac"}
 MA_NUT_GIUA = 195
 #: Đường thô: trong khoảng này (ms) sau lần nhả, nhấn tiếp thì tính cùng một cử chỉ nhiều lần; giữ quá ngưỡng này (ms) là «giữ».
 KHOANG_NHAN_MS = 450
@@ -312,13 +308,12 @@ def dang_ky_dich_vu(hass: HomeAssistant) -> None:
 # ── Bộ điều phối theo mục cấu hình ───────────────────────────────────
 
 class Phim:
-    """Gắn nguồn cử chỉ (kết nối mic) với hành động và sự kiện của MỘT loa."""
+    """Gắn nguồn cử chỉ (kết nối mic) với sự kiện của MỘT loa. Không có hành động gắn sẵn: cử chỉ chỉ bắn trigger thiết bị và sự kiện,
+    việc làm gì do tự động hoá quyết định."""
 
     def __init__(self, hass: HomeAssistant, entry, coordinator, ma_hanh_dong: Callable[[], set[int]]) -> None:
         self.hass, self.entry, self.coordinator = hass, entry, coordinator
         self._ma = ma_hanh_dong
-        self.cau_hinh: dict[str, str] = dict(MAC_DINH)     # cử chỉ → tên hành động (ô chọn cập nhật)
-        self.dich: dict[str, str] = {}                     # cử chỉ → entity_id cho hành động ``chay_thuc_the``
         self.tren_su_kien: list[Callable[[str, int], None]] = []      # (cử chỉ, mã phím): thực thể sự kiện nghe
         self.nhat_ky: list[tuple[int, str]] = []
         self._nd = NhanDien(self._cu_chi_that, self._hen)
@@ -355,8 +350,6 @@ class Phim:
                 cb(cu_chi, ma)
             except Exception:  # noqa: BLE001 — người nghe hỏng không được chặn hành động
                 _LOGGER.exception("phím: người nghe sự kiện lỗi")
-        if cu_chi in CU_CHI and ma in self._ma():
-            self.hass.async_create_task(self.chay(cu_chi, ma))
 
     async def do(self, giay: int = 60) -> None:
         """Bật chế độ dò phím ``giay`` giây rồi tự tắt."""
@@ -372,14 +365,3 @@ class Phim:
             self._huy_do = None
             self.hass.async_create_task(mic.gui_phim_cau_hinh(sorted(self._ma()), False))
         self._huy_do = self.hass.loop.call_later(giay, xong).cancel
-
-    async def chay(self, cu_chi: str, ma: int = MA_NUT_GIUA) -> None:
-        ten = self.cau_hinh.get(cu_chi, "khong_lam_gi")
-        h = _DANG_KY.get(ten)
-        if h is None:
-            _LOGGER.warning("phím %s: hành động «%s» không còn", cu_chi, ten)
-            return
-        try:
-            await h.ham(PhimCtx(self.hass, self.entry, self.coordinator, ma, cu_chi))
-        except Exception as exc:  # noqa: BLE001 — một hành động hỏng không được làm hỏng vòng nghe phím
-            _LOGGER.warning("phím %s → «%s» lỗi: %s", cu_chi, ten, exc or type(exc).__name__)

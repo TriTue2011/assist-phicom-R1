@@ -59,7 +59,7 @@ async def test_su_kien_bus_co_device_id_va_moi_loai_cu_chi_ke_ca_nhan_ngan(hass,
 
 
 async def test_bon_nut_ao_mo_phong_dung_duong_cua_phim_that(hass, r1):
-    """Bấm nút ảo = bắn trigger + cập nhật event.r1_phim + chạy hành động đang chọn cho cử chỉ đó (như bấm phím thật)."""
+    """Bấm nút ảo = bắn trigger + cập nhật event.r1_phim (như bấm phím thật); không chạy hành động nào."""
     e, phim, *_ = await _lien_ket(hass, r1)
     reg = er.async_get(hass)
     dev = _device(hass, e)
@@ -70,13 +70,11 @@ async def test_bon_nut_ao_mo_phong_dung_duong_cua_phim_that(hass, r1):
     hass.bus.async_listen(SU_KIEN_PHIM, callback(lambda ev: bat.append((ev.data["type"], ev.data["phim"]))))
     goi = []
     hass.services.async_register("media_player", "volume_up", lambda c: goi.append(c.data["entity_id"]))
-    sel = reg.async_get_entity_id("select", DOMAIN, f"{e.entry_id}_phim_ba")
-    await hass.services.async_call("select", "select_option", {"entity_id": sel, "option": "tang_am_luong"}, blocking=True)
     for cc in P.CU_CHI:
         await hass.services.async_call("button", "press", {"entity_id": nut[cc]}, blocking=True)
     await hass.async_block_till_done()
     assert bat == [(cc, 195) for cc in P.CU_CHI], bat
-    assert goi and goi[0].startswith("media_player."), goi                  # nhấn ba lần ảo chạy hành động đã chọn (tăng âm lượng)
+    assert goi == [], goi                                                   # không còn hành động gắn sẵn: nút ảo chỉ bắn trigger và sự kiện
     ev = reg.async_get_entity_id("event", DOMAIN, f"{e.entry_id}_phim")
     assert hass.states.get(ev).attributes["event_type"] == "giu"           # cử chỉ cuối cùng
     assert nut["don"] and dev

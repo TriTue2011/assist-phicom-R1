@@ -3,7 +3,7 @@ blueprint:
   description: >
     Một cử chỉ của nút giữa loa R1, tuỳ lúc mà làm việc khác nhau:
     đang có cuộc gọi đến thì NGHE MÁY; đang trong cuộc gọi thì CÚP (có thể tắt); không có cuộc gọi nào thì GỌI ĐI cho người bạn chọn.
-    Cần tích hợp Zalo Call từ bản 2026.11.11.3. Người sẽ gọi chọn từ danh sách (không gõ mã). Muốn thêm nhắn tin, gọi cảnh báo và chọn nhiều người nhận: xem mẫu «Zalo Call - Một nút bấm» trong kho TriTue2011/Blueprint. Nhớ đặt hành động tích hợp của cử chỉ này (ô chọn «Phím loa» của loa R1) là «Không làm gì (chỉ phát sự kiện)»
+    Cần tích hợp Zalo Call từ bản 2026.11.11.3. Người sẽ gọi chọn từ danh sách (không gõ mã). Muốn thêm nhắn tin, gọi cảnh báo và chọn nhiều người nhận: xem mẫu «Zalo Call - Một nút bấm» trong kho TriTue2011/Blueprint.
     để cử chỉ chỉ dành cho tự động hoá này.
   domain: automation
   author: TriTue2011
