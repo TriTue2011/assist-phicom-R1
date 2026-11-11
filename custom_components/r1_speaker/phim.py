@@ -19,9 +19,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 
-from .const import DOMAIN
+from .const import DOMAIN, SU_KIEN_PHIM
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -335,8 +335,21 @@ class Phim:
         self.hass.bus.async_fire("r1_speaker_phim_do", {"entry_id": self.entry.entry_id, "phim": ma, "xuong": xuong})   # dò phím: luôn báo thô
         (self._nd.xuong if xuong else self._nd.len)(ma)
 
+    def gia_lap(self, cu_chi: str) -> None:
+        """Mô phỏng một cử chỉ của nút giữa (nút ảo ``button.*``): đi đúng đường của phím thật - bắn trigger thiết bị, cập nhật ``event.r1_phim`` và chạy
+        hành động đang chọn cho cử chỉ đó. Dùng mã phím hành động (mặc định 195) để hành động chạy như phím thật."""
+        if cu_chi not in CU_CHI_SU_KIEN:
+            raise ValueError(f"cử chỉ không hợp lệ: {cu_chi}")
+        ma_hd = self._ma()
+        self._cu_chi_that(MA_NUT_GIUA if MA_NUT_GIUA in ma_hd or not ma_hd else min(ma_hd), cu_chi)
+
+    def _device_id(self) -> str | None:
+        dev = dr.async_get(self.hass).async_get_device(identifiers={(DOMAIN, self.entry.entry_id)})
+        return None if dev is None else dev.id
+
     def _cu_chi_that(self, ma: int, cu_chi: str) -> None:
         self.nhat_ky = (self.nhat_ky + [(ma, cu_chi)])[-20:]
+        self.hass.bus.async_fire(SU_KIEN_PHIM, {"device_id": self._device_id(), "entry_id": self.entry.entry_id, "type": cu_chi, "phim": ma})
         for cb in list(self.tren_su_kien):
             try:
                 cb(cu_chi, ma)

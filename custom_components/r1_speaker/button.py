@@ -15,6 +15,7 @@ from .adb_client import AdbError
 from .const import DOMAIN, KDL_LY_DO_BAM
 from .coordinator import R1ConfigEntry
 from .entity import preregister
+from .phim import CU_CHI
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
@@ -24,7 +25,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry,
     preregister(hass, entry, "button", f"{entry.entry_id}_dung_nhac", "r1_dung_nhac")
     preregister(hass, entry, "button", f"{entry.entry_id}_dong_adb", "r1_dong_adb")
     preregister(hass, entry, "button", f"{entry.entry_id}_tat_bao_thuc", "r1_tat_bao_thuc")
-    async_add_entities([R1RebootButton(entry), R1PrepareButton(entry), R1StopButton(entry), R1CloseAdbButton(entry), R1DismissAlarmButton(entry)])
+    for cu_chi in CU_CHI:
+        preregister(hass, entry, "button", f"{entry.entry_id}_phim_nut_{cu_chi}", f"r1_nut_giua_{cu_chi}")
+    async_add_entities([R1RebootButton(entry), R1PrepareButton(entry), R1StopButton(entry), R1CloseAdbButton(entry), R1DismissAlarmButton(entry),
+                        *(R1PhimButton(entry, cu_chi) for cu_chi in CU_CHI)])
+
+
+class R1PhimButton(ButtonEntity):
+    """Nút ảo «Nút giữa: nhấn đơn / đúp / ba / giữ»: bấm = mô phỏng đúng cử chỉ của phím thật (bắn trigger thiết bị + sự kiện, chạy hành động đang chọn).
+    Dùng để thử tự động hoá mà không cần ra chỗ loa, hoặc đặt lên bảng điều khiển."""
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:gesture-tap-button"
+
+    def __init__(self, entry: R1ConfigEntry, cu_chi: str) -> None:
+        self._entry, self._cu_chi = entry, cu_chi
+        self._attr_translation_key = f"phim_nut_{cu_chi}"
+        self._attr_unique_id = f"{entry.entry_id}_phim_nut_{cu_chi}"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry.entry_id)})
+
+    async def async_press(self) -> None:
+        self._entry.runtime_data.phim.gia_lap(self._cu_chi)
 
 
 class R1DismissAlarmButton(ButtonEntity):

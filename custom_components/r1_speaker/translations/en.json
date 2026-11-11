@@ -318,6 +318,18 @@
       },
       "tat_bao_thuc": {
         "name": "Dismiss ringing alarm"
+      },
+      "phim_nut_don": {
+        "name": "Center key - single press"
+      },
+      "phim_nut_doi": {
+        "name": "Center key - double press"
+      },
+      "phim_nut_ba": {
+        "name": "Center key - triple press"
+      },
+      "phim_nut_giu": {
+        "name": "Center key - long press"
       }
     },
     "event": {
@@ -859,6 +871,15 @@
     "thieu_tu_danh_thuc": {
       "title": "R1 Assist has no wake word engine",
       "description": "The Assist pipeline used by {entity} has no wake word engine, so the satellite is not listening and no turn is started. Fix: install a wake word engine (for example openWakeWord via Wyoming), pick a wake word for the pipeline in Settings → Voice assistants and assign that pipeline to the speaker's Assistant entity; or turn Assist off. This issue disappears once configured."
+    }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "don": "Center key single press",
+      "doi": "Center key double press",
+      "ba": "Center key triple press",
+      "giu": "Center key long press",
+      "nhan_ngan": "Center key short press"
     }
   }
 }

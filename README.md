@@ -9,6 +9,8 @@ Kho này biến loa **Phicomm R1** thành một thiết bị đầy đủ của 
    cảm biến CPU/RAM/bộ nhớ/WiFi của loa; thẻ Lovelace `r1-card` (đàm thoại, EQ, chức năng, cài đặt); icon riêng (`brand/`; HA có hỗ trợ thư mục này tự nạp, đã thấy trong 2026.10.3, bản cũ hơn chưa kiểm).
 2. **APK `vn.r1.bodam`** (`apk/`): ứng dụng Android nhỏ trên loa, lấy tiếng mic gửi về HA **chỉ khi người dùng bật**; nút giữa bật/tắt mic.
 
+> **Mới ở 0.16.0 - nút giữa dùng được trong tự động hoá bằng giao diện.** Mỗi cử chỉ (nhấn đơn / đúp / ba lần / giữ / ngắn) là một **trigger thiết bị**; có 4 **nút ảo** `button.r1_nut_giua_*` để thử hoặc đặt lên bảng điều khiển; kèm **mẫu tự động hoá** «nhấn đơn = nghe máy khi có cuộc gọi đến, không thì gọi đi» (Zalo Call). Xem [mục 8](#8-nút-giữa) (phần «Gán nút giữa vào tự động hoá»).
+
 > **Đọc trước khi làm theo.** Đây là dự án thử nghiệm. Phần lớn mã được kiểm bằng loa giả trên máy phát triển; các điểm đã kiểm trên **loa thật** và điểm **chưa kiểm** được ghi rõ ở từng mục và ở
 > [docs/PHAT-TRIEN.md](docs/PHAT-TRIEN.md). Cài ứng dụng lên loa và dùng ADB là việc **khó đảo ngược** với thiết bị của bạn: đọc phần *Quyền riêng tư và bảo mật* trước.
 
@@ -56,7 +58,7 @@ Bạn chọn **một** cách (ô **«Chế độ đóng ADB»** ở **Cài đặ
 | | **Dùng APK** (đóng ADB) | **Dùng ADB** (giữ ADB, mặc định) |
 |---|---|---|
 | An ninh | Không máy nào trong mạng nối được cổng `5555` | Cổng `5555` mở không xác thực cho cả LAN; phải tự bảo vệ (phần cuối trang) |
-| Chạy được | Mic, đàm thoại, Assist, âm lượng, phát nhạc DLNA/AirPlay, Dừng, Tắt tiếng, nút giữa (APK 1.3) | Tất cả |
+| Chạy được | Mic, đàm thoại, Assist, âm lượng, phát nhạc DLNA/AirPlay, Dừng, Tắt tiếng, nút giữa (APK 1.3; trigger thiết bị và nút ảo của nút giữa) | Tất cả |
 | Đèn | Chỉ hiệu ứng có sẵn của firmware (màu cố định, thở, hướng đánh thức) | Đèn tự do 13 hiệu ứng, màu RGB tuỳ ý |
 | Mất | Cài/cập nhật ứng dụng, «Chuẩn bị loa», thông tin hệ thống, công tắc Bluetooth | — |
 | Mở lại ADB | Rút điện loa rồi cắm lại (làm xong thì đóng lại) | — |
@@ -188,6 +190,8 @@ Loa R1 không có cảm biến nhiệt và không có pin. Chi tiết: [docs/THO
 
 ## 8. Nút giữa
 
+Nút giữa là **phím vật lý duy nhất** dùng được trên loa (mã 195). HA nhận diện 4 cử chỉ từ nó: **nhấn đơn, nhấn đúp, nhấn ba lần, nhấn giữ** (thêm «nhấn ngắn» do firmware báo, chỉ phát sự kiện). Mỗi cử chỉ có thể: (a) chạy một **hành động tích hợp** chọn ở ô «Phím loa», (b) làm **trigger tự động hoá** (xem «Gán nút giữa vào tự động hoá» ở cuối mục này), hoặc (c) cả hai.
+
 - Mã phím nút giữa trên loa là **195** (`0x00c3`), **đã đo thật** (thiết bị `/dev/input/event0`, `rk29-keypad`, có đủ sự kiện nhấn và nhả). APK NV245 đặt
   sẵn mặc định 195.
 - **Nhấn đơn** = bật/tắt mic (quyết định sau khoảng chờ nhấn đôi, mặc định 500 ms). **Nhấn đôi** trong khoảng đó = bật/tắt Bluetooth. Nhấn giữ lâu
@@ -196,6 +200,36 @@ Loa R1 không có cảm biến nhiệt và không có pin. Chi tiết: [docs/THO
   Muốn nhận nút giữa khi app chạy nền, APK có dịch vụ trợ năng `TiepCanPhim` (**mặc định TẮT**, chỉ phản ứng đúng mã phím đã cấu hình); bật nó là quyết định của bạn
   và **chưa kiểm trên loa thật**.
 - Nếu nút giữa trên loa của bạn không phải 195: dùng nút *Dò mã phím* trong app (ghi logcat tag `NV243Phim` và hiện mã trên màn hình), rồi điền mã thập phân vào ô *Keycode nút giữa*. Đặt `-1` = tắt xử lý nút.
+
+### Gán nút giữa vào tự động hoá (dễ nhất)
+
+Mỗi cử chỉ của nút giữa là **một trigger thiết bị** chọn bằng giao diện, không cần viết gì:
+
+1. **Cài đặt → Tự động hoá → Tạo tự động hoá → Thêm trigger → Thiết bị →** chọn loa **Phicomm R1**.
+2. Chọn một trong: **Nhấn đơn / Nhấn đúp / Nhấn ba lần / Nhấn giữ / Nhấn ngắn nút giữa**.
+3. Thêm hành động bất kỳ. Trong hành động có thể dùng `{{ trigger.event.data.phim }}` (mã phím).
+
+**Chống chạy đôi:** mỗi cử chỉ vẫn có **hành động tích hợp** (bốn ô chọn «Phím loa»: ví dụ nhấn đơn = tắt báo thức/bật đàm thoại). Muốn cử chỉ chỉ dành cho tự động hoá của bạn thì đặt ô đó là **«Không làm gì (chỉ phát sự kiện)»**.
+
+**Nút ảo để thử và để đặt lên bảng điều khiển:** loa có thêm 4 nút **«Nút giữa - nhấn đơn / đúp / ba lần / giữ»** (`button.r1_nut_giua_don`, `..._doi`, `..._ba`, `..._giu`). Bấm nút ảo = mô phỏng đúng cử chỉ thật (bắn trigger, cập nhật `event.r1_phim`, chạy hành động đang chọn), nên thử tự động hoá được mà không cần chạy ra chỗ loa.
+
+**Cùng một cử chỉ, việc khác nhau tuỳ lúc** (ví dụ nhấn đơn = nghe máy khi có cuộc gọi đến, không thì gọi đi): dùng mẫu tự động hoá có sẵn
+[`blueprints/automation/r1_speaker/nut_giua_nghe_hoac_goi_zalo.yaml`](blueprints/automation/r1_speaker/nut_giua_nghe_hoac_goi_zalo.yaml)
+(cần tích hợp Zalo Call). Nhập mẫu: **Cài đặt → Tự động hoá → Mẫu tự động hoá → Nhập mẫu**, dán địa chỉ tệp trên GitHub.
+Mẫu làm: đang có cuộc gọi đến thì **nghe máy**; đang trong cuộc gọi thì **cúp** (tắt được); không có cuộc gọi thì **gọi đi** cho người bạn chọn.
+Muốn nhiều tình huống hơn thì tạo thêm tự động hoá với điều kiện «Trạng thái» của cảm biến cuộc gọi.
+
+```yaml
+# Ví dụ không dùng mẫu: nhấn giữ nút giữa = gọi cảnh báo
+triggers:
+  - trigger: device
+    domain: r1_speaker
+    device_id: <chọn bằng giao diện>
+    type: giu
+actions:
+  - action: zalo_call.alert_call
+    data: {thread_id: "6643404425553198601", message: "Có người cần giúp ở phòng khách"}
+```
 
 ## 9. Nối mic loa về HA
 

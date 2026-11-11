@@ -1,0 +1,76 @@
+blueprint:
+  name: Loa R1 - nút giữa nghe máy hoặc gọi đi (Zalo)
+  description: >
+    Một cử chỉ của nút giữa loa R1, tuỳ lúc mà làm việc khác nhau:
+    đang có cuộc gọi đến thì NGHE MÁY; đang trong cuộc gọi thì CÚP (có thể tắt); không có cuộc gọi nào thì GỌI ĐI cho người bạn chọn.
+    Cần tích hợp Zalo Call. Nhớ đặt hành động tích hợp của cử chỉ này (ô chọn «Phím loa» của loa R1) là «Không làm gì (chỉ phát sự kiện)»
+    để cử chỉ chỉ dành cho tự động hoá này.
+  domain: automation
+  author: TriTue2011
+  input:
+    nut:
+      name: Cử chỉ nút giữa
+      description: Chọn trigger thiết bị của loa R1, ví dụ «Nhấn đơn nút giữa».
+      selector:
+        trigger: {}
+    cam_bien:
+      name: Cảm biến trạng thái cuộc gọi Zalo
+      description: Cảm biến «Trạng thái cuộc gọi» của Zalo Call.
+      selector:
+        entity:
+          domain: sensor
+          integration: zalo_call
+    nguoi_nhan:
+      name: Mã Zalo người sẽ gọi khi không có cuộc gọi
+      description: Mã Zalo của người (xem bằng dịch vụ «Xem danh bạ Zalo»).
+      selector:
+        text:
+    loai_goi:
+      name: Gọi thoại hay gọi video
+      default: user
+      selector:
+        select:
+          options:
+            - value: user
+              label: Thoại
+            - value: video
+              label: Video
+    cup_khi_dang_goi:
+      name: Đang trong cuộc gọi thì nhấn để cúp
+      default: true
+      selector:
+        boolean: {}
+
+mode: single
+max_exceeded: silent
+
+variables:
+  cam_bien: !input cam_bien
+  nguoi_nhan: !input nguoi_nhan
+  loai_goi: !input loai_goi
+  cup_khi_dang_goi: !input cup_khi_dang_goi
+
+triggers: !input nut
+
+actions:
+  - choose:
+      # Có cuộc gọi ĐẾN đang đổ chuông: nghe máy
+      - conditions:
+          - condition: template
+            value_template: "{{ is_state(cam_bien, 'ringing') and state_attr(cam_bien, 'status') == 'incoming' }}"
+        sequence:
+          - action: zalo_call.answer_call
+            data: {}
+      # Đang trong cuộc gọi (hoặc đang gọi đi mà chưa ai nghe): cúp, nếu bạn cho phép
+      - conditions:
+          - condition: template
+            value_template: "{{ cup_khi_dang_goi and not is_state(cam_bien, 'idle') }}"
+        sequence:
+          - action: zalo_call.end_call
+            data: {}
+    # Không có cuộc gọi nào: gọi đi
+    default:
+      - action: zalo_call.make_call
+        data:
+          thread_id: "{{ nguoi_nhan }}"
+          type: "{{ loai_goi }}"

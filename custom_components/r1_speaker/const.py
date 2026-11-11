@@ -375,3 +375,7 @@ KDL_TREO_TOI_THIEU_PHUT = 15
 KDL_NGHI_SAU_TU_PHUC_HOI_GIO = 6
 #: Lý do khởi động lại, ghi vào nhật ký và vào thuộc tính của cảm biến.
 KDL_LY_DO_LICH, KDL_LY_DO_TREO, KDL_LY_DO_BAM = "lich", "treo", "bam"
+
+#: Sự kiện bus mỗi khi có một cử chỉ phím trên loa (thật hoặc do nút ảo mô phỏng): dữ liệu ``device_id``, ``entry_id``, ``type`` (cử chỉ), ``phim``
+#: (mã phím). Trigger thiết bị (``device_trigger.py``) lắng nghe sự kiện này.
+SU_KIEN_PHIM = "r1_speaker_phim"

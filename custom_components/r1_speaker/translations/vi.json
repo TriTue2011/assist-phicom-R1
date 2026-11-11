@@ -318,6 +318,18 @@
       },
       "tat_bao_thuc": {
         "name": "Tắt báo thức đang kêu"
+      },
+      "phim_nut_don": {
+        "name": "Nút giữa - nhấn đơn"
+      },
+      "phim_nut_doi": {
+        "name": "Nút giữa - nhấn đúp"
+      },
+      "phim_nut_ba": {
+        "name": "Nút giữa - nhấn ba lần"
+      },
+      "phim_nut_giu": {
+        "name": "Nút giữa - nhấn giữ"
       }
     },
     "event": {
@@ -859,6 +871,15 @@
     "thieu_tu_danh_thuc": {
       "title": "Assist của loa R1 chưa có từ đánh thức",
       "description": "Pipeline Assist của {entity} chưa có engine từ đánh thức nên vệ tinh chưa nghe và chưa mở lượt nào. Cách sửa: cài engine từ đánh thức (ví dụ openWakeWord qua Wyoming), vào Cài đặt → Trợ lý giọng nói, chọn từ đánh thức cho pipeline đang dùng và gán pipeline đó cho thực thể Trợ lý của loa; hoặc tắt «Assist». Mục này tự biến mất khi cấu hình đủ."
+    }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "don": "Nhấn đơn nút giữa",
+      "doi": "Nhấn đúp nút giữa",
+      "ba": "Nhấn ba lần nút giữa",
+      "giu": "Nhấn giữ nút giữa",
+      "nhan_ngan": "Nhấn ngắn nút giữa"
     }
   }
 }
