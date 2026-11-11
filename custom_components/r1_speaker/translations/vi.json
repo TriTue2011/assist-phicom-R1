@@ -760,6 +760,146 @@
           "description": "Tên hiện trên loa (tuỳ chọn)."
         }
       }
+    },
+    "bat_tat_mic": {
+      "name": "Bật/tắt mic (Tắt mic)",
+      "description": "Bật/tắt mic (Tắt mic) (dùng để gán vào cử chỉ của nút giữa trong tự động hoá).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        }
+      }
+    },
+    "bat_tat_bluetooth": {
+      "name": "Bật/tắt Bluetooth",
+      "description": "Bật/tắt Bluetooth (dùng để gán vào cử chỉ của nút giữa trong tự động hoá).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        }
+      }
+    },
+    "bat_tat_dam_thoai": {
+      "name": "Bật/tắt đàm thoại (bộ đàm)",
+      "description": "Bật/tắt đàm thoại (bộ đàm) (dùng để gán vào cử chỉ của nút giữa trong tự động hoá).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        }
+      }
+    },
+    "bat_tat_assist": {
+      "name": "Bật/tắt Assist (từ đánh thức)",
+      "description": "Bật/tắt Assist (từ đánh thức) (dùng để gán vào cử chỉ của nút giữa trong tự động hoá).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        }
+      }
+    },
+    "bat_tat_den_nhac": {
+      "name": "Bật/tắt đèn theo nhạc",
+      "description": "Bật/tắt đèn theo nhạc (dùng để gán vào cử chỉ của nút giữa trong tự động hoá).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        }
+      }
+    },
+    "bao_thuc_hoac_dam_thoai": {
+      "name": "Tắt báo thức đang kêu; không có thì bật/tắt đàm thoại",
+      "description": "Tắt báo thức đang kêu; không có thì bật/tắt đàm thoại (dùng để gán vào cử chỉ của nút giữa trong tự động hoá).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        }
+      }
+    },
+    "phat_tam_dung": {
+      "name": "Phát / tạm dừng nhạc",
+      "description": "Phát / tạm dừng nhạc (dùng để gán vào cử chỉ của nút giữa trong tự động hoá).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        }
+      }
+    },
+    "dung_nhac": {
+      "name": "Dừng nhạc",
+      "description": "Dừng nhạc (dùng để gán vào cử chỉ của nút giữa trong tự động hoá).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        }
+      }
+    },
+    "bai_ke": {
+      "name": "Bài kế tiếp",
+      "description": "Bài kế tiếp (dùng để gán vào cử chỉ của nút giữa trong tự động hoá).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        }
+      }
+    },
+    "bai_truoc": {
+      "name": "Bài trước",
+      "description": "Bài trước (dùng để gán vào cử chỉ của nút giữa trong tự động hoá).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        }
+      }
+    },
+    "tang_am_luong": {
+      "name": "Tăng âm lượng",
+      "description": "Tăng âm lượng (dùng để gán vào cử chỉ của nút giữa trong tự động hoá).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        }
+      }
+    },
+    "giam_am_luong": {
+      "name": "Giảm âm lượng",
+      "description": "Giảm âm lượng (dùng để gán vào cử chỉ của nút giữa trong tự động hoá).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        }
+      }
+    },
+    "tat_tieng_loa": {
+      "name": "Tắt/bật tiếng loa",
+      "description": "Tắt/bật tiếng loa (dùng để gán vào cử chỉ của nút giữa trong tự động hoá).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        }
+      }
+    },
+    "hen_gio_tat_nhac_30": {
+      "name": "Hẹn giờ tắt nhạc 30 phút (nhỏ dần)",
+      "description": "Hẹn giờ tắt nhạc 30 phút (nhỏ dần) (dùng để gán vào cử chỉ của nút giữa trong tự động hoá).",
+      "fields": {
+        "entity_id": {
+          "name": "Loa",
+          "description": "Thực thể r1_speaker bất kỳ của loa."
+        }
+      }
     }
   },
   "selector": {

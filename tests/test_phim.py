@@ -229,3 +229,35 @@ async def test_select_phim_cu_cua_ban_truoc_bi_go_khoi_so_thuc_the_khi_nap_lai(h
     await hass.async_block_till_done()
     assert not any(reg.async_get(x) for x in cu), cu
 
+
+def test_moi_hanh_dong_cu_cua_nut_deu_co_dich_vu_hoac_ly_do_khong_can():
+    """Nút giữa không còn hành động gắn sẵn: mỗi hành động trong danh mục phải gọi được bằng dịch vụ (hoặc đã có dịch vụ riêng/không cần)."""
+    khong_can = {"khong_lam_gi", "chay_thuc_the", "bao_thuc_dung", "bao_thuc_hoan"}      # bao_thuc_dung = bao_thuc_tat, bao_thuc_hoan đã là dịch vụ sẵn có
+    assert set(P._DANG_KY) - khong_can == set(P.DICH_VU_HANH_DONG), set(P._DANG_KY) ^ set(P.DICH_VU_HANH_DONG)
+
+
+async def test_dich_vu_hanh_dong_goi_dung_thuc_the_cua_loa_va_tu_choi_thuc_the_la(hass, r1):
+    from homeassistant.exceptions import ServiceValidationError
+    e, phim, _, _p = await _lien_ket(hass, r1)
+    reg = er.async_get(hass)
+    toggle = []
+    hass.services.async_register("switch", "toggle", lambda c: toggle.append(c.data["entity_id"]))
+    ent = lambda khoa: reg.async_get_entity_id("switch", "r1_speaker", f"{e.entry_id}_{khoa}")   # noqa: E731
+    anh = reg.async_get_entity_id("event", "r1_speaker", f"{e.entry_id}_phim")                    # thực thể bất kỳ của loa
+    for dv, khoa in (("bat_tat_assist", "assist"), ("bat_tat_bluetooth", "bluetooth"), ("bat_tat_den_nhac", "music_light"), ("bat_tat_dam_thoai", "intercom_open")):
+        assert hass.services.has_service("r1_speaker", dv), dv
+        toggle.clear()
+        await hass.services.async_call("r1_speaker", dv, {"entity_id": anh}, blocking=True)
+        assert toggle == [ent(khoa)] and toggle[0], (dv, toggle)
+    goi = []
+    hass.services.async_register("media_player", "volume_up", lambda c: goi.append(("up", c.data["entity_id"])))
+    hass.services.async_register("media_player", "media_next_track", lambda c: goi.append(("next", c.data["entity_id"])))
+    await hass.services.async_call("r1_speaker", "tang_am_luong", {"entity_id": anh}, blocking=True)
+    await hass.services.async_call("r1_speaker", "bai_ke", {"entity_id": anh}, blocking=True)
+    assert [g[0] for g in goi] == ["up", "next"] and all(g[1].startswith("media_player.") for g in goi), goi
+    # Dịch vụ sẵn có không bị ghi đè; thực thể không phải của r1_speaker bị từ chối
+    assert hass.services.has_service("r1_speaker", "bao_thuc_tat") and hass.services.has_service("r1_speaker", "bao_thuc_hoan")
+    hass.states.async_set("light.khac", "off")
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call("r1_speaker", "bat_tat_assist", {"entity_id": "light.khac"}, blocking=True)
+

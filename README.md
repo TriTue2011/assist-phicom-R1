@@ -213,6 +213,21 @@ Mỗi cử chỉ của nút giữa là **một trigger thiết bị** chọn b�
 
 **Không còn hành động gắn sẵn (từ 0.17.0):** nút giữa chỉ bắn trigger thiết bị và cập nhật `event.r1_phim`. Trước đây nhấn đơn tự tắt báo thức/bật đàm thoại, đúp bật/tắt Assist, ba lần bật/tắt Bluetooth, giữ bật/tắt đèn theo nhạc; nay không cái nào tự chạy, nên không còn chạy đôi với tự động hoá của bạn. Cần việc nào thì tạo tự động hoá cho cử chỉ đó.
 
+**Các việc cũ của nút nay là dịch vụ** (gọi trong tự động hoá gắn vào cử chỉ; `entity_id` = thực thể bất kỳ của loa):
+
+| Dịch vụ `r1_speaker.…` | Việc làm |
+|---|---|
+| `bat_tat_mic` | Bật/tắt mic (Tắt mic) |
+| `bat_tat_bluetooth` | Bật/tắt Bluetooth |
+| `bat_tat_dam_thoai` | Bật/tắt đàm thoại (bộ đàm) |
+| `bat_tat_assist` | Bật/tắt Assist (từ đánh thức) |
+| `bat_tat_den_nhac` | Bật/tắt đèn theo nhạc |
+| `bao_thuc_hoac_dam_thoai` | Tắt báo thức đang kêu; không có thì bật/tắt đàm thoại |
+| `phat_tam_dung`, `dung_nhac`, `bai_ke`, `bai_truoc` | Phát/tạm dừng, dừng, bài kế, bài trước |
+| `tang_am_luong`, `giam_am_luong`, `tat_tieng_loa` | Tăng, giảm âm lượng, tắt/bật tiếng |
+| `hen_gio_tat_nhac_30` | Hẹn giờ tắt nhạc 30 phút (nhỏ dần) |
+| `bao_thuc_tat`, `bao_thuc_hoan` | Tắt báo thức đang kêu, hoãn báo thức (dịch vụ có sẵn từ trước) |
+
 **Nút ảo để thử và để đặt lên bảng điều khiển:** loa có thêm 4 nút **«Nút giữa - nhấn đơn / đúp / ba lần / giữ»** (`button.r1_nut_giua_don`, `..._doi`, `..._ba`, `..._giu`). Bấm nút ảo = mô phỏng đúng cử chỉ thật (bắn trigger, cập nhật `event.r1_phim`), nên thử tự động hoá được mà không cần chạy ra chỗ loa.
 
 **Cùng một cử chỉ, việc khác nhau tuỳ lúc** (ví dụ nhấn đơn = nghe máy khi có cuộc gọi đến, không thì gọi đi): dùng mẫu tự động hoá có sẵn

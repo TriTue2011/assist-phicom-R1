@@ -739,6 +739,146 @@
           "description": "Optional: only stops if this speaker is the one speaking."
         }
       }
+    },
+    "bat_tat_mic": {
+      "name": "Toggle mic (Mute mic)",
+      "description": "Toggle mic (Mute mic) (assign it to a middle-button gesture in an automation).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        }
+      }
+    },
+    "bat_tat_bluetooth": {
+      "name": "Toggle Bluetooth",
+      "description": "Toggle Bluetooth (assign it to a middle-button gesture in an automation).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        }
+      }
+    },
+    "bat_tat_dam_thoai": {
+      "name": "Toggle intercom",
+      "description": "Toggle intercom (assign it to a middle-button gesture in an automation).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        }
+      }
+    },
+    "bat_tat_assist": {
+      "name": "Toggle Assist (wake word)",
+      "description": "Toggle Assist (wake word) (assign it to a middle-button gesture in an automation).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        }
+      }
+    },
+    "bat_tat_den_nhac": {
+      "name": "Toggle music light",
+      "description": "Toggle music light (assign it to a middle-button gesture in an automation).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        }
+      }
+    },
+    "bao_thuc_hoac_dam_thoai": {
+      "name": "Dismiss ringing alarm, else toggle intercom",
+      "description": "Dismiss ringing alarm, else toggle intercom (assign it to a middle-button gesture in an automation).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        }
+      }
+    },
+    "phat_tam_dung": {
+      "name": "Play / pause",
+      "description": "Play / pause (assign it to a middle-button gesture in an automation).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        }
+      }
+    },
+    "dung_nhac": {
+      "name": "Stop music",
+      "description": "Stop music (assign it to a middle-button gesture in an automation).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        }
+      }
+    },
+    "bai_ke": {
+      "name": "Next track",
+      "description": "Next track (assign it to a middle-button gesture in an automation).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        }
+      }
+    },
+    "bai_truoc": {
+      "name": "Previous track",
+      "description": "Previous track (assign it to a middle-button gesture in an automation).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        }
+      }
+    },
+    "tang_am_luong": {
+      "name": "Volume up",
+      "description": "Volume up (assign it to a middle-button gesture in an automation).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        }
+      }
+    },
+    "giam_am_luong": {
+      "name": "Volume down",
+      "description": "Volume down (assign it to a middle-button gesture in an automation).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        }
+      }
+    },
+    "tat_tieng_loa": {
+      "name": "Mute / unmute speaker",
+      "description": "Mute / unmute speaker (assign it to a middle-button gesture in an automation).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        }
+      }
+    },
+    "hen_gio_tat_nhac_30": {
+      "name": "Sleep timer 30 min (fade out)",
+      "description": "Sleep timer 30 min (fade out) (assign it to a middle-button gesture in an automation).",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker",
+          "description": "Any r1_speaker entity of the speaker."
+        }
+      }
     }
   },
   "selector": {

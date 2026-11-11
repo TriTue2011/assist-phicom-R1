@@ -286,6 +286,11 @@ class NhanDien:
 
 # ── Dịch vụ dò phím ──────────────────────────────────────────────────
 
+#: Hành động cũ của nút giữa nay là dịch vụ (xem dang_ky_dich_vu). Tên là định danh ổn định.
+DICH_VU_HANH_DONG = ("bat_tat_mic", "bat_tat_bluetooth", "bat_tat_dam_thoai", "bat_tat_assist", "bat_tat_den_nhac", "bao_thuc_hoac_dam_thoai", "phat_tam_dung",
+                     "dung_nhac", "bai_ke", "bai_truoc", "tang_am_luong", "giam_am_luong", "tat_tieng_loa", "hen_gio_tat_nhac_30")
+
+
 def dang_ky_dich_vu(hass: HomeAssistant) -> None:
     """``r1_speaker.phim_do``: một lúc báo MỌI phím về HA (qua dịch vụ trợ năng của APK, không nuốt phím) để biết mã phím của nút/thanh cảm ứng;
     mỗi phím phát sự kiện bus ``r1_speaker_phim_do``. Hết giờ tự trả về cấu hình thường."""
@@ -303,6 +308,22 @@ def dang_ky_dich_vu(hass: HomeAssistant) -> None:
 
     hass.services.async_register(DOMAIN, "phim_do", _do, schema=vol.Schema(
         {vol.Required("entity_id"): cv.entity_id, vol.Optional("giay"): vol.All(vol.Coerce(int), vol.Range(min=5, max=300))}))
+
+    # Từ 0.17.0 nút giữa không còn hành động gắn sẵn; mỗi hành động cũ thành MỘT DỊCH VỤ để tự động hoá (gán vào cử chỉ của nút) gọi:
+    # ``r1_speaker.<tên hành động>`` với ``entity_id`` = thực thể bất kỳ của loa. Hành động trùng tên dịch vụ có sẵn (bao_thuc_hoan) hoặc đã có
+    # dịch vụ riêng (bao_thuc_dung -> bao_thuc_tat) thì bỏ qua.
+    for ten in DICH_VU_HANH_DONG:
+        if hass.services.has_service(DOMAIN, ten):
+            continue
+
+        async def _chay(call, ten=ten) -> None:
+            rec = er.async_get(hass).async_get(call.data["entity_id"])
+            entry = hass.config_entries.async_get_entry(rec.config_entry_id) if rec else None
+            phim = getattr(getattr(entry, "runtime_data", None), "phim", None) if entry is not None and entry.domain == DOMAIN else None
+            if phim is None:
+                raise ServiceValidationError("Không phải thực thể của r1_speaker, hoặc loa chưa nạp xong")
+            await _DANG_KY[ten].ham(PhimCtx(hass, entry, phim.coordinator, MA_NUT_GIUA, "don"))
+        hass.services.async_register(DOMAIN, ten, _chay, schema=vol.Schema({vol.Required("entity_id"): cv.entity_id}))
 
 
 # ── Bộ điều phối theo mục cấu hình ───────────────────────────────────
