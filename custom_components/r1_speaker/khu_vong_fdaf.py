@@ -40,6 +40,14 @@ BUOC_DOI_TRE = RATE // 50  # độ trễ mới lệch hơn 20 ms mới đổi (v
 #: nên tiếng vọng liên tục; đặt khúc theo giờ tới (jitter mạng / hàng đợi vài chục ms) làm tham chiếu đứt đoạn so với vọng → bộ lọc không học được
 #: (đo trên máy thật 10/11/2026: tham chiếu theo giờ tới chỉ khử ~0,5 dB, tham chiếu liên tục khử 9–14 dB trên cùng dữ liệu).
 JITTER_NOI_LIEN = RATE * 3 // 10
+# --- Bộ triệt vọng DƯ sau bộ lọc (RES, như bộ NLP của điện thoại): lọc thích nghi một mình chỉ khử ~10 dB (đo 10/11 và mô phỏng 13/11), điện thoại cần ≥25 dB ---
+RES_BAT = True
+RES_BETA = 1.2            # hệ số «quá trừ»: gain = 1 - BETA·(công suất vọng ước lượng / công suất còn lại)
+RES_SAN_DB = -32.0        # gain tối thiểu (dB) khi chỉ có tiếng bên kia
+RES_LAM_MUOT = 0.8        # làm mượt công suất theo thời gian (0..1, lớn = mượt)
+RES_TAN_CONG = 0.05       # làm mượt khi công suất sai số TĂNG (nhỏ = phản ứng nhanh)
+RES_DT_HE_SO = 0.3       # hệ số nhân của BETA khi nghi người nhà nói chen (0 = không triệt)
+RES_NOI_CHEN = 1.0        # sai số > NOI_CHEN × vọng ước lượng ⇒ người nhà đang nói chen: giảm triệt để giữ tiếng người
 
 
 class KhuVongFdaf:
@@ -69,6 +77,13 @@ class KhuVongFdaf:
         self.mic_rms = 0.0                               # RMS khúc mic gần nhất
         self.lan_uoc = 0                                 # số lần dò độ trễ đã chạy tới cùng (đủ cửa sổ + đủ tiếng cả hai phía)
         self.dinh_ms = 0                                 # độ trễ ở đỉnh GCC-PHAT gần nhất, kể cả khi chưa đủ tin cậy
+        self._win = np.sqrt(np.hanning(2 * N + 1)[:-1]).astype(np.float32)
+        self._res_pe = np.zeros(N + 1, dtype=np.float32)
+        self._res_py = np.zeros(N + 1, dtype=np.float32)
+        self._res_e = np.zeros(N, dtype=np.float32)       # khối e/y trước (chồng 50%)
+        self._res_y = np.zeros(N, dtype=np.float32)
+        self._res_tail = np.zeros(N, dtype=np.float32)    # nửa sau của khung tổng hợp trước
+        self.res_db = 0.0                                  # chẩn đoán: mức giảm trung bình của RES
 
     # -- tham chiếu (tiếng đã gửi xuống loa) ---------------------------------------------------------
     def _t(self) -> float:
@@ -146,12 +161,12 @@ class KhuVongFdaf:
         y = np.fft.irfft(Y, 2 * N)[N:].astype(np.float32)
         e = d - y
         e_loa = float(np.mean(x_cur * x_cur))
-        if e_loa < NGUONG_LOA:                           # loa im: không có vọng để học, trả mic nguyên
-            return d
+        if e_loa < NGUONG_LOA:                           # loa im: không có vọng để học, trả mic nguyên (qua RES với gain 1 để độ trễ đồng nhất)
+            return self._res(d, np.zeros(N, dtype=np.float32), 1.0, 1e6) if RES_BAT else d
         dn, ey, ee = float(np.mean(d * d)) + 1e-6, float(np.mean(y * y)) + 1e-6, float(np.mean(e * e)) + 1e-6
         if ee > 1.5 * dn and self._da_hoc >= KHOI_HOC_DAU:      # phát tán (tệ hơn mic thô): thu nhỏ bộ lọc, KHÔNG bao giờ trả tệ hơn mic
             self.W *= 0.5
-            return d
+            return self._res(d, np.zeros(N, dtype=np.float32), 1.0, 1e6) if RES_BAT else d
         self.erle_db = 0.95 * self.erle_db + 0.05 * 10 * np.log10(dn / ee)
         # Bước biến thiên: người nói chen làm sai số lớn hơn vọng ước lượng → bước nhỏ lại (bảo vệ bộ lọc).
         if self._da_hoc < KHOI_HOC_DAU:
@@ -165,7 +180,30 @@ class KhuVongFdaf:
             w = np.fft.irfft(self.W[p] + np.conj(self._hist[p]) * g, 2 * N)
             w[N:] = 0.0                                  # ràng buộc nhân quả
             self.W[p] = np.fft.rfft(w).astype(np.complex64)
-        return e
+        return self._res(e, y, ey, ee) if RES_BAT else e
+
+    def _res(self, e, y, ey, ee):
+        """Triệt vọng dư theo từng tần số (Wiener quá trừ), chồng 50% cửa sổ √Hann → trễ thêm 1 khối (16 ms); chỉ khi có tiếng loa."""
+        w = self._win
+        E = np.fft.rfft(np.concatenate([self._res_e, e]) * w)
+        Y = np.fft.rfft(np.concatenate([self._res_y, y]) * w)
+        self._res_e, self._res_y = e.copy(), y.copy()
+        pe, py = (np.abs(E) ** 2).astype(np.float32), (np.abs(Y) ** 2).astype(np.float32)
+        a = RES_LAM_MUOT
+        # Công suất sai số: LÊN nhanh (tiếng người nhà vừa bắt đầu phải qua ngay — không mất đầu câu), XUỐNG chậm. Công suất vọng ước lượng mượt đều.
+        ae = np.where(pe > self._res_pe, RES_TAN_CONG, a).astype(np.float32)
+        self._res_pe = ae * self._res_pe + (1 - ae) * pe
+        self._res_py = a * self._res_py + (1 - a) * py
+        # Người nhà nói chen: sai số (phần không giải thích được bằng loa) lớn hơn hẳn vọng ước lượng → không triệt (hoặc rất nhẹ).
+        beta = RES_BETA * (RES_DT_HE_SO if ee > RES_NOI_CHEN * ey else 1.0)
+        g = 1.0 - beta * self._res_py / (self._res_pe + 1e-3)
+        g = np.clip(g, 10 ** (RES_SAN_DB / 20), 1.0).astype(np.float32)
+        g = np.convolve(np.concatenate([[g[0]], g, [g[-1]]]), np.ones(3, dtype=np.float32) / 3, mode="valid")   # làm mượt qua tần số (giảm «tiếng nhạc»)
+        o = np.fft.irfft(E * g, 2 * N).astype(np.float32) * w
+        out = o[:N] + self._res_tail
+        self._res_tail = o[N:]
+        self.res_db = 0.98 * self.res_db + 0.02 * float(-10 * np.log10(np.mean(g * g) + 1e-9))
+        return out
 
     # -- ước lượng độ trễ loa → mic (GCC-PHAT) --------------------------------------------------------------
     @staticmethod

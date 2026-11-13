@@ -162,6 +162,98 @@ async def test_fdaf_quang_im_dai_khong_lam_hong_va_khong_phinh_bo_nho():
     assert aec._far.size == 16000 * 6 and aec._near.size == 16000 * 6          # vòng cố định, không phình
 
 
+# ── Bộ triệt vọng dư (RES) sau bộ lọc thích nghi (13/11/2026): chủ máy muốn R1 như điện thoại bật loa ngoài — không vọng, không mất đầu câu ──
+
+def _giong_gia(n, seed, hoat_dong):
+    """Giọng giả: nhiễu lọc băng giọng × đường bao âm tiết (không có giọng thật trong kho); chuẩn hoá RMS = 1 trên đoạn có tiếng."""
+    rng = np.random.default_rng(seed)
+    x = rng.standard_normal(n).astype(np.float32)
+    X = np.fft.rfft(x)
+    f = np.fft.rfftfreq(n, 1 / RATE)
+    X *= ((f > 300) & (f < 3400)) * (1.0 / np.sqrt(1 + (f / 1500.0) ** 2))
+    x = np.fft.irfft(X, n).astype(np.float32)
+    env = np.zeros(n, np.float32)
+    t = 0
+    while t < n:
+        seg = int(rng.uniform(0.12, 0.30) * RATE)
+        env[t:t + seg] = np.hanning(seg)[:max(0, min(seg, n - t))] if t + seg <= n else 0
+        t += seg + int(rng.uniform(0.02, 0.08) * RATE)
+    x = x * env * hoat_dong
+    return x / (np.sqrt(np.mean(x[np.abs(x) > 0] ** 2)) + 1e-9)
+
+
+def _vang_phong(far, tre_ms, he_so):
+    rng = np.random.default_rng(4)
+    ir = np.zeros(int(0.25 * RATE), np.float32)
+    ir[0] = 1.0
+    for k in range(1, 40):
+        ir[int(rng.uniform(0, 0.24) * RATE)] += rng.uniform(-0.25, 0.25) * np.exp(-k / 14)
+    e = np.convolve(far, ir)[:len(far)] * he_so
+    d = int(tre_ms * RATE / 1000)
+    return np.concatenate([np.zeros(d, np.float32), e])[:len(far)]
+
+
+def _chay_lien_tuc(mic, far):
+    """App phát LIÊN TỤC xuống R1 (khung im lặng khi bên kia nghỉ), tới lệch nhẹ 0–25 ms — đúng cách R1 thật nhận tham chiếu."""
+    t = [0.0]
+    aec = KhuVongFdaf(clock=lambda: t[0])
+    out = np.zeros_like(mic)
+    jr = np.random.default_rng(9)
+    for i in range(0, len(mic) - 320, 320):
+        t[0] = i / RATE + float(jr.uniform(0, 0.025))
+        aec.day_ref(np.round(far[i:i + 320]).astype("<i2").tobytes())
+        t[0] = i / RATE
+        out[i:i + 320] = np.frombuffer(aec.xu_ly(np.round(np.clip(mic[i:i + 320], -32768, 32767)).astype("<i2").tobytes()), dtype="<i2")[:320]
+    return out, aec
+
+
+def _tuong_quan(near, out, a, b):
+    L = max(range(0, 1100, 16), key=lambda k: float(np.dot(near[11 * RATE:13 * RATE], out[11 * RATE + k:13 * RATE + k])))
+    nn, oo = near[a:b], out[a + L:b + L]
+    return (float(np.dot(nn, oo) / (np.linalg.norm(nn) * np.linalg.norm(oo) + 1e-9)),
+            float(np.sqrt(np.mean(oo ** 2)) / (np.sqrt(np.mean(nn ** 2)) + 1e-9)))
+
+
+@pytest.mark.parametrize("tre_ms", [120, 350, 700])
+async def test_fdaf_res_khu_vong_tren_20db_chi_co_tieng_ben_kia(tre_ms):
+    n = 14 * RATE
+    act = np.zeros(n, np.float32)
+    act[:12 * RATE] = 1
+    far = _giong_gia(n, 1, act) * 3000
+    mic = _vang_phong(far, tre_ms, 1.2) + np.random.default_rng(5).standard_normal(n).astype(np.float32) * 6
+    out, aec = _chay_lien_tuc(mic, far)
+    assert 10 * math.log10(np.mean(mic[6 * RATE:12 * RATE] ** 2) / np.mean(out[6 * RATE:12 * RATE] ** 2)) >= 18      # RES: 9–10 dB → ≥ 18 dB (đo mô phỏng ~21–23)
+    assert aec.res_db > 0
+
+
+async def test_fdaf_res_khong_mat_dau_cau_nguoi_nha_vua_sau_khi_ben_kia_nghi():
+    n = 14 * RATE
+    fa, na = np.zeros(n, np.float32), np.zeros(n, np.float32)
+    fa[:8 * RATE] = 1                                          # bên kia nói xong lúc 8,0 s
+    na[8 * RATE:] = 1                                          # người nhà nói NGAY sau đó (vọng còn kéo đuôi)
+    far, near = _giong_gia(n, 1, fa) * 3000, _giong_gia(n, 8, na) * 2500
+    mic = _vang_phong(far, 350, 1.2) + near + np.random.default_rng(5).standard_normal(n).astype(np.float32) * 6
+    out, _ = _chay_lien_tuc(mic, far)
+    c1, l1 = _tuong_quan(near, out, 8 * RATE, int(8.3 * RATE))
+    c2, l2 = _tuong_quan(near, out, int(8.3 * RATE), int(8.8 * RATE))
+    c3, l3 = _tuong_quan(near, out, 9 * RATE, 11 * RATE)
+    assert l1 >= 0.5 and c1 >= 0.7, (c1, l1)                   # 0,3 s đầu: còn ≥ −6 dB (bản RES đầu tiên chỉ còn 0,41 = −7,7 dB)
+    assert l2 >= 0.85 and c2 >= 0.9, (c2, l2)
+    assert c3 >= 0.99 and 0.95 <= l3 <= 1.05, (c3, l3)         # nói một mình: nguyên vẹn
+
+
+async def test_fdaf_res_giu_tieng_nguoi_noi_chen_vong_binh_thuong():
+    n = 16 * RATE
+    fa, na = np.zeros(n, np.float32), np.zeros(n, np.float32)
+    fa[:14 * RATE] = 1
+    na[8 * RATE:] = 1
+    far, near = _giong_gia(n, 1, fa) * 3000, _giong_gia(n, 8, na) * 2500
+    mic = _vang_phong(far, 350, 0.9) + near + np.random.default_rng(5).standard_normal(n).astype(np.float32) * 6
+    out, _ = _chay_lien_tuc(mic, far)
+    c, lv = _tuong_quan(near, out, 10 * RATE, 14 * RATE)
+    assert c >= 0.8 and lv >= 0.8, (c, lv)                     # nói chen: vẫn nhận ra (bản chưa RES: 0,90 / 1,1 nhưng còn vọng 9 dB)
+
+
 # ── Hành động phím «chạy thực thể» ──────────────────────────────────────────────────────────────
 
 class _Services:
