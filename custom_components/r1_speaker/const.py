@@ -94,6 +94,16 @@ DEFAULT_DUPLEX_MAX_S = 1800.0
 #: Cả hai số CHƯA ĐO trên loa R1.
 DEFAULT_DUPLEX_DUCK = False
 DEFAULT_DUPLEX_DUCK_DB = -45.0
+#: Chặn VỌNG TRỄ (``vong_tre.py``): mic bị bỏ khi loa vừa phát trong cửa sổ trễ [thấp, cao] ms mà mic nhỏ hơn ``ty_le`` × đỉnh loa. ĐÃ ĐO trên loa R1 (14/11/2026):
+#: vọng về sau ~470 ms, dao động tới ~745 ms. Mic to hơn mức vọng (người nhà nói chen) thì cho qua.
+CONF_DUPLEX_VONG_TRE = "duplex_vong_tre"
+CONF_DUPLEX_VONG_TRE_THAP_MS = "duplex_vong_tre_thap_ms"
+CONF_DUPLEX_VONG_TRE_CAO_MS = "duplex_vong_tre_cao_ms"
+CONF_DUPLEX_VONG_TRE_TY_LE = "duplex_vong_tre_ty_le"
+DEFAULT_DUPLEX_VONG_TRE = True
+DEFAULT_DUPLEX_VONG_TRE_THAP_MS = 300
+DEFAULT_DUPLEX_VONG_TRE_CAO_MS = 750
+DEFAULT_DUPLEX_VONG_TRE_TY_LE = 2.0
 # Động cơ xử lý âm thanh mic: ``noi_bo`` = bộ có sẵn (khử tạp Wiener, khử vọng NLMS, thuần Python) hoặc ``nang_cao`` = khử tạp Speex (``pyspeex_noise``,
 # HA đã có) + khử vọng miền tần số có ước lượng độ trễ (``khu_vong_fdaf``, numpy). KHÔNG cần cài thêm gì; thiếu thư viện thì tự dùng bộ có sẵn.
 # Mặc định ``noi_bo`` = hành vi cũ.

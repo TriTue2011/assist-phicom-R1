@@ -22,8 +22,10 @@ from .const import (
     CONF_AM_LUONG_MEDIA, DEFAULT_AM_LUONG_MEDIA,
     CONF_DSP_DONG_CO, CONF_DUPLEX_AEC, DEFAULT_DSP_DONG_CO, DEFAULT_DUPLEX_AEC,CONF_AGC_ENABLE, CONF_AGC_MAX_GAIN_DB, CONF_AGC_SILENCE_DB, CONF_AGC_TARGET_DB,
                     CONF_DUPLEX_DUCK, CONF_DUPLEX_DUCK_DB, CONF_DUPLEX_HANGOVER,
+                    CONF_DUPLEX_VONG_TRE, CONF_DUPLEX_VONG_TRE_CAO_MS, CONF_DUPLEX_VONG_TRE_THAP_MS, CONF_DUPLEX_VONG_TRE_TY_LE,
                     CONF_DUPLEX_MAX_S, CONF_DUPLEX_PREROLL, CONF_DUPLEX_VAD_THRESHOLD,
                     DEFAULT_DUPLEX_DUCK, DEFAULT_DUPLEX_DUCK_DB, DEFAULT_DUPLEX_HANGOVER,
+                    DEFAULT_DUPLEX_VONG_TRE, DEFAULT_DUPLEX_VONG_TRE_CAO_MS, DEFAULT_DUPLEX_VONG_TRE_THAP_MS, DEFAULT_DUPLEX_VONG_TRE_TY_LE,
                     DEFAULT_DUPLEX_MAX_S, DEFAULT_DUPLEX_PREROLL, DEFAULT_DUPLEX_VAD_THRESHOLD,
                     CONF_LIMITER_CEILING, CONF_LIMITER_ENABLE, CONF_NOISE_ENABLE,
                     CONF_NOISE_STRENGTH_DB, CONF_NOISE_VOICE_DB, DEFAULT_AGC_ENABLE,
@@ -127,6 +129,8 @@ _GOC = {
     CONF_DUPLEX_PREROLL: DEFAULT_DUPLEX_PREROLL, CONF_DUPLEX_HANGOVER: DEFAULT_DUPLEX_HANGOVER,
     CONF_DUPLEX_MAX_S: DEFAULT_DUPLEX_MAX_S, CONF_DUPLEX_DUCK: DEFAULT_DUPLEX_DUCK,
     CONF_DUPLEX_DUCK_DB: DEFAULT_DUPLEX_DUCK_DB,
+    CONF_DUPLEX_VONG_TRE: DEFAULT_DUPLEX_VONG_TRE, CONF_DUPLEX_VONG_TRE_THAP_MS: DEFAULT_DUPLEX_VONG_TRE_THAP_MS,
+    CONF_DUPLEX_VONG_TRE_CAO_MS: DEFAULT_DUPLEX_VONG_TRE_CAO_MS, CONF_DUPLEX_VONG_TRE_TY_LE: DEFAULT_DUPLEX_VONG_TRE_TY_LE,
     CONF_WAKE_ENABLE: DEFAULT_WAKE_ENABLE, CONF_WAKE_WORD: DEFAULT_WAKE_WORD,
     CONF_WAKE_SENSITIVITY: DEFAULT_WAKE_SENSITIVITY,
     CONF_ADB_SERVER: DEFAULT_ADB_SERVER, CONF_ADB_MODE: DEFAULT_ADB_MODE, CONF_ADB_TU_DONG: False, CONF_PHIM_MA: DEFAULT_PHIM_MA, CONF_PHIM_NGUON: DEFAULT_PHIM_NGUON,
@@ -309,7 +313,11 @@ class R1OptionsFlow(OptionsFlowWithReload):
                 CONF_DUPLEX_HANGOVER: user_input[CONF_DUPLEX_HANGOVER],
                 CONF_DUPLEX_MAX_S: user_input[CONF_DUPLEX_MAX_S],
                 CONF_DUPLEX_DUCK: user_input.get(CONF_DUPLEX_DUCK, DEFAULT_DUPLEX_DUCK),
-                CONF_DUPLEX_DUCK_DB: user_input[CONF_DUPLEX_DUCK_DB]})
+                CONF_DUPLEX_DUCK_DB: user_input[CONF_DUPLEX_DUCK_DB],
+                CONF_DUPLEX_VONG_TRE: user_input.get(CONF_DUPLEX_VONG_TRE, DEFAULT_DUPLEX_VONG_TRE),
+                CONF_DUPLEX_VONG_TRE_THAP_MS: user_input[CONF_DUPLEX_VONG_TRE_THAP_MS],
+                CONF_DUPLEX_VONG_TRE_CAO_MS: user_input[CONF_DUPLEX_VONG_TRE_CAO_MS],
+                CONF_DUPLEX_VONG_TRE_TY_LE: user_input[CONF_DUPLEX_VONG_TRE_TY_LE]})
         v = {}
         talk = TalkSettings.from_entry(entry)
         duplex = DuplexSettings.from_entry(entry)
@@ -357,4 +365,14 @@ class R1OptionsFlow(OptionsFlowWithReload):
             vol.Required(CONF_DUPLEX_DUCK_DB,
                          default=v.get(CONF_DUPLEX_DUCK_DB, duplex.duck_db)):
                 vol.All(vol.Coerce(float), vol.Range(min=-90, max=-5)),
+            vol.Required(CONF_DUPLEX_VONG_TRE, default=v.get(CONF_DUPLEX_VONG_TRE, duplex.vong_tre)): bool,
+            vol.Required(CONF_DUPLEX_VONG_TRE_THAP_MS,
+                         default=v.get(CONF_DUPLEX_VONG_TRE_THAP_MS, duplex.vong_tre_thap_ms)):
+                vol.All(vol.Coerce(float), vol.Range(min=50, max=2000)),
+            vol.Required(CONF_DUPLEX_VONG_TRE_CAO_MS,
+                         default=v.get(CONF_DUPLEX_VONG_TRE_CAO_MS, duplex.vong_tre_cao_ms)):
+                vol.All(vol.Coerce(float), vol.Range(min=100, max=3000)),
+            vol.Required(CONF_DUPLEX_VONG_TRE_TY_LE,
+                         default=v.get(CONF_DUPLEX_VONG_TRE_TY_LE, duplex.vong_tre_ty_le)):
+                vol.All(vol.Coerce(float), vol.Range(min=0.5, max=8)),
         }))

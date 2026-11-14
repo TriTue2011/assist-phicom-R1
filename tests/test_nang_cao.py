@@ -26,7 +26,7 @@ def _sid(hass):
 async def test_thuoc_tinh_du_muoi_chin_cai_dat_dung_mac_dinh(hass, r1):
     e = await _them(hass, r1)
     ds = hass.states.get(_sid(hass)).attributes["am_thanh"]["nang_cao"]
-    assert len(ds) == 19 == len(nang_cao.BANG)
+    assert len(ds) == 23 == len(nang_cao.BANG)
     assert {d["nhom"] for d in ds} == {"thoai", "khu_tap", "agc", "han_dinh", "song_cong"}
     assert all(d["v"] == d["mac_dinh"] for d in ds)
     t = next(d for d in ds if d["k"] == "talk_silence_s")

@@ -71,7 +71,8 @@ async def test_form_co_du_truong(hass, r1):
         "noise_suppress", "noise_strength_db", "noise_voice_db", "agc_enable",
         "agc_target_db", "agc_max_gain_db", "agc_silence_db", "limiter_enable", "limiter_ceiling",
         "duplex_vad_threshold", "duplex_preroll_s", "duplex_hangover_s",
-        "duplex_max_s", "duplex_duck", "duplex_duck_db"}
+        "duplex_max_s", "duplex_duck", "duplex_duck_db",
+        "duplex_vong_tre", "duplex_vong_tre_thap_ms", "duplex_vong_tre_cao_ms", "duplex_vong_tre_ty_le"}
 
 
 async def test_luu_chi_giu_gia_tri_khac_goc_va_ap_ngay(hass, r1):

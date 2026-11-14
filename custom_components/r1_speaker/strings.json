@@ -327,7 +327,11 @@
           "duplex_hangover_s": "Duplex call: audio kept after speech (s)",
           "duplex_max_s": "Duplex call: max session length (s)",
           "duplex_duck": "Duplex call: drop quiet mic audio while HA is playing (echo cut, off by default)",
-          "duplex_duck_db": "Duplex call: echo-cut level threshold (dBFS)"
+          "duplex_duck_db": "Duplex call: echo-cut level threshold (dBFS)",
+          "duplex_vong_tre": "Duplex call: block DELAYED echo (mic quieter than the echo level while the speaker played within the delay window; louder mic = someone speaking, passes)",
+          "duplex_vong_tre_thap_ms": "Duplex call: delayed echo — lower bound of the speaker→mic delay window (ms; measured ~470)",
+          "duplex_vong_tre_cao_ms": "Duplex call: delayed echo — upper bound of the speaker→mic delay window (ms; measured up to ~745)",
+          "duplex_vong_tre_ty_le": "Duplex call: delayed echo — mic/speaker-peak ratio below this counts as echo (higher = blocks more, may clip quiet speech)"
         }
       }
     },

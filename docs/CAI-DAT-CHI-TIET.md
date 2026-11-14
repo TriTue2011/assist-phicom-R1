@@ -39,7 +39,7 @@ nữa với IP khác, mỗi loa có khoá, cổng, phiên, đèn và thực th�
 | Chế độ «đóng ADB» | Tự đóng ADB mạng của loa khi APK đã nối về HA ổn định 2 phút (không bao giờ đóng khi APK chưa nối, để khỏi tự khoá). Mặc định TẮT. Xem bảng chọn bên dưới |
 | Khởi động lại loa theo lịch | Mặc định TẮT (phòng ngừa; firmware AIBox cũ có lịch hằng ngày, bản hiện tại không có). Bật thì loa tự khởi động lại vào **giờ** đã chọn (giờ địa phương của HA, mặc định 04:00) ở các **ngày trong tuần** đã chọn (mặc định mọi ngày, bỏ chọn được từng thứ). Tới giờ mà loa đang có phiên Assist / đàm thoại, báo thức đang kêu hoặc đang phát nhạc thì HOÃN tối đa 45 phút rồi mới khởi động. Lượt của ngày đó chỉ chạy một lần, nhớ cả khi HA khởi động lại; HA bật lại muộn quá 90 phút sau giờ lịch thì bỏ lượt đó; vừa bật lịch hoặc đổi giờ thì chỉ các lượt SAU lúc đổi mới tính, và lịch mới được chạy lượt của nó trong ngày dù lịch cũ đã chạy (đặt 11:52 rồi đặt lại 12:05 cùng ngày: cả hai đều chạy). Lệnh chỉ được tính là xong khi loa **thật sự tắt** (xem «Khởi động lại loa» bên dưới); không thì trạng thái báo lỗi chứ không báo `ok`. Mọi lần khởi động lại đều ghi nhật ký lý do (`lịch` / `loa treo` / `người dùng bấm`) và cách đã có tác dụng (thuộc tính `duong`) |
 | Tự khởi động lại khi loa treo | Mặc định TẮT. Khi «Loa phản hồi» báo **treo** (mạng còn thông, ứng dụng trên loa im) liên tục 15 phút và ADB còn nối được thì HA khởi động lại loa qua ADB MỘT lần, rồi nghỉ ít nhất 6 giờ (mốc nhớ qua khởi động lại HA, không bao giờ lặp vòng). Loa **mất mạng** thật thì HA không làm được gì từ xa, chỉ báo |
-| Chỉnh thông số nâng cao | Sang bước hai: 19 số âm thanh ở mục 4 (cũng chỉnh được ở thẻ) |
+| Chỉnh thông số nâng cao | Sang bước hai: 23 số âm thanh ở mục 4 (cũng chỉnh được ở thẻ) |
 
 ### Chọn: đóng ADB hay giữ ADB
 
@@ -171,7 +171,7 @@ Mỗi loa chỉ một điện thoại một lúc (người thứ hai bị từ c
 
 ---
 
-## 4. Cài đặt nâng cao (19 mục)
+## 4. Cài đặt nâng cao (23 mục)
 
 Mọi mục **CHƯA ĐO** trên R1. Giá trị bằng mặc định thì không được lưu: khi sau này đo xong và đổi mặc định, các mục
 bạn chưa chỉnh tay tự theo. Chỉnh ở thẻ (Cài đặt → Âm thanh → Cài đặt nâng cao), ở Tuỳ chọn → «Chỉnh thông số nâng cao»,
@@ -231,9 +231,37 @@ Chặn tiếng quá to làm vỡ tiếng.
 | `duplex_max_s` | Thời gian tối đa của phiên (giây) | 60…86400 | 1800 | Phiên tự đóng khi quá thời gian này (an toàn khi quên tắt) |
 | `duplex_duck` | Cắt vọng: bỏ tiếng mic nhỏ khi HA đang phát | bật/tắt | tắt | Bật khi nghe tiếng vọng của chính loa; đổi lại có thể mất tiếng nói nhỏ |
 | `duplex_duck_db` | Ngưỡng mức tiếng cắt vọng (dBFS) | −90…−5 | −45 | Khung mic nhỏ hơn ngưỡng này (lúc HA đang phát) sẽ bị bỏ. Cao: cắt mạnh hơn |
+| `duplex_vong_tre` | Chặn vọng TRỄ (song công) | bật/tắt | bật | Loa đo thật trễ không cố định (~470, tới ~745 ms) nên bộ khử vọng thích nghi trễ cố định không bám được. Bật: mic nhỏ hơn mức vọng trong cửa sổ trễ sau khi loa vừa phát bị bỏ; mic TO hơn (người nhà nói chen) vẫn qua |
+| `duplex_vong_tre_thap_ms` | Cận dưới cửa sổ trễ loa→mic (ms) | 50…2000 | 300 | Vọng về sớm hơn mốc này không xét |
+| `duplex_vong_tre_cao_ms` | Cận trên cửa sổ trễ loa→mic (ms) | 100…3000 | 750 | Phải lớn hơn cận dưới |
+| `duplex_vong_tre_ty_le` | Tỉ lệ mic/đỉnh loa coi là vọng (×) | 0,5…8 | 2 | Mic nhỏ hơn «tỉ lệ × đỉnh loa» trong cửa sổ trễ bị coi là vọng. Lớn hơn: chặn nhiều hơn, dễ cắt tiếng nhà nói nhỏ |
 
 Khử vọng (trừ tiếng HA đã phát khỏi mic) bật sẵn trong phiên song công với độ trễ cố định 300 ms, **CHƯA ĐO**.
 Nhạc phát qua AirPlay/DLNA không đi qua đường tiếng của HA nên không được trừ.
+
+---
+
+
+## Dịch vụ hành động của nút giữa
+
+Từ 0.17.0 nút giữa không còn hành động gắn sẵn: gán các dịch vụ `r1_speaker.…` dưới đây vào cử chỉ (nhấn đơn, đúp, ba, giữ) bằng tự động hoá hoặc blueprint. Mỗi dịch vụ nhận `entity_id` = thực thể bất kỳ của loa.
+
+| Dịch vụ | Việc làm |
+|---|---|
+| `bat_tat_mic` | Bật/tắt mic (Tắt mic) |
+| `bat_tat_bluetooth` | Bật/tắt Bluetooth |
+| `bat_tat_dam_thoai` | Bật/tắt đàm thoại (bộ đàm) |
+| `bat_tat_assist` | Bật/tắt Assist (từ đánh thức) |
+| `bat_tat_den_nhac` | Bật/tắt đèn theo nhạc |
+| `bao_thuc_hoac_dam_thoai` | Tắt báo thức đang kêu; không có thì bật/tắt đàm thoại |
+| `phat_tam_dung` | Phát / tạm dừng nhạc |
+| `dung_nhac` | Dừng nhạc |
+| `bai_ke` | Bài kế tiếp |
+| `bai_truoc` | Bài trước |
+| `tang_am_luong` | Tăng âm lượng |
+| `giam_am_luong` | Giảm âm lượng |
+| `tat_tieng_loa` | Tắt/bật tiếng loa |
+| `hen_gio_tat_nhac_30` | Hẹn giờ tắt nhạc 30 phút (nhỏ dần) |
 
 ---
 

@@ -330,7 +330,11 @@
           "duplex_hangover_s": "Đàm thoại song công: giữ tiếng sau câu nói (giây)",
           "duplex_max_s": "Đàm thoại song công: thời gian tối đa của phiên (giây)",
           "duplex_duck": "Đàm thoại song công: bỏ tiếng mic nhỏ khi HA đang phát (cắt vọng, mặc định tắt)",
-          "duplex_duck_db": "Đàm thoại song công: ngưỡng mức tiếng cắt vọng (dBFS)"
+          "duplex_duck_db": "Đàm thoại song công: ngưỡng mức tiếng cắt vọng (dBFS)",
+          "duplex_vong_tre": "Đàm thoại song công: chặn vọng TRỄ (mic nhỏ hơn mức vọng khi loa vừa phát trong cửa sổ trễ; mic to = người nhà nói chen thì cho qua)",
+          "duplex_vong_tre_thap_ms": "Đàm thoại song công: vọng trễ — cận dưới cửa sổ trễ loa→mic (ms; đo thật ~470)",
+          "duplex_vong_tre_cao_ms": "Đàm thoại song công: vọng trễ — cận trên cửa sổ trễ loa→mic (ms; đo thật tới ~745)",
+          "duplex_vong_tre_ty_le": "Đàm thoại song công: vọng trễ — tỉ lệ mic/đỉnh loa dưới mức này coi là vọng (lớn hơn = chặn nhiều hơn, dễ cắt tiếng nhà nói nhỏ)"
         }
       }
     },

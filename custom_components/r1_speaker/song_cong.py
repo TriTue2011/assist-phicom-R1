@@ -51,6 +51,7 @@ from .mic import R1Mic
 from .playback import R1PlayError, R1Playback
 from . import xu_ly_nang_cao
 from .khu_vong_fdaf import KhuVongFdaf
+from .vong_tre import ChanVongTre
 from .khu_vong import KhuVong
 
 #: Khử vọng cho đàm thoại song công (mặc định BẬT). Trễ loa→mic CHƯA ĐO trên R1.
@@ -172,6 +173,7 @@ class R1Duplex:
         self._phone_noi_den = 0.0            # điện thoại có tiếng (VOX) tới thời điểm này
         self._huong_da_bao = "loa"
         self._aec = None                     # khử vọng (tạo khi mở phiên)
+        self._vt = None                      # chặn vọng trễ (tạo khi mở phiên, xem vong_tre.py)
         self.half_duplex = False             # bật = luân phiên (bỏ mic khi loa phát); tắt = song công
         self.luon = False                    # «Bật mic luôn»: giữ phiên mở, không cần giữ nút
         self._last_forward = 0.0
@@ -266,6 +268,7 @@ class R1Duplex:
             "song_cong_khung_bo": max(0, vao - chuyen) + self.duck_dropped,
             "song_cong_ket_thuc_gan_nhat": self.last_end,
             "khu_vong": self._do_khu_vong(),
+            "vong_tre": self._vt.mo_ta() if self._vt is not None else None,
             "hoi_thoai": self.phong.mo_ta() if self.phong is not None else None,
         }
 
@@ -313,6 +316,7 @@ class R1Duplex:
             vad = self._vad_factory() if self._vad_factory is not None else None
             self._gate = VadGate(self.settings, vad)
             self._aec = self._tao_khu_vong()
+            self._vt = self._tao_vong_tre()
         except BaseException:
             self._release()
             self._release = None
@@ -354,6 +358,7 @@ class R1Duplex:
         self.luon = False                    # phiên đóng thì «giữ mở» cũng hết
         self.ptt = False
         self._aec = None
+        self._vt = None
         self.last_end = reason
         if self._watchdog is not None:
             self._watchdog.cancel()
@@ -430,6 +435,9 @@ class R1Duplex:
         if self._duck_applies(chunk):
             self.duck_dropped += len(chunk) // VAD_FRAME
             return
+        if self._vt is not None and self._vt.chan(chunk):
+            self.duck_dropped += len(chunk) // VAD_FRAME      # vọng trễ còn sót sau bộ khử: bỏ (tính chung vào số khung bỏ)
+            return
         for khung in self._gate.feed(chunk):
             self._last_forward = time.monotonic()
             for cb in list(self._audio):
@@ -443,6 +451,14 @@ class R1Duplex:
     def set_settings(self, settings: DuplexSettings) -> None:
         """Áp cài đặt mới tại chỗ. Phiên đang mở giữ bộ khử vọng đã dựng; phiên mở SAU dùng cài đặt mới."""
         self.settings = settings
+
+    def _tao_vong_tre(self) -> ChanVongTre | None:
+        """Bộ chặn vọng TRỄ của phiên (tuỳ chọn ``duplex_vong_tre``, mặc định bật); cửa sổ/tỉ lệ theo cài đặt. Cửa sổ sai (cao ≤ thấp) = tắt."""
+        st = self.settings
+        if not st.vong_tre:
+            return None
+        vt = ChanVongTre(st.vong_tre_thap_ms / 1000.0, st.vong_tre_cao_ms / 1000.0, st.vong_tre_ty_le)
+        return vt if vt.bat else None
 
     def _tao_khu_vong(self):
         """Bộ khử vọng của phiên: tắt (tuỳ chọn ``duplex_aec``), miền tần số FDAF (``nang_cao``, cần numpy) hoặc NLMS có sẵn."""
@@ -477,6 +493,8 @@ class R1Duplex:
         self._last_play = time.monotonic()
         if self._aec is not None:
             self._aec.day_ref(pcm)           # tham chiếu cho khử vọng
+        if self._vt is not None:
+            self._vt.note_far(pcm)           # lịch sử mức loa cho bộ chặn vọng trễ
         day_bo_cu_nhat(self._hang, pcm)
 
     async def _nguon(self, hang: asyncio.Queue) -> AsyncIterator[bytes]:

@@ -324,6 +324,39 @@ async def test_cat_vong_tuy_chon_mac_dinh_tat(hass, play_server):
     await d2.async_settle()
 
 
+async def test_vong_tre_bo_vong_sau_do_tre_va_cho_tieng_nha_to_qua(hass, play_server):
+    """Đo thật 14/11/2026: vọng về mic sau ~470 ms, không cố định. Loa phát to; mic nhỏ hơn 2× đỉnh loa SAU cửa sổ trễ bị bỏ; mic to hơn thì qua."""
+    st = DuplexSettings(vad_threshold=0.5, preroll_s=0.0, hangover_s=0.0, vong_tre=True,
+                        vong_tre_thap_ms=100, vong_tre_cao_ms=800, vong_tre_ty_le=2.0)
+    d, mic, talk = tao_phien(hass, play_server.port, st)
+    nhan: list[bytes] = []
+    d.add_audio_listener(nhan.append)
+    mic.note_inbound(True)
+    await d.async_start()
+    assert d._vt is not None and d._vt.bat
+    d.feed_playback(khung10(7000) * 10)                    # 100 ms tiếng bên kia xuống loa
+    await cho(lambda: len(play_server.data) >= 10 * VAD_FRAME)
+    await asyncio.sleep(0.2)                               # tới cửa sổ trễ [100, 800] ms
+    mic.feed_inbound(_chunk_nho_co_dau_nguoi())            # vọng yếu có dấu người (VAD giả cho qua) nhưng RMS ≪ 2× đỉnh loa
+    assert nhan == [] and d.duck_dropped == 6, "vọng trễ phải bị bỏ"
+    mic.feed_inbound(khung10(16000) * 6)                   # tiếng nhà to hơn 2× đỉnh loa: nói chen, cho qua
+    assert len(nhan) == 6 and d._vt.da_qua >= 1
+    assert d.as_attributes()["vong_tre"]["da_chan"] >= 1
+    await asyncio.sleep(1.0)                               # loa im đã > 800 ms: hết vọng, mic nhỏ đi qua bình thường
+    mic.feed_inbound(_chunk_nho_co_dau_nguoi())
+    assert len(nhan) == 7
+    d.end("nguoi_dung_ket_thuc")
+    await d.async_settle()
+    assert d._vt is None
+
+    d2, mic2, _ = tao_phien(hass, play_server.port, DuplexSettings(vad_threshold=0.5, preroll_s=0.0, hangover_s=0.0, vong_tre=False))
+    mic2.note_inbound(True)
+    await d2.async_start()
+    assert d2._vt is None and d2.as_attributes()["vong_tre"] is None, "tắt tuỳ chọn thì không có bộ chặn"
+    d2.end("nguoi_dung_ket_thuc")
+    await d2.async_settle()
+
+
 # ── Tích hợp HA thật: dịch vụ mở/dừng, sensor, DuplexView ─────────────────────────
 
 LOA = "media_player.r1_loa"

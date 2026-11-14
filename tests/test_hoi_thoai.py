@@ -373,7 +373,9 @@ async def test_ws_dien_thoai_voi_hai_loa_dien_thoai_noi_ca_hai_nghe_va_dien_thoa
     await cho(lambda: len(pa.data) >= 90 * 320 and len(pb.data) >= 90 * 320)
     assert 0 < _muc(bytes(pa.data[-3200:])) < 100
     await ws.send_str("het")
-    _tieng_loa(ca, 4000, 30)                                                       # loa A nói: điện thoại nghe qua WebSocket
+    # Loa A nói: điện thoại nghe qua WebSocket. Nói TO hơn mức vọng (tiếng điện thoại 3000 × tỉ lệ 2): người nhà nói chen thì bộ chặn vọng TRỄ cho qua;
+    # nói nhỏ hơn ngay sau tiếng loa thì bị coi là vọng (đúng thiết kế, xem tests/test_vong_tre.py).
+    _tieng_loa(ca, 8000, 30)
     nhan = b""
     for _ in range(40):
         msg = await ws.receive(timeout=3)
@@ -383,7 +385,7 @@ async def test_ws_dien_thoai_voi_hai_loa_dien_thoai_noi_ca_hai_nghe_va_dien_thoa
     assert _muc(nhan) > 3000
     assert len(pb.data) < 3200 * 200                                              # giua mặc định TẮT: loa B không nghe loa A (chỉ nghe điện thoại)
     b_nghe_a = _muc(bytes(pb.data[-6400:]))
-    assert b_nghe_a < 3500, b_nghe_a                                              # (tiếng điện thoại ~3000, tiếng A ~4000: nếu trộn sẽ vượt)
+    assert b_nghe_a < 3500, b_nghe_a                                              # (tiếng điện thoại ~3000, tiếng A ~8000: nếu trộn sẽ vượt)
     await ws.close()
     await cho(lambda: not ca.duplex.active and not cb.duplex.active)               # điện thoại ngắt thì phòng do nó mở đóng theo
     assert ca.talk.session is None and not ca.duplex.downlink_busy

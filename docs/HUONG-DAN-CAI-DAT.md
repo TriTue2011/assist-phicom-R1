@@ -61,7 +61,7 @@ ghép mở lại; APK tự lấy khoá mới sau vài giây. Cài APK lần đ�
 8123). Lệnh kèm khoá vẫn có ở thẻ → Cài đặt → Kết nối (quản trị viên) cho ai muốn cấp tay. Khoá/cổng đã đặt tay từ
 phiên bản cũ vẫn giữ và KHÔNG có cửa ghép.
 
-**Cài đặt chi tiết** (ngưỡng tiếng người, khử tạp, AGC, hạn đỉnh, đàm thoại song công, 19 mục) chỉnh thẳng ở thẻ →
+**Cài đặt chi tiết** (ngưỡng tiếng người, khử tạp, AGC, hạn đỉnh, đàm thoại song công, 23 mục) chỉnh thẳng ở thẻ →
 Cài đặt → Âm thanh → «Cài đặt nâng cao» (dịch vụ `r1_speaker.set_advanced_option`; mục khác mặc định có dấu `*`).
 Đổi một mục nạp lại tích hợp để áp dụng (mic nối lại sau vài giây). Vẫn còn ở Tuỳ chọn → «Chỉnh thông số nâng cao».
 

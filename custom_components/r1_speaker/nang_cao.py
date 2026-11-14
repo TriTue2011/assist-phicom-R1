@@ -38,6 +38,10 @@ BANG: tuple[tuple[str, str, str, float, float, float, Any], ...] = (
     ("song_cong", c.CONF_DUPLEX_MAX_S, "so", 60, 86400, 60, c.DEFAULT_DUPLEX_MAX_S),
     ("song_cong", c.CONF_DUPLEX_DUCK, "bat", 0, 1, 1, c.DEFAULT_DUPLEX_DUCK),
     ("song_cong", c.CONF_DUPLEX_DUCK_DB, "so", -90, -5, 1, c.DEFAULT_DUPLEX_DUCK_DB),
+    ("song_cong", c.CONF_DUPLEX_VONG_TRE, "bat", 0, 1, 1, c.DEFAULT_DUPLEX_VONG_TRE),
+    ("song_cong", c.CONF_DUPLEX_VONG_TRE_THAP_MS, "so", 50, 2000, 50, c.DEFAULT_DUPLEX_VONG_TRE_THAP_MS),
+    ("song_cong", c.CONF_DUPLEX_VONG_TRE_CAO_MS, "so", 100, 3000, 50, c.DEFAULT_DUPLEX_VONG_TRE_CAO_MS),
+    ("song_cong", c.CONF_DUPLEX_VONG_TRE_TY_LE, "so", 0.5, 8, 0.1, c.DEFAULT_DUPLEX_VONG_TRE_TY_LE),
 )
 _THEO_KHOA = {b[1]: b for b in BANG}
 
