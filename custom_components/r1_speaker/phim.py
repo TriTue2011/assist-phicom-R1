@@ -33,6 +33,28 @@ MA_NUT_GIUA = 195
 KHOANG_NHAN_MS = 450
 NGUONG_GIU_MS = 800
 
+#: Mã phím Linux (scancode: số ``getevent`` thấy, cũng là số người dùng điền ở «mã phím») → mã phím ANDROID mà dịch vụ trợ năng của APK nhận (``KeyEvent.getKeyCode``).
+#: HAI SỐ KHÁC NHAU: bảng keylayout của loa đổi scancode thành tên phím rồi tên thành mã Android. Đo trên loa thật 15/11/2026: ``/system/usr/keylayout/Generic.kl``
+#: dòng «key 195 PHICOMM_OK» và bảng KEYCODES trong ``/system/lib/libinput.so``: PHICOMM_OK = 275. Trước đây HA báo APK «195» nên APK không bao giờ khớp mã 275
+#: của nút giữa: nhấn nút ở nguồn «apk» KHÔNG có sự kiện nào (từ 11/11). Nguồn ADB (``getevent``) dùng scancode nên vẫn chạy.
+SCANCODE_SANG_KEYCODE: dict[int, int] = {195: 275}
+KEYCODE_SANG_SCANCODE: dict[int, int] = {v: k for k, v in SCANCODE_SANG_KEYCODE.items()}
+
+
+def ma_gui_apk(ma: "set[int] | list[int]") -> list[int]:
+    """Danh sách mã phím gửi APK (``phim_cau_hinh``): mã đã cấu hình VÀ mã Android tương ứng của nó (người dùng điền cả mã Android thì vẫn đúng). Tối đa 16."""
+    ra: list[int] = []
+    for m in sorted(ma):
+        for x in (m, SCANCODE_SANG_KEYCODE.get(m)):
+            if x is not None and x not in ra and len(ra) < 16:
+                ra.append(x)
+    return sorted(ra)
+
+
+def ma_tu_apk(keycode: int) -> int:
+    """Mã phím APK báo (Android) → mã phím chuẩn của HA (scancode), để hai nguồn APK và ADB cho cùng một mã (195) trong sự kiện và ``phim_ma``."""
+    return KEYCODE_SANG_SCANCODE.get(keycode, keycode)
+
 
 @dataclass
 class PhimCtx:
@@ -344,11 +366,18 @@ class Phim:
 
     def noi(self, mic_server) -> list[Callable[[], None]]:
         """Nghe kết nối mic: trả các hàm gỡ nghe."""
-        return [mic_server.add_phim_tho_listener(self.tu_tho)]
+        return [mic_server.add_phim_tho_listener(self.tu_apk)]
 
-    def tu_tho(self, ma: int, xuong: bool) -> None:
-        """Phím thô (nhấn/nhả) từ APK (trợ năng) hoặc từ ADB (``phim_adb``): HA nhận diện cử chỉ rồi chạy hành động."""
-        self.hass.bus.async_fire("r1_speaker_phim_do", {"entry_id": self.entry.entry_id, "phim": ma, "xuong": xuong})   # dò phím: luôn báo thô
+    def tu_apk(self, keycode: int, xuong: bool) -> None:
+        """Phím thô từ APK (trợ năng): mã là mã ANDROID, đổi về mã chuẩn của HA (xem ``ma_tu_apk``); mã gốc ghi thêm vào sự kiện dò phím."""
+        self.tu_tho(ma_tu_apk(keycode), xuong, keycode)
+
+    def tu_tho(self, ma: int, xuong: bool, keycode: int | None = None) -> None:
+        """Phím thô (nhấn/nhả) từ APK (qua ``tu_apk``) hoặc từ ADB (``phim_adb``, scancode): HA nhận diện cử chỉ rồi bắn sự kiện."""
+        du_lieu = {"entry_id": self.entry.entry_id, "phim": ma, "xuong": xuong}
+        if keycode is not None and keycode != ma:
+            du_lieu["keycode"] = keycode                              # mã Android APK báo (khác scancode): để biết đường nào đi qua
+        self.hass.bus.async_fire("r1_speaker_phim_do", du_lieu)   # dò phím: luôn báo thô
         (self._nd.xuong if xuong else self._nd.len)(ma)
 
     def gia_lap(self, cu_chi: str) -> None:
@@ -377,12 +406,12 @@ class Phim:
         mic = self.coordinator.mic_server
         if not mic.receiving:
             raise RuntimeError("APK chưa nối về HA")
-        await mic.gui_phim_cau_hinh(sorted(self._ma()), True)
+        await mic.gui_phim_cau_hinh(ma_gui_apk(self._ma()), True)
         self._huy_do = getattr(self, "_huy_do", None)
         if self._huy_do is not None:
             self._huy_do()
 
         def xong() -> None:
             self._huy_do = None
-            self.hass.async_create_task(mic.gui_phim_cau_hinh(sorted(self._ma()), False))
+            self.hass.async_create_task(mic.gui_phim_cau_hinh(ma_gui_apk(self._ma()), False))
         self._huy_do = self.hass.loop.call_later(giay, xong).cancel

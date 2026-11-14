@@ -55,7 +55,7 @@ from .intercom import IntercomView, MicView, R1Intercom, go2rtc_source, wake_end
 from .mic import R1Mic
 from .mic_server import R1MicServer
 from .playback import R1Playback
-from .phim import Phim, dang_ky_dich_vu as dang_ky_dich_vu_phim
+from .phim import Phim, dang_ky_dich_vu as dang_ky_dich_vu_phim, ma_gui_apk
 from .kenh import dang_ky_dich_vu as dang_ky_dich_vu_kenh, hub as kenh_hub
 from .phim_adb import PhimAdb
 from .settings import (adb_settings, adb_tu_dong_dong, phim_ma, phim_nguon, DuplexSettings, TalkSettings, agc_settings, cong_nghe_trong, limiter_settings, mic_host_hieu_luc, noise_settings, ha_url, mic_address, mic_listen, play_address, speaker_host,
@@ -292,7 +292,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: R1ConfigEntry) -> bool:
 
     async def _bao_cau_hinh_phim() -> None:
         # Nguồn phím là ADB hoặc tắt: báo APK KHÔNG nhận phím nào (không nuốt, không báo), để một lần bấm không chạy hai lần.
-        await coordinator.mic_server.gui_phim_cau_hinh(sorted(phim_ma(entry)) if phim_nguon(entry) == "apk" else [], False)
+        await coordinator.mic_server.gui_phim_cau_hinh(ma_gui_apk(phim_ma(entry)) if phim_nguon(entry) == "apk" else [], False)
     coordinator.mic_server.khi_ket_noi = _bao_cau_hinh_phim            # APK nối vào thì báo mã phím do HA xử lý
     # Nguồn phím mặc định: ADB (getevent), không cần APK mới.
     entry.async_create_background_task(

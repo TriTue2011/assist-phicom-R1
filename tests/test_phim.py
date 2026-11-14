@@ -189,7 +189,39 @@ async def test_nguon_phim_apk_thi_apk_nhan_cau_hinh_phim_tu_ha(hass, r1):
     port = _cong_trong()
     e = await _them(hass, r1, mic_host="127.0.0.1", mic_port=9, mic_listen_port=port, mic_listen_key=KHOA, phim_nguon="apk")
     reader, writer = await _noi_apk(e, port)
-    assert await _khung_cau_hinh_phim(reader) == {"type": "phim_cau_hinh", "ma": [195], "do": False}
+    # APK nhận mã phím ANDROID (275 = PHICOMM_OK, đo trên loa thật), không phải scancode 195: báo cả hai để khớp dù người dùng điền mã nào
+    assert await _khung_cau_hinh_phim(reader) == {"type": "phim_cau_hinh", "ma": [195, 275], "do": False}
+    writer.close()
+
+
+def test_anh_xa_ma_phim_linux_sang_android_theo_bang_do_tren_loa_that():
+    """Gốc lỗi «nhấn nút bằng APK không có sự kiện» (15/11/2026): HA báo APK 195 (scancode) trong khi trợ năng nhận 275. Bảng do từ keylayout + libinput.so của loa."""
+    assert P.SCANCODE_SANG_KEYCODE == {195: 275} and P.KEYCODE_SANG_SCANCODE == {275: 195}
+    assert P.ma_gui_apk({195}) == [195, 275]
+    assert P.ma_gui_apk({275}) == [275], "người dùng điền thẳng mã Android thì giữ nguyên"
+    assert P.ma_gui_apk({195, 116}) == [116, 195, 275], "mã không có trong bảng đi nguyên"
+    assert P.ma_gui_apk(set()) == []
+    assert len(P.ma_gui_apk(set(range(100, 116)))) <= 16, "tối đa 16 mã như APK chấp nhận"
+    assert P.ma_tu_apk(275) == 195 and P.ma_tu_apk(195) == 195 and P.ma_tu_apk(116) == 116
+
+
+async def test_phim_android_275_tu_apk_thanh_cu_chi_voi_ma_chuan_195_va_ghi_keycode_goc(hass, r1):
+    """APK báo keycode Android 275: HA đổi về 195 để nhận diện cử chỉ, bắn sự kiện thô kèm keycode gốc — cùng mã với đường ADB."""
+    port = _cong_trong()
+    e = await _them(hass, r1, mic_host="127.0.0.1", mic_port=9, mic_listen_port=port, mic_listen_key=KHOA, phim_nguon="apk")
+    reader, writer = await _noi_apk(e, port)
+    tho, cu_chi = [], []
+    hass.bus.async_listen("r1_speaker_phim_do", lambda ev: tho.append(dict(ev.data)))
+    hass.bus.async_listen("r1_speaker_phim", lambda ev: cu_chi.append((ev.data["type"], ev.data["phim"])))
+    writer.write(khung_json({"type": "phim", "ma": 275, "xuong": True}))
+    writer.write(khung_json({"type": "phim", "ma": 275, "xuong": False}))
+    await writer.drain()
+    for _ in range(300):
+        if cu_chi:
+            break
+        await asyncio.sleep(0.01)
+    assert cu_chi == [("don", 195)], cu_chi
+    assert [(t["phim"], t["keycode"], t["xuong"]) for t in tho] == [(195, 275, True), (195, 275, False)], tho
     writer.close()
 
 
