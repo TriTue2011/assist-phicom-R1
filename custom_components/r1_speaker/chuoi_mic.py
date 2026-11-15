@@ -7,9 +7,10 @@ bytes vào, không đụng tới khúc.
 
 from __future__ import annotations
 
-from .agc import Agc, AgcSettings, Limiter, LimiterSettings, floats_to_pcm, pcm_to_floats
+from .agc import (Agc, AgcSettings, Limiter, LimiterSettings, array_to_pcm, floats_to_pcm, np,
+                  pcm_to_array, pcm_to_floats)
 from . import xu_ly_nang_cao
-from .noise_suppress import NoiseSettings, NoiseSuppressor
+from .noise_suppress import NoiseSettings, build as build_noise
 
 
 class MicChain:
@@ -21,7 +22,7 @@ class MicChain:
             if noise.engine == "nang_cao" and xu_ly_nang_cao.co_san_khu_on():
                 self.noise = xu_ly_nang_cao.SpeexMic(noise.strength_db)
             else:
-                self.noise = NoiseSuppressor(noise)
+                self.noise = build_noise(noise)
         self.agc = Agc(agc) if agc and agc.enabled else None
         self.limiter = Limiter(limiter) if limiter and limiter.enabled else None
 
@@ -35,10 +36,11 @@ class MicChain:
         if self.noise:
             pcm = self.noise.process(pcm)
         if self.agc or self.limiter:
-            xs = pcm_to_floats(pcm)
+            fast = np is not None                    # có numpy: cả chuỗi chạy trên ndarray
+            xs = pcm_to_array(pcm) if fast else pcm_to_floats(pcm)
             if self.agc:
                 xs = self.agc.run(xs)
             if self.limiter:
                 xs = self.limiter.run(xs)
-            pcm = floats_to_pcm(xs)
+            pcm = array_to_pcm(xs) if fast else floats_to_pcm(xs)
         return pcm

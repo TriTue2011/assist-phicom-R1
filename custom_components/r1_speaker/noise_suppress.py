@@ -20,9 +20,10 @@ Thuật toán: lọc Wiener trên phổ ngắn hạn (spectral gating mềm) v�
   "nhiễu nhạc" (các đốm tần số nhấp nháy) so với trừ phổ thô. ``strength_db`` là mức giảm tối
   đa của MỘT ô tần số (sàn hệ số lọc), cũng là mức giảm nền tạp thuần tối đa.
 
-LỰA CHỌN: **thuần Python, không numpy.** Tích hợp có ``requirements: []`` và numpy KHÔNG nằm
-trong yêu cầu lõi của Home Assistant (chỉ các thành phần như ``stream`` kéo nó vào), nên không
-được giả định nó có. FFT thực 512 điểm làm bằng FFT phức 256 điểm (mẹo gói chẵn/lẻ). Giá
+LỰA CHỌN: **bản chuẩn thuần Python; có numpy thì dùng bản numpy (``NoiseSuppressorNp``).** Tích hợp có
+``requirements: []`` và numpy KHÔNG nằm trong yêu cầu lõi của Home Assistant (chỉ các thành phần như
+``stream`` kéo nó vào), nên không được giả định nó có: không có thì chạy bản thuần Python (nặng CPU:
+đo trên HA thật ~22% một core cho luồng mic liên tục). Hai bản cho cùng kết quả (test so khớp). FFT thực 512 điểm làm bằng FFT phức 256 điểm (mẹo gói chẵn/lẻ). Giá
 phải trả: tốn CPU hơn bản numpy; thời gian đo được ghi ở ``tests/test_noise_suppress.py`` và
 trong báo cáo, có chạy trong vòng lặp sự kiện của HA (xem ``process``).
 
@@ -40,6 +41,11 @@ import array
 import cmath
 import math
 from dataclasses import dataclass
+
+try:
+    import numpy as np
+except ImportError:       # pragma: no cover
+    np = None
 
 from .const import (DEFAULT_NOISE_ENABLE, DEFAULT_NOISE_STRENGTH_DB, DEFAULT_NOISE_VOICE_DB,
                     MIC_RATE)
@@ -247,6 +253,78 @@ class NoiseSuppressor:
         self._tail = [y[HOP + i] * _WIN[HOP + i] for i in range(HOP)]
 
 
+class NoiseSuppressorNp(NoiseSuppressor):
+    """Cùng thuật toán với ``NoiseSuppressor`` nhưng vector hoá bằng numpy (FFT thực của numpy,
+    các vòng lặp theo ô tần số thành phép toán mảng). Trạng thái là ``ndarray``."""
+
+    def reset(self) -> None:
+        self._in = np.zeros(HOP)
+        self._tail = np.zeros(HOP)
+        self._out = np.zeros(0)
+        self._noise = None
+        self._clean_prev = np.zeros(_BINS)
+        self._gain_prev = np.ones(_BINS)
+        self._frames = 0
+
+    def process(self, pcm: bytes) -> bytes:
+        if not self.settings.enabled:
+            return pcm
+        raw = np.frombuffer(pcm, dtype="<i2", count=len(pcm) // 2).astype(np.float64)
+        n = raw.size
+        if n == 0:
+            return b""
+        buf = np.concatenate([self._in, raw])
+        outs = []
+        pos = 0
+        while buf.size - pos >= FRAME:
+            outs.append(self._frame_np(buf[pos:pos + FRAME]))
+            pos += HOP
+        self._in = buf[pos:]
+        if outs:
+            self._out = np.concatenate([self._out, *outs])
+        out = self._out[:n]
+        self._out = self._out[n:]
+        if out.size < n:                       # khúc lẻ: như bản chuẩn
+            out = np.concatenate([np.zeros(n - out.size), out])
+        return np.clip(np.rint(out), -32768, 32767).astype("<i2").tobytes()
+
+    def _frame_np(self, x):
+        spec = np.fft.rfft(x * _WIN_NP)
+        power = spec.real * spec.real + spec.imag * spec.imag
+        noise = self._noise
+        if noise is None:
+            noise = power + _EPS
+        warm = self._frames < _WARMUP_FRAMES
+        stat = 10 * math.log10(float(np.sum(power / (noise + _EPS))) / _BINS + _EPS)
+        voice = (not warm) and stat > self.settings.voice_db
+        if voice:
+            noise = np.where(power > noise, np.minimum(noise * _RISE, power), noise)
+        else:
+            a = 0.5 if warm else _NOISE_ALPHA
+            cap = 1e30 if warm else _RISE
+            noise = np.minimum(a * noise + (1 - a) * power, noise * cap)
+        self._noise = noise
+        nn = noise * _OVERSUB + _EPS
+        post = power / nn
+        xi = _DD_ALPHA * self._clean_prev / nn + (1 - _DD_ALPHA) * np.maximum(post - 1.0, 0.0)
+        gains = np.maximum(xi / (1.0 + xi), self._gmin)
+        spec = spec * gains
+        self._clean_prev = gains * gains * power
+        self._gain_prev = gains
+        self._frames += 1
+        y = np.fft.irfft(spec, FRAME)
+        out = self._tail + y[:HOP] * _WIN_NP[:HOP]
+        self._tail = y[HOP:] * _WIN_NP[HOP:]
+        return out
+
+
+if np is not None:
+    _WIN_NP = np.array(_WIN)
+
+
 def build(settings: NoiseSettings | None) -> NoiseSuppressor | None:
-    """Bộ khử tạp cho luồng mới, hoặc ``None`` nếu tắt (chuỗi mic khỏi đụng tới khúc)."""
-    return NoiseSuppressor(settings) if settings and settings.enabled else None
+    """Bộ khử tạp cho luồng mới, hoặc ``None`` nếu tắt (chuỗi mic khỏi đụng tới khúc).
+    Có numpy thì dùng bản numpy (nhẹ CPU hơn nhiều), không thì bản thuần Python."""
+    if not (settings and settings.enabled):
+        return None
+    return NoiseSuppressorNp(settings) if np is not None else NoiseSuppressor(settings)
