@@ -63,6 +63,24 @@ public final class Khung {
         return dongGoi(utf8("{\"type\":\"bluetooth_trang_thai\",\"bat\":" + (bat ? "true" : "false") + "}"));
     }
 
+    /** Phien ban cac goi ung dung tren loa (HA hien o thuc the «Cap nhat» khi KHONG co ADB): {"goi":{"ten.goi":"phien ban",...}}; khong co goi nao thi null. */
+    public static byte[] ungDung(String[] goi, String[] phienBan) {
+        StringBuilder b = new StringBuilder("{\"type\":\"ung_dung\",\"goi\":{");
+        int n = 0;
+        for (int i = 0; i < goi.length; i++) {
+            if (phienBan[i] == null) continue;
+            if (n++ > 0) b.append(',');
+            b.append('"').append(thoat(goi[i])).append("\":\"").append(thoat(phienBan[i])).append('"');
+        }
+        if (n == 0) return null;
+        return dongGoi(utf8(b.append("}}").toString()));
+    }
+
+    /** Chan doan duong phim (HA hien o sensor.r1_apk): dich vu tro nang da noi chua, so phim toi dich vu, so da bao HA, so mat (khong gui duoc). */
+    public static byte[] phimChanDoan(boolean noi, int nhan, int bao, int mat) {
+        return dongGoi(utf8("{\"type\":\"phim_cd\",\"noi\":" + (noi ? "true" : "false") + ",\"nhan\":" + nhan + ",\"bao\":" + bao + ",\"mat\":" + mat + "}"));
+    }
+
     /** Su kien phim: ma phim Android, xuong = true (nhan) / false (nha). HA tu nhan dien nhan don/doi/ba/giu. */
     public static byte[] phim(int ma, boolean xuong) {
         return dongGoi(utf8("{\"type\":\"phim\",\"ma\":" + ma + ",\"xuong\":" + (xuong ? "true" : "false") + "}"));

@@ -68,6 +68,8 @@ class R1AppUpdate(UpdateEntity):
         tt = self._tt
         if tt is None:
             return None
+        if tt.nguon == "apk":
+            return tt.phien_ban                              # APK báo versionName thật (không có md5 để so «giống từng byte»): so thẳng với bản đi kèm
         if not tt.cai:
             return CHUA_CAI
         if tt.an:
@@ -84,7 +86,7 @@ class R1AppUpdate(UpdateEntity):
     @property
     def extra_state_attributes(self) -> dict:
         return {"goi": self._ud.goi, "duong_dan": getattr(self._tt, "duong_dan", None), "an": getattr(self._tt, "an", None),
-                "ban_di_kem": self._ud.phien_ban, "loi": self._loi}
+                "ban_di_kem": self._ud.phien_ban, "loi": self._loi, "nguon": getattr(self._tt, "nguon", None)}
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -97,6 +99,9 @@ class R1AppUpdate(UpdateEntity):
 
         self._bo.khi_doi = _doi
         self.async_on_remove(lambda: setattr(self._bo, "khi_doi", cu))
+        m = getattr(self._entry.runtime_data, "mic_server", None)
+        if m is not None:                                      # APK nối / báo phiên bản mới: đọc lại ngay (không chờ chu kỳ 1 giờ)
+            self.async_on_remove(m.add_state_listener(lambda: self.hass.async_create_task(self._lam_moi())))
         # Lần đọc đầu chạy NỀN: loa chưa nối thì không làm chậm việc nạp tích hợp.
         self._entry.async_create_background_task(self.hass, self._lam_moi(), f"{self.entity_id} lam moi")
 
@@ -104,12 +109,24 @@ class R1AppUpdate(UpdateEntity):
         await self.async_update()
         self.async_write_ha_state()
 
+    def _tt_tu_apk(self) -> TrangThai | None:
+        """Phiên bản đang trên loa do APK báo (không cần ADB): chính APK này (``apk_ver``) và các gói APK ≥ 1.4 báo (``ung_dung``); chưa có thì None."""
+        m = getattr(self._entry.runtime_data, "mic_server", None)
+        if m is None or not m.receiving:
+            return None
+        ver = m.apk_ver if self._ud.goi == "vn.r1.bodam" else (m.ung_dung or {}).get(self._ud.goi)
+        return TrangThai(cai=True, phien_ban=ver, giong_di_kem=None, nguon="apk") if ver else None
+
     async def async_update(self) -> None:
         try:
             self._tt = await self._bo.trang_thai(self._ud)
             self._loi = None
         except (AdbError, OSError, TimeoutError) as exc:
-            self._loi = f"ADB: {exc or type(exc).__name__}"
+            tt = self._tt_tu_apk()                           # ADB đóng / không nối được: vẫn báo phiên bản và có bản mới hay không qua APK
+            if tt is not None:
+                self._tt, self._loi = tt, None
+            else:
+                self._loi = f"ADB: {exc or type(exc).__name__}"
 
     async def async_install(self, version: str | None, backup: bool, **kwargs) -> None:
         kq = await self._bo.cai(self._ud)

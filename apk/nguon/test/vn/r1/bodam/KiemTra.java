@@ -371,16 +371,22 @@ public class KiemTra {
         String t2 = HeThongLoa.tao(rong);
         ok(!t2.contains("---df") && !t2.contains("---wifi") && !t2.contains("---bt") && t2.contains("---up"), "hethong: khong doc duoc thi bo khoi, khong nem loi");
 
+        // --- Phien ban goi ung dung (khung ung_dung) ---
+        byte[] ud = Khung.ungDung(new String[] {"a.b", "c.d", "e.f"}, new String[] {"1.4", null, "2.0\"x"});
+        ok(ud != null && new String(ud, 4, ud.length - 4, U).equals("{\"type\":\"ung_dung\",\"goi\":{\"a.b\":\"1.4\",\"e.f\":\"2.0\\\"x\"}}"), "ung_dung: chi goi co phien ban, thoat ky tu dac biet");
+        ok(Khung.ungDung(new String[] {"a.b"}, new String[] {null}) == null, "ung_dung: khong goi nao thi khong gui khung");
+
         // --- Bao cao ---
         final List<String> khungGui = new ArrayList<String>();
         BaoCao.Gui gb = new BaoCao.Gui() {
             @Override public void gui(byte[] k) throws IOException { khungGui.add(new String(k, 4, k.length - 4, U)); }
         };
         BaoCao.khiNoi(gb, gia);
-        ok(khungGui.size() == 3 && khungGui.get(0).startsWith("{\"type\":\"apk\",\"ver\":\"" + BaoCao.PHIEN_BAN + "\"")
+        ok(khungGui.size() == 4 && khungGui.get(3).startsWith("{\"type\":\"phim_cd\",\"noi\":") && khungGui.get(3).contains("\"nhan\":") && khungGui.get(3).contains("\"mat\":")
+                && khungGui.get(0).startsWith("{\"type\":\"apk\",\"ver\":\"" + BaoCao.PHIEN_BAN + "\"")
                 && khungGui.get(0).contains("\"phim\"") && khungGui.get(0).contains("\"bluetooth\"") && khungGui.get(0).contains("\"he_thong\"")
                 && khungGui.get(1).equals("{\"type\":\"bluetooth_trang_thai\",\"bat\":true}") && khungGui.get(2).startsWith("{\"type\":\"he_thong\""),
-                "baocao: khi noi gui apk (kha nang), bluetooth, he_thong");
+                "baocao: khi noi gui apk (kha nang), bluetooth, he_thong, phim_cd (chan doan duong phim)");
         BaoCao.Gui hong = new BaoCao.Gui() { @Override public void gui(byte[] k) throws IOException { throw new IOException("dut"); } };
         BaoCao.khiNoi(hong, gia);
         BaoCao.baoHeThong(hong, gia);

@@ -32,5 +32,5 @@ def test_hai_ban_sao_apk_giong_nhau_va_ma_bam_khop():
 
 def test_khung_apk_va_ha_deu_co_trong_tai_lieu_hop_dong():
     hd = _doc("docs/HOP-DONG-PHIA-LOA.md")
-    for khung in ("apk", "he_thong", "he_thong_hoi", "bluetooth", "bluetooth_trang_thai", "phim", "phim_cau_hinh"):
+    for khung in ("apk", "he_thong", "he_thong_hoi", "bluetooth", "bluetooth_trang_thai", "phim", "phim_cau_hinh", "phim_cd", "ung_dung"):
         assert f"`{khung}`" in hd, f"thiếu khung {khung} trong docs/HOP-DONG-PHIA-LOA.md"

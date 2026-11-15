@@ -173,6 +173,8 @@ Mọi khung đều là «4 byte độ dài + JSON gọn» trên kết nối mic 
 | `he_thong` | `txt` | Thông tin hệ thống dạng văn bản chia khối `---tên` (CPU, RAM, `/data`, WiFi, Bluetooth, uptime), mỗi 60 giây và khi HA hỏi. Cùng định dạng mà `he_thong.phan_tich` đọc cho đường ADB. Không có BSSID/MAC/số sê-ri |
 | `bluetooth_trang_thai` | `bat` | Trạng thái Bluetooth THẬT (báo lại ~2 giây sau lệnh) |
 | `phim` | `ma`, `xuong` | Phím thô qua dịch vụ trợ năng của APK (nhấn/nhả); chỉ báo phím HA đã nhận (`phim_cau_hinh`) hoặc mọi phím trong chế độ dò. HA tự nhận diện đơn/đúp/ba/giữ |
+| `phim_cd` | `noi`, `nhan`, `bao`, `mat` | Chẩn đoán đường phím (APK ≥ 1.4, kèm báo cáo hệ thống mỗi 60 giây): dịch vụ trợ năng đã nối chưa, số phím tới dịch vụ, số đã báo HA, số không gửi được. HA hiện ở thuộc tính `phim` của `sensor.r1_apk`. |
+| `ung_dung` | `goi` (≤ 8 mục «tên gói → versionName») | Phiên bản các gói HA cài/cập nhật trên loa (APK ≥ 1.4, kèm báo cáo hệ thống): thực thể «Cập nhật» dùng khi KHÔNG có ADB. Gói không thấy (chưa cài/bị ẩn) thì không có mục. |
 
 **HA → APK:**
 

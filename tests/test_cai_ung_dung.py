@@ -77,7 +77,7 @@ def test_danh_sach_dung_ba_ung_dung_va_tep_that_khop_sha256():
     ds = doc_bo_cai()
     assert [(u.id, u.goi, u.phien_ban) for u in ds] == [
         ("player", "com.phicomm.speaker.player", "0.2.5"), ("unisound", "com.phicomm.speaker.device", "V3.2.5.2-"),
-        ("bodam", "vn.r1.bodam", "1.3")]
+        ("bodam", "vn.r1.bodam", "1.4")]
     for u in ds:
         assert hashlib.sha256(ghep_va_kiem(u)).hexdigest() == u.sha256       # tệp thật, kể cả ghép 2 phần của unisound
     assert doc_bo_cai()[1].tep == ("unisound.apk.00", "unisound.apk.01")
@@ -308,12 +308,12 @@ async def test_moi_ung_dung_co_mot_thuc_the_cap_nhat_va_cai_bang_nut(hass, ha_ca
     from homeassistant.helpers.entity_component import async_update_entity
     await async_update_entity(hass, pl)
     st = hass.states.get(pl)
-    assert st.attributes["installed_version"] == "chưa cài" and st.attributes["latest_version"] == "1.3"
+    assert st.attributes["installed_version"] == "chưa cài" and st.attributes["latest_version"] == "1.4"
     assert st.state == "on" and st.attributes["title"].startswith("APK mic")
     await hass.services.async_call("update", "install", {"entity_id": pl}, blocking=True)
     assert any(c.startswith("pm install -r") and "r1-bodam" in c for c in dev.cmds)
     dev.cai_san["vn.r1.bodam"] = ("/data/app/p-1/base.apk",
-                                                 hashlib.md5(ghep_va_kiem(bo.tim("bodam"))).hexdigest(), "1.3")
+                                                 hashlib.md5(ghep_va_kiem(bo.tim("bodam"))).hexdigest(), "1.4")
     bo._nho.clear()                                                          # bỏ bộ nhớ 30 giây của lần đọc trước
     await async_update_entity(hass, pl)
     assert hass.states.get(pl).state == "off"                              # đã cài đúng bản đi kèm: hết «có cập nhật»
@@ -549,3 +549,47 @@ async def test_cau_hinh_bodam_bat_tro_nang_phim_giu_dich_vu_khac_va_khong_lap():
     dev.cmds.clear()
     assert "bỏ qua" in await bo._bat_tro_nang_phim()
     assert not any(c.startswith("settings put") for c in dev.cmds)
+
+
+async def test_adb_dong_van_bao_phien_ban_va_co_ban_moi_qua_apk(hass, ha_cai):
+    """15/11: dùng qua APK (đóng ADB) thì thực thể «Ứng dụng» báo «Không rõ» — nay đọc phiên bản APK báo (apk_ver cho chính APK, `ung_dung` cho các gói khác)."""
+    e, bo, dev = ha_cai
+    dev.fail = "ADB đã đóng"                                              # mọi lệnh ADB hỏng
+    mic = e.runtime_data.mic_server
+    from unittest import mock
+    pat = mock.patch.object(type(mic), "receiving", new_callable=mock.PropertyMock, return_value=True)
+    pat.start()
+    try:
+        await _kiem_apk(hass, bo, mic)
+    finally:
+        pat.stop()
+
+
+async def _kiem_apk(hass, bo, mic):
+    mic.apk_ver = "1.3"
+    mic._xu_ly_khung_apk("ung_dung", {"goi": {"vn.r1.bodam": "1.3", "com.phicomm.speaker.device": "V3.2.5.2-"}})
+    bo._nho.clear()
+    from homeassistant.helpers.entity_component import async_update_entity
+    ids = _ud_ids(hass)
+    bd = next(i for i in ids if "apk_mic" in i)
+    us = next(i for i in ids if "thiet_bi" in i)
+    for i in ids:
+        await async_update_entity(hass, i)
+    st = hass.states.get(bd)
+    assert st.attributes["installed_version"] == "1.3" and st.attributes["latest_version"] == "1.4" and st.state == "on", st.attributes   # có bản mới
+    assert st.attributes["nguon"] == "apk"
+    assert hass.states.get(us).attributes["installed_version"] == "V3.2.5.2-"
+    mic.apk_ver = "1.4"                                                    # đã cập nhật: hết «có bản mới»
+    bo._nho.clear()
+    await async_update_entity(hass, bd)
+    assert hass.states.get(bd).state == "off"
+
+
+def test_khung_ung_dung_sai_dang_bi_bo():
+    from unittest import mock
+    from custom_components.r1_speaker.mic_server import R1MicServer
+    s = R1MicServer(mock.MagicMock(), 0, "khoa-gia", "127.0.0.1")
+    for xau in ({"goi": []}, {"goi": {"a": 1}}, {"goi": {"": "1"}}, {"goi": {"a": "x" * 41}}, {"goi": {str(i): "1" for i in range(9)}}, {}):
+        assert s._xu_ly_khung_apk("ung_dung", xau) is True and s.ung_dung == {}, xau
+    s._xu_ly_khung_apk("ung_dung", {"goi": {"vn.r1.bodam": "1.4"}})
+    assert s.ung_dung == {"vn.r1.bodam": "1.4"}

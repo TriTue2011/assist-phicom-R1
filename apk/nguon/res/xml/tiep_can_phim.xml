@@ -4,4 +4,5 @@
     android:accessibilityEventTypes="typeAllMask"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:canRequestFilterKeyEvents="true"
+    android:accessibilityFlags="flagRequestFilterKeyEvents"
     android:description="@string/mo_ta_tiep_can" />

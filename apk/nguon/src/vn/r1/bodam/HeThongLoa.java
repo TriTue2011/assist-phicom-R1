@@ -80,6 +80,18 @@ public final class HeThongLoa {
 
     static void khoiTao(Context c) { ctx = c == null ? null : c.getApplicationContext(); }
 
+    /** versionName của một gói đã cài trên loa (PackageManager, KHÔNG cần ADB); null nếu chưa có ngữ cảnh / không thấy gói (chưa cài hoặc bị ẩn). */
+    public static String phienBanGoi(String goi) {
+        Context c = ctx;
+        if (c == null || goi == null) return null;
+        try {
+            String v = c.getPackageManager().getPackageInfo(goi, 0).versionName;
+            return v == null || v.length() > 40 ? null : v;
+        } catch (Exception khongThay) {
+            return null;
+        }
+    }
+
     public static final Nguon THAT = new Nguon() {
         @Override public String doc(String duongDan) {
             FileInputStream in = null;

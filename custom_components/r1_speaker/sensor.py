@@ -129,6 +129,8 @@ class R1ApkSensor(SensorEntity):
     @property
     def extra_state_attributes(self) -> dict:
         return {"kha_nang": sorted(self._mic.apk_kha_nang), "den_firmware": self._mic.den_san_sang,
+                "phim": self._mic.phim_cd,                    # APK ≥ 1.4: {dich_vu_noi, nhan, bao_ha, mat}; nhan tăng khi nhấn nút mà bao_ha đứng yên = phím thuộc mã HA chưa nhận
+
                 "nguon_he_thong": getattr(getattr(self._entry.runtime_data.he_thong, "data", None), "nguon", None)}
 
     async def async_added_to_hass(self) -> None:

@@ -2,8 +2,8 @@
 <!-- NV247 — BIEN THE PHAT HANH: khong co receiver kiem thu. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="vn.r1.bodam"
-    android:versionCode="4"
-    android:versionName="1.3">
+    android:versionCode="5"
+    android:versionName="1.4">
 
     <uses-sdk android:minSdkVersion="22" android:targetSdkVersion="22" />
 

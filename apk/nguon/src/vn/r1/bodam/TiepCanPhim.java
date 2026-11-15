@@ -1,6 +1,7 @@
 package vn.r1.bodam;
 
 import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Intent;
 import android.os.Handler;
 import android.os.Looper;
@@ -26,7 +27,30 @@ public class TiepCanPhim extends AccessibilityService {
 
     private LogicNut logicNut;
 
+    /**
+     * BẮT BUỘC để nhận phím: dịch vụ trợ năng chỉ được gọi onKeyEvent khi đặt cờ FLAG_REQUEST_FILTER_KEY_EVENTS (cờ này KHÁC quyền
+     * canRequestFilterKeyEvents trong XML). Thiếu cờ thì quyền có, dịch vụ chạy, mà KHÔNG BAO GIỜ nhận phím nào (APK 1.3: nút R1 không báo gì về HA).
+     * Đặt cả ở XML (accessibilityFlags) lẫn tại đây (cho chắc trên firmware cũ).
+     */
+    @Override protected void onServiceConnected() {
+        super.onServiceConnected();
+        try {
+            AccessibilityServiceInfo info = getServiceInfo();
+            if (info != null) {
+                info.flags |= AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS;
+                setServiceInfo(info);
+            }
+        } catch (RuntimeException boQua) { }
+        PhimHa.daNoiTrangThai(true);
+    }
+
+    @Override public boolean onUnbind(Intent intent) {
+        PhimHa.daNoiTrangThai(false);
+        return super.onUnbind(intent);
+    }
+
     @Override protected boolean onKeyEvent(KeyEvent event) {
+        PhimHa.demNhan();                                           // chẩn đoán: số phím hệ thống đã tới dịch vụ (kể cả phím không báo HA)
         // Phim thuoc HA (HA da gui phim_cau_hinh) hoac dang do phim: bao ve HA, KHONG xu ly tai cho. Day la cua do nguoi dung chon
         // o HA, nen khong phu thuoc co bat_tiep_can_phim cuc bo.
         if (PhimHa.suKien(event.getKeyCode(), event.getAction() == KeyEvent.ACTION_DOWN, event.getRepeatCount(), PhimHa.QUA_KENH)) {

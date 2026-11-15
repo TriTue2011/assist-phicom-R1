@@ -95,6 +95,10 @@ class R1MicServer:
         #: Thông tin hệ thống APK báo định kỳ (văn bản chia khối «---tên», cùng định dạng ``he_thong.phan_tich`` đọc) và lúc nhận.
         self.he_thong_txt: str | None = None
         self.he_thong_luc: float | None = None
+        #: Chẩn đoán đường phím do APK ≥ 1.4 báo: dịch vụ trợ năng đã nối chưa, bao nhiêu phím tới dịch vụ, bao nhiêu đã báo HA, bao nhiêu mất.
+        self.phim_cd: dict | None = None
+        #: Phiên bản các gói ứng dụng trên loa do APK ≥ 1.4 báo (PackageManager, KHÔNG cần ADB): {tên gói: versionName}. Thực thể «Cập nhật» dùng khi ADB đóng.
+        self.ung_dung: dict[str, str] = {}
         self._nghe_phim_tho: list[Callable[[int, bool], None]] = []    # (mã phím, nhấn=True / nhả=False) qua dịch vụ trợ năng
         #: Gọi (dạng tác vụ) ngay sau khi APK xác thực xong: gửi cấu hình phím cho APK.
         self.khi_ket_noi: Callable[[], Any] | None = None
@@ -205,6 +209,22 @@ class R1MicServer:
             if isinstance(ctrl.get("bat"), bool) and ctrl["bat"] != self.bluetooth:
                 self.bluetooth = ctrl["bat"]
                 self._notify_state()
+            return True
+        if loai == "ung_dung":
+            goi = ctrl.get("goi")
+            if isinstance(goi, dict) and len(goi) <= 8 and all(isinstance(k, str) and 0 < len(k) <= 80 and isinstance(v, str) and 0 < len(v) <= 40
+                                                              for k, v in goi.items()):
+                if goi != self.ung_dung:
+                    self.ung_dung = dict(goi)
+                    self._notify_state()
+            return True
+        if loai == "phim_cd":
+            noi, nhan, bao, mat = ctrl.get("noi"), ctrl.get("nhan"), ctrl.get("bao"), ctrl.get("mat")
+            if (isinstance(noi, bool) and all(isinstance(x, int) and not isinstance(x, bool) and 0 <= x <= 10**9 for x in (nhan, bao, mat))):
+                moi = {"dich_vu_noi": noi, "nhan": nhan, "bao_ha": bao, "mat": mat}
+                if moi != self.phim_cd:
+                    self.phim_cd = moi
+                    self._notify_state()
             return True
         if loai == "phim":
             ma, xuong = ctrl.get("ma"), ctrl.get("xuong")

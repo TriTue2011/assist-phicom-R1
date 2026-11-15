@@ -80,6 +80,7 @@ class TrangThai:
     giong_di_kem: bool | None = None
     duong_dan: str | None = None
     an: bool = False
+    nguon: str = "adb"            # «adb» = đọc từ loa qua ADB (có md5); «apk» = APK báo phiên bản (không cần ADB, không biết md5)
 
 
 _BAN_GHI_AN = "Hidden system packages:"

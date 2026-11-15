@@ -34,6 +34,16 @@ public final class PhimHa {
 
     public static boolean dangDo() { return doTatCa; }
 
+    // Chẩn đoán đường phím (HA đọc qua báo cáo hệ thống): dịch vụ trợ năng đã nối chưa, bao nhiêu phím tới, bao nhiêu phím đã báo HA.
+    private static volatile boolean dichVuNoi = false;
+    private static volatile int nhan = 0, baoHa = 0, mat = 0;
+    public static void daNoiTrangThai(boolean noi) { dichVuNoi = noi; }
+    public static void demNhan() { nhan++; }
+    public static boolean dichVuDaNoi() { return dichVuNoi; }
+    public static int soNhan() { return nhan; }
+    public static int soBaoHa() { return baoHa; }
+    public static int soMat() { return mat; }
+
     /**
      * Xu ly mot su kien phim cua he thong. lap = getRepeatCount() (chi bao lan dau: HA tu do thoi gian de nhan ra nhan giu).
      * Tra ve true neu phim bi nuot (thuoc HA); che do do chi bao, khong nuot.
@@ -41,7 +51,9 @@ public final class PhimHa {
     public static boolean suKien(int keycode, boolean xuong, int lap, Gui g) {
         boolean cuaHa = hoiXuLy(keycode);
         if (!cuaHa && !doTatCa) return false;
-        if (lap == 0) g.gui(Khung.phim(keycode, xuong));
+        if (lap == 0) {
+            if (g.gui(Khung.phim(keycode, xuong))) baoHa++; else mat++;           // mat: phím thuộc HA nhưng không gửi được (chưa nối HA)
+        }
         return cuaHa;
     }
 }
