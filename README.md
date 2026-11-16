@@ -230,11 +230,8 @@ Mỗi cử chỉ của nút giữa là **một trigger thiết bị** chọn b�
 
 **Nút ảo để thử và để đặt lên bảng điều khiển:** loa có thêm 4 nút **«Nút giữa - nhấn đơn / đúp / ba lần / giữ»** (`button.r1_nut_giua_don`, `..._doi`, `..._ba`, `..._giu`). Bấm nút ảo = mô phỏng đúng cử chỉ thật (bắn trigger, cập nhật `event.r1_phim`), nên thử tự động hoá được mà không cần chạy ra chỗ loa.
 
-**Cùng một cử chỉ, việc khác nhau tuỳ lúc** (ví dụ nhấn đơn = nghe máy khi có cuộc gọi đến, không thì gọi đi): dùng mẫu tự động hoá có sẵn
-[`blueprints/automation/r1_speaker/nut_giua_nghe_hoac_goi_zalo.yaml`](blueprints/automation/r1_speaker/nut_giua_nghe_hoac_goi_zalo.yaml)
-(cần tích hợp Zalo Call). Nhập mẫu: **Cài đặt → Tự động hoá → Mẫu tự động hoá → Nhập mẫu**, dán địa chỉ tệp trên GitHub.
-Mẫu làm: đang có cuộc gọi đến thì **nghe máy**; đang trong cuộc gọi thì **cúp** (tắt được); không có cuộc gọi thì **gọi đi** cho người bạn chọn.
-Muốn nhiều tình huống hơn thì tạo thêm tự động hoá với điều kiện «Trạng thái» của cảm biến cuộc gọi.
+**Cùng một cử chỉ, việc khác nhau tuỳ lúc** (ví dụ nhấn đơn = nghe máy khi có cuộc gọi đến, nhấn đôi lúc rảnh = gọi đi): dùng blueprint **«Nút bấm mọi loại - một automation, thêm bao nhiêu việc cũng được»**
+([`nut_bam_nhieu_viec.yaml`](https://github.com/TriTue2011/Blueprint/blob/main/nut_bam_nhieu_viec.yaml) trong kho Blueprint). Thêm trigger nút giữa của loa R1 (kiểu nhấn đơn/đúp…) và đặt ID cho từng cử chỉ; mỗi «việc» gồm cảm biến + trạng thái cần xử lý + lời gọi dịch vụ (`zalo_call.answer_call`, `zalo_call.make_call`…), thêm bao nhiêu cũng được; mỗi lần bấm việc có cảm biến đổi gần nhất thắng. Blueprint riêng của kho này («nút giữa nghe máy hoặc gọi đi») đã bỏ vì trùng chức năng.
 
 ```yaml
 # Ví dụ không dùng mẫu: nhấn giữ nút giữa = gọi cảnh báo
