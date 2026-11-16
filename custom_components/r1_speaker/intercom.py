@@ -251,9 +251,33 @@ class IntercomView(HomeAssistantView):
         return web.json_response({"seconds": round(phien.seconds, 1)})
 
 
-#: Cứ ngần này giây không có khúc mic (đang nửa công / luồng chậm) thì ghi một khúc im để
-#: bên nghe không đứng luồng và để phát hiện bên nghe đã đóng.
-_MIC_IM_SAU = 1.0
+#: Bên nghe (app Zalo, go2rtc) coi luồng này là PCM THỜI GIAN THỰC liên tục. Phiên song công/nửa công bỏ NGUYÊN khúc mic ở nhiều chỗ (nửa công khi bên kia nói, cắt vọng, chặn vọng trễ,
+#: khử vọng): không bù thì luồng chỉ còn ~2/3 nhịp (đo 16/11/2026: app Zalo nhận 33 khung/s thay vì 50), RTP gửi sang điện thoại thưa và đứt, điện thoại báo «tín hiệu kém», tiếng không trôi chảy.
+_MIC_NHIP = 0.02          # kiểm tra mỗi 20 ms xem có cần chèn im lặng không
+_MIC_TRE_CHO = 0.1        # luồng được phép chậm hơn đồng hồ thật tới ngần này giây (khúc đến trễ không bị coi là mất)
+_MIC_IM_TOI_THIEU = 640   # byte: dưới 20 ms thì chưa chèn
+_MIC_IM_TOI_DA = 6400     # byte: một lần chèn tối đa 200 ms
+
+
+class TrucThoiGian:
+    """Giữ trục thời gian của một luồng PCM16 thời gian thực: ``can_chen`` cho biết cần chèn bao nhiêu byte IM LẶNG để tổng byte đã ghi (tiếng thật + im lặng) theo kịp đồng hồ.
+
+    Chậm hơn đồng hồ tối đa ``tre_cho`` giây (đệm chờ khúc trễ). Ghi VƯỢT đồng hồ (khúc dồn từ hàng đợi) thì bên nghe còn tiếng để phát: không chèn gì cho tới khi lượng dư đó dùng hết."""
+
+    def __init__(self, byte_moi_giay: int, bay_gio: float, tre_cho: float = _MIC_TRE_CHO) -> None:
+        self._bps = byte_moi_giay
+        self._t0 = bay_gio
+        self._da = 0
+        self._tre = tre_cho
+
+    def da_ghi(self, so_byte: int) -> None:
+        self._da += so_byte
+
+    def can_chen(self, bay_gio: float) -> int:
+        thieu = (bay_gio - self._t0 - self._tre) * self._bps - self._da
+        if thieu < _MIC_IM_TOI_THIEU:
+            return 0
+        return int(min(thieu, _MIC_IM_TOI_DA)) // 2 * 2
 
 
 class MicView(HomeAssistantView):
@@ -288,12 +312,18 @@ class MicView(HomeAssistantView):
         await resp.prepare(request)
         huy = (loc_vad.add_audio_listener(nhan) if loc_vad is not None
                else mic.add_chunk_listener(nhan))
+        loop = asyncio.get_running_loop()
+        truc = TrucThoiGian(MIC_RATE * 2, loop.time())
         try:
             while mic.available and not mic.muted and (loc_vad is None or loc_vad.active):
                 try:
-                    khuc = await asyncio.wait_for(hang.get(), _MIC_IM_SAU)
+                    khuc = await asyncio.wait_for(hang.get(), _MIC_NHIP)
                 except TimeoutError:
-                    khuc = bytes(int(MIC_RATE * 0.1) * 2)
+                    them = truc.can_chen(loop.time())     # khúc bị bỏ ở phiên song công/nửa công: bù IM LẶNG cho luồng liên tục
+                    if not them:
+                        continue
+                    khuc = bytes(them)
+                truc.da_ghi(len(khuc))
                 await resp.write(khuc)
         except ConnectionResetError:
             pass                       # bên nghe đã đóng

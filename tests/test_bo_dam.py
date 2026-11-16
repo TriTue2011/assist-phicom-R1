@@ -345,6 +345,31 @@ async def test_get_mic_phat_pcm_va_bi_chan_khi_tat(hass, r1, pcm_server, hass_cl
     assert (await cl.get(f"{url}?k={khoa}")).status == 503     # tắt mic: không có luồng
 
 
+async def test_luong_mic_http_van_lien_tuc_khi_nguon_im_lang(hass, r1, pcm_server, hass_client_no_auth):
+    """Nguồn bỏ khúc (song công/nửa công/VAD): luồng HTTP vẫn phải ra đều theo thời gian thực — bù IM LẶNG ngay (không đợi 1 giây rồi chèn 0,1 giây như bản cũ)."""
+    import time
+    e = await _them(hass, r1, mic_host="127.0.0.1", mic_port=pcm_server.port)
+    cl = await hass_client_no_auth()
+    khoa = e.data[CONF_INTERCOM_KEY]
+    await _cho(lambda: pcm_server.writers)
+    await pcm_server.send(pcm(5))
+    await _cho(lambda: e.runtime_data.mic.available, hass)
+    r = await cl.get(f"/api/r1_speaker/mic/{e.entry_id}?k={khoa}")
+    assert r.status == 200
+    await pcm_server.send(pcm(777))                              # MỘT khúc có tiếng rồi nguồn im hoàn toàn
+    got, t0 = b"", time.monotonic()
+    while time.monotonic() - t0 < 0.8:
+        try:
+            got += await asyncio.wait_for(r.content.readany(), 0.3)
+        except TimeoutError:
+            break
+    r.close()
+    thoi_gian = time.monotonic() - t0
+    assert 777 in samples(got)
+    nhan_giay = len(got) / 32000
+    assert nhan_giay >= 0.55 * thoi_gian, "luồng chỉ ra %.2f s tiếng trong %.2f s (bản cũ: 0,1 s mỗi giây)" % (nhan_giay, thoi_gian)
+
+
 async def test_dich_vu_nguon_bo_dam(hass, r1):
     e = await _them(hass, r1)
     kq = await hass.services.async_call(
