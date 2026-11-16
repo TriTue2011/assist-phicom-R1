@@ -9,6 +9,8 @@ Kho này biến loa **Phicomm R1** thành một thiết bị đầy đủ của 
    cảm biến CPU/RAM/bộ nhớ/WiFi của loa; thẻ Lovelace `r1-card` (đàm thoại, EQ, chức năng, cài đặt); icon riêng (`brand/`; HA có hỗ trợ thư mục này tự nạp, đã thấy trong 2026.10.3, bản cũ hơn chưa kiểm).
 2. **APK `vn.r1.bodam`** (`apk/`): ứng dụng Android nhỏ trên loa, lấy tiếng mic gửi về HA **chỉ khi người dùng bật**; nút giữa bật/tắt mic.
 
+> **0.17.2 - luồng mic HTTP liên tục theo thời gian thực**: khi nguồn mic im lặng hoặc phiên song công bỏ nguyên khúc 64 ms, luồng `MicView` bù khoảng lặng (`TrucThoiGian`) để bên nhận (Zalo/Telegram) luôn thấy luồng đều, hết giật/đứt tiếng.
+>
 > **0.17.1 - APK 1.4: sửa nút giữa không báo gì về HA khi đóng ADB** (APK 1.3 thiếu cờ `FLAG_REQUEST_FILTER_KEY_EVENTS` của dịch vụ trợ năng nên chạy mà KHÔNG nhận phím nào). Cài lại APK 1.4 (`apk/vn-r1-bodam.apk`, SHA-256 trong `apk/vn-r1-bodam.apk.sha256`). Chẩn đoán đường phím: `sensor.r1_apk`, thuộc tính `phim` (dịch vụ nối / phím nhận / đã báo HA / mất); thực thể Cập nhật dùng phiên bản APK báo về khi ADB đóng. Việc làm gì khi bấm nút do automation quyết định: dùng blueprint **«Nút bấm mọi loại»** của kho [Blueprint](https://github.com/TriTue2011/Blueprint).
 >
 > **0.17.0 - nút giữa không còn hành động gắn sẵn: chỉ phát trigger và sự kiện, việc làm gì do tự động hoá của bạn quyết định** (bốn ô chọn «Phím loa» đã gỡ).
