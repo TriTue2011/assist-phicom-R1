@@ -9,6 +9,8 @@ Kho này biến loa **Phicomm R1** thành một thiết bị đầy đủ của 
    cảm biến CPU/RAM/bộ nhớ/WiFi của loa; thẻ Lovelace `r1-card` (đàm thoại, EQ, chức năng, cài đặt); icon riêng (`brand/`; HA có hỗ trợ thư mục này tự nạp, đã thấy trong 2026.10.3, bản cũ hơn chưa kiểm).
 2. **APK `vn.r1.bodam`** (`apk/`): ứng dụng Android nhỏ trên loa, lấy tiếng mic gửi về HA **chỉ khi người dùng bật**; nút giữa bật/tắt mic.
 
+> **0.17.1 - APK 1.4: sửa nút giữa không báo gì về HA khi đóng ADB** (APK 1.3 thiếu cờ `FLAG_REQUEST_FILTER_KEY_EVENTS` của dịch vụ trợ năng nên chạy mà KHÔNG nhận phím nào). Cài lại APK 1.4 (`apk/vn-r1-bodam.apk`, SHA-256 trong `apk/vn-r1-bodam.apk.sha256`). Chẩn đoán đường phím: `sensor.r1_apk`, thuộc tính `phim` (dịch vụ nối / phím nhận / đã báo HA / mất); thực thể Cập nhật dùng phiên bản APK báo về khi ADB đóng. Việc làm gì khi bấm nút do automation quyết định: dùng blueprint **«Nút bấm mọi loại»** của kho [Blueprint](https://github.com/TriTue2011/Blueprint).
+>
 > **0.17.0 - nút giữa không còn hành động gắn sẵn: chỉ phát trigger và sự kiện, việc làm gì do tự động hoá của bạn quyết định** (bốn ô chọn «Phím loa» đã gỡ).
 >
 > **Mới ở 0.16.0 - nút giữa dùng được trong tự động hoá bằng giao diện.** Mỗi cử chỉ (nhấn đơn / đúp / ba lần / giữ / ngắn) là một **trigger thiết bị**; có 4 **nút ảo** `button.r1_nut_giua_*` để thử hoặc đặt lên bảng điều khiển; kèm **mẫu tự động hoá** «nhấn đơn = nghe máy khi có cuộc gọi đến, không thì gọi đi» (Zalo Call). Xem [mục 8](#8-nút-giữa) (phần «Gán nút giữa vào tự động hoá»).
@@ -60,7 +62,7 @@ Bạn chọn **một** cách (ô **«Chế độ đóng ADB»** ở **Cài đặ
 | | **Dùng APK** (đóng ADB) | **Dùng ADB** (giữ ADB, mặc định) |
 |---|---|---|
 | An ninh | Không máy nào trong mạng nối được cổng `5555` | Cổng `5555` mở không xác thực cho cả LAN; phải tự bảo vệ (phần cuối trang) |
-| Chạy được | Mic, đàm thoại, Assist, âm lượng, phát nhạc DLNA/AirPlay, Dừng, Tắt tiếng, nút giữa (APK 1.3; trigger thiết bị và nút ảo của nút giữa) | Tất cả |
+| Chạy được | Mic, đàm thoại, Assist, âm lượng, phát nhạc DLNA/AirPlay, Dừng, Tắt tiếng, nút giữa (APK 1.4; trigger thiết bị và nút ảo của nút giữa) | Tất cả |
 | Đèn | Chỉ hiệu ứng có sẵn của firmware (màu cố định, thở, hướng đánh thức) | Đèn tự do 13 hiệu ứng, màu RGB tuỳ ý |
 | Mất | Cài/cập nhật ứng dụng, «Chuẩn bị loa», thông tin hệ thống, công tắc Bluetooth | — |
 | Mở lại ADB | Rút điện loa rồi cắm lại (làm xong thì đóng lại) | — |
@@ -74,7 +76,7 @@ Bạn chọn **một** cách (ô **«Chế độ đóng ADB»** ở **Cài đặ
 
 | Lựa chọn | Giá trị | Chọn khi |
 |---|---|---|
-| **Nguồn phím** (nút giữa) | `adb` (mặc định): HA đọc phím qua ADB, không cần APK mới, nhưng cần ADB mở và giữ một luồng ADB liên tục<br>`apk`: APK 1.3 báo phím qua dịch vụ trợ năng, chạy được cả khi ADB đóng<br>`tat`: không nhận phím | Giữ ADB → `adb`; đóng ADB → `apk` |
+| **Nguồn phím** (nút giữa) | `adb` (mặc định): HA đọc phím qua ADB, không cần APK mới, nhưng cần ADB mở và giữ một luồng ADB liên tục<br>`apk`: APK 1.4 báo phím qua dịch vụ trợ năng (APK 1.3 không nhận phím, phải cập nhật), chạy được cả khi ADB đóng<br>`tat`: không nhận phím | Giữ ADB → `adb`; đóng ADB → `apk` |
 | **Cách nối ADB** (`adb_mode`) | `auto` (tự nhận), `server` (qua adb-server container), `direct` (nối thẳng loa) | Thường để `auto`; có adb-server riêng thì `server` |
 | **Hành động nút giữa** (bốn ô chọn: nhấn 1, 2, 3 lần, giữ) | Mặc định theo app AI box: 1 lần tắt báo thức/đàm thoại, 2 lần Assist, 3 lần Bluetooth, giữ đèn theo nhạc | Muốn như APK cũ (đơn = tắt mic, đúp = Bluetooth) thì đổi ở bốn ô này |
 | **Mic** | «Tăng mic» khoảng **18 dB** và bật **hạn đỉnh**; **đừng bật AGC** với mặc định hiện tại (mục 10) | Từ đánh thức không nhận |
@@ -101,7 +103,7 @@ Loa gọi ngược về Home Assistant ở **cổng 18765** (mỗi loa thêm m�
 | Sau khi cài, mic không tự chạy lại sau khởi động | APK chưa từng được mở một lần: bấm **Cài đặt** lại ở «Ứng dụng: …» (mic) rồi khởi động lại loa |
 | Không thấy WiFi `Phicomm_R1_XXXX` | Loa chưa ở chế độ chờ: làm lại bước 1 (rút điện, giữ nút nguồn, cắm điện, nhả khi đèn đen–trắng–hồng) |
 | Cần cài/cập nhật ứng dụng nhưng ADB đã đóng | **Rút điện loa rồi cắm lại** (ADB mở lại), làm xong thì đóng lại |
-| Nút giữa không chạy sau khi đóng ADB | Đổi **«Nguồn phím»** thành `apk` (cần APK 1.3), hoặc mở lại ADB |
+| Nút giữa không chạy sau khi đóng ADB | Đổi **«Nguồn phím»** thành `apk` (cần APK 1.4), hoặc mở lại ADB |
 | Đèn không sáng | Xem `binary_sensor.r1_dich_vu_den` (thuộc tính `loi`); tự thử lại sau 15 giây. ADB đóng thì đèn chạy qua APK |
 
 Chi tiết: [mục 11 (gỡ rối)](#11-gỡ-rối), [docs/CAI-UNG-DUNG.md](docs/CAI-UNG-DUNG.md), [docs/HUONG-DAN-CAI-DAT.md](docs/HUONG-DAN-CAI-DAT.md).
